@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // setupTestDB creates an in-memory SQLite database for testing
 func setupTestDB(t *testing.T) (*sql.DB, *db.NodeStore) {
 	// Use in-memory SQLite for tests (no rqlite needed)
-	database, err := sql.Open("sqlite3", ":memory:")
+	database, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err, "Failed to create in-memory database")
 
 	// Create nodes table with GPU columns

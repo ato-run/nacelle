@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // mockAgentServer simulates an Agent's gRPC server for Week 4 E2E test
@@ -58,7 +58,7 @@ func (m *mockAgentServer) DeployWorkload(ctx context.Context, req *pb.DeployWork
 // 4. Week 4: VRAM is reserved and DeployWorkload RPC is called
 func TestGpuSimulationE2E(t *testing.T) {
 	// --- Setup: Database and NodeStore ---
-	testDB, err := sql.Open("sqlite3", ":memory:")
+	testDB, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
 	defer testDB.Close()
 
