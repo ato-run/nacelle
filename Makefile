@@ -18,12 +18,14 @@ wasm:
 # Client ビルド
 client: proto wasm
 	@echo "Building Client..."
+	@mkdir -p bin
 	cd client && go build -o ../bin/capsuled-client ./cmd/client
 
 # Engine ビルド
 engine: proto wasm
 	@echo "Building Engine..."
 	cd engine && cargo build --release
+	@mkdir -p bin
 	@cp engine/target/release/capsuled-engine bin/
 
 # 統合テスト

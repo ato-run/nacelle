@@ -13,6 +13,7 @@ target/
 *.log
 
 # Capsule build artifacts
+bin/
 client/bin/
 client/dist/
 client/coverage.out
