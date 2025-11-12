@@ -1,0 +1,127 @@
+syntax = "proto3";
+package onescluster.coordinator.v1;
+
+option go_package = "github.com/onescluster/coordinator/pkg/proto;proto";
+
+// Coordinator service - handles communication between Agents and Coordinator
+service Coordinator {
+  // Agent reports its observed state (hardware + running workloads)
+  rpc ReportStatus(StatusReportRequest) returns (StatusReportResponse);
+
+  // Coordinator instructs Agent to deploy a workload
+  rpc DeployWorkload(DeployWorkloadRequest) returns (DeployWorkloadResponse);
+}
+
+// Report submitted by Agent containing current hardware + workload state
+message StatusReportRequest {
+  RigStatus status = 1;
+}
+
+message StatusReportResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Agent state snapshot (source of truth for reconciliation)
+message RigStatus {
+  string rig_id = 1;                    // Unique Rig identifier (hostname)
+  HardwareState hardware = 2;           // Hardware metrics (VRAM, drivers, GPUs)
+  repeated WorkloadStatus running_workloads = 3; // Workloads currently running on Agent
+  repeated Taint taints = 4;            // Scheduling taints advertised by Agent
+  uint64 reported_at_unix_seconds = 5;  // Timestamp of this report (epoch seconds)
+  bool is_mock = 6;                     // Whether this is mock data (for testing)
+}
+
+// Hardware snapshot for a Rig
+message HardwareState {
+  repeated GpuInfo gpus = 1;            // List of GPUs on this Rig
+  string system_cuda_version = 2;       // System CUDA version (e.g., "12.2")
+  string system_driver_version = 3;     // NVIDIA driver version (e.g., "525.60.11")
+  uint64 total_vram_bytes = 4;          // Sum of VRAM across all GPUs
+  uint64 used_vram_bytes = 5;           // VRAM currently consumed by running workloads
+}
+
+// GPU information (maps to Rust GpuInfo)
+message GpuInfo {
+  uint32 index = 1;                     // GPU index (0-based)
+  string device_name = 2;               // GPU name (e.g., "NVIDIA GeForce RTX 4090")
+  uint64 vram_total_bytes = 3;          // Total VRAM in bytes
+  string cuda_compute_capability = 4;   // CUDA compute capability (e.g., "8.9")
+  uint64 vram_available_bytes = 5;      // Currently available VRAM (optional)
+}
+
+// Workload instance currently running on the Rig
+message WorkloadStatus {
+  string workload_id = 1;               // Unique workload identifier
+  string name = 2;                      // Human-friendly workload name (optional)
+  uint64 reserved_vram_bytes = 3;       // VRAM reserved by this workload
+  WorkloadPhase phase = 4;              // Observed execution phase
+  uint64 pid = 5;                       // Process ID of the container (0 = unknown)
+  uint64 observed_vram_bytes = 6;       // VRAM measured in bytes (fallback to reserved)
+}
+
+enum WorkloadPhase {
+  WORKLOAD_PHASE_UNSPECIFIED = 0;
+  WORKLOAD_PHASE_PENDING = 1;
+  WORKLOAD_PHASE_RUNNING = 2;
+  WORKLOAD_PHASE_FAILED = 3;
+  WORKLOAD_PHASE_SUCCEEDED = 4;
+}
+
+// Node-level taints advertised for scheduling decisions
+message Taint {
+  string key = 1;
+  string value = 2;
+  TaintEffect effect = 3;
+}
+
+enum TaintEffect {
+  TAINT_EFFECT_UNSPECIFIED = 0;
+  TAINT_EFFECT_NO_SCHEDULE = 1;
+  TAINT_EFFECT_PREFER_NO_SCHEDULE = 2;
+}
+
+// Request to deploy a workload (Coordinator → Agent)
+message DeployWorkloadRequest {
+  string workload_id = 1;               // Unique workload identifier
+  AdePManifest manifest = 2;            // Strongly typed adep manifest
+  string manifest_json = 3;             // Original JSON payload (for compatibility)
+}
+
+// Response to deploy request
+message DeployWorkloadResponse {
+  bool success = 1;
+  string message = 2;  // Success message or error details
+}
+
+// Strict schema for adep.json manifest
+message AdePManifest {
+  string name = 1;                      // Workload name
+  SchedulingConfig scheduling = 2;      // Scheduling preferences/constraints
+  ComputeConfig compute = 3;            // Container execution parameters
+  repeated Volume volumes = 4;          // Volume mounts
+  map<string, string> metadata = 5;     // Arbitrary metadata for future use
+}
+
+message SchedulingConfig {
+  GpuConstraints gpu = 1;               // GPU requirements
+  string strategy = 2;                  // Scheduling strategy hint (e.g., "best_fit")
+}
+
+message GpuConstraints {
+  uint64 vram_min_gb = 1;               // Minimum VRAM requirement (GB)
+  string cuda_version_min = 2;          // Minimum CUDA version requirement
+}
+
+message ComputeConfig {
+  string image = 1;                     // OCI image reference
+  repeated string args = 2;             // Container args (entrypoint + args)
+  map<string, string> env = 3;          // Environment variables key/value
+}
+
+message Volume {
+  string type = 1;                      // Mount type (e.g., "bind")
+  string source = 2;                    // Host path
+  string destination = 3;               // Container path
+  bool readonly = 4;                    // Read-only flag
+}

@@ -1,0 +1,53 @@
+# Rust
+target/
+
+# Environment files
+.env
+.env.local
+
+# Database
+*.db
+*.db-journal
+
+# Logs
+*.log
+
+# Capsule build artifacts
+client/bin/
+client/dist/
+client/coverage.out
+engine/target/
+adep-logic/target/
+tests/**/tmp/
+capsule-bundles/
+
+# Provisioning script artifacts
+engine/provisioning/scripts/_vendor/
+
+# Local environment overrides
+client/.env
+engine/.env
+engine/config.local.toml
+
+# LocalDocuments
+local-docs/
+.archives/
+
+# api_key
+api_key.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+engine/provisioning/scripts/venv/

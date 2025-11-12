@@ -1,0 +1,56 @@
+[package]
+name = "capsuled-engine"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "capsuled_engine"
+path = "src/lib.rs"
+
+[[bin]]
+name = "capsuled-engine"
+path = "src/main.rs"
+
+[[bin]]
+name = "status-reporter-driver"
+path = "src/bin/status_reporter_driver.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tonic = "0.10"
+prost = "0.12"
+prost-types = "0.12"
+wasmtime = "16.0"
+toml = "0.8"
+
+# 既存の依存関係
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+clap = { version = "4.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+anyhow = "1.0"
+thiserror = "1.0"
+num_cpus = "1.16"
+which = "5.0"
+
+# Hardware detection
+hostname = "0.4"
+nvml-wrapper = { version = "0.9", optional = true }
+
+# OCI runtime specification
+oci-spec = "0.6"
+
+# Storage and container management (optional, for future implementation)
+# libadep-core = { path = "../../libadep/core" }
+# lvm-sys2 = "0.2"
+# libcryptsetup-rs = "0.9"
+
+[features]
+default = []
+real-gpu = ["nvml-wrapper"]
+
+[build-dependencies]
+tonic-build = "0.10"
+

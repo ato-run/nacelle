@@ -1,0 +1,74 @@
+# Capsuled Coordinator Configuration
+
+# Coordinator settings
+coordinator:
+  # Node ID (ULID) - leave empty to generate automatically
+  node_id: ""
+
+  # Node address (IP:PORT) for cluster communication
+  address: "0.0.0.0:8080"
+
+  # Headscale node name
+  headscale_name: "coordinator-1"
+
+# rqlite settings
+rqlite:
+  # List of rqlite node addresses
+  addresses:
+    - "http://localhost:4001"
+
+  # Maximum retry attempts for connection failures
+  max_retries: 3
+
+  # Delay between retry attempts (in seconds)
+  retry_delay: 2
+
+  # Request timeout (in seconds)
+  timeout: 10
+
+# Clustering settings
+cluster:
+  # Gossip protocol bind address
+  gossip_bind_addr: "0.0.0.0:7946"
+
+  # Initial cluster peers (for joining existing cluster)
+  peers: []
+
+  # Heartbeat interval (in seconds)
+  heartbeat_interval: 5
+
+  # Node timeout (in seconds) - mark node as failed after this time
+  node_timeout: 30
+
+# Headscale API settings
+headscale:
+  # Headscale API URL
+  api_url: "http://headscale:8080"
+
+  # API key for authentication
+  api_key: ""
+
+  # Request timeout (in seconds)
+  timeout: 10
+
+# HTTP API server settings
+api:
+  # Listen address for HTTP API
+  listen_addr: "0.0.0.0:8080"
+
+  # Enable TLS
+  tls_enabled: false
+
+  # TLS certificate path
+  tls_cert: ""
+
+  # TLS key path
+  tls_key: ""
+
+# Logging settings
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+
+  # Log format: text, json
+  format: "text"

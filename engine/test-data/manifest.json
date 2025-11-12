@@ -1,0 +1,9 @@
+{
+  "id": "test-capsule-1",
+  "version": "1.0.0",
+  "image": "nginx:latest",
+  "network": {
+    "ingress": true,
+    "public_domain": "test-app.rig.my-startup.com"
+  }
+}
