@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/onescluster/coordinator/pkg/db"
 	server "github.com/onescluster/coordinator/pkg/grpc"
 	pb "github.com/onescluster/coordinator/pkg/proto"
@@ -27,7 +27,7 @@ func TestAgentCoordinatorVRAME2E(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "cluster.db")
 
-	sqlite, err := sql.Open("sqlite3", dbPath)
+	sqlite, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
