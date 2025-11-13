@@ -218,13 +218,27 @@ jobs:
           chmod +x /usr/local/bin/buf
         continue-on-error: true
 
-      - name: Build all components
-        run: make all
+      - name: Build Wasm
+        run: make wasm
+
+      - name: Build Engine (release)
+        working-directory: engine
+        run: |
+          cargo build --release
+          mkdir -p ../bin
+          cp target/release/capsuled-engine ../bin/
+
+      - name: Build Client
+        working-directory: client
+        run: |
+          mkdir -p ../bin
+          go build -o ../bin/capsuled-client ./cmd/client
 
       - name: Verify artifacts exist
         run: |
           ls -lh bin/
           ls -lh wasm/
+          echo "✅ All artifacts built successfully"
 
   # Create release on tag push
   release:
