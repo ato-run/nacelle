@@ -17,10 +17,12 @@ bin/
 client/bin/
 client/dist/
 client/coverage.out
+client/capsuled-client-*
 engine/target/
 adep-logic/target/
 tests/**/tmp/
 capsule-bundles/
+wasm/*.wasm
 
 # Provisioning script artifacts
 engine/provisioning/scripts/_vendor/
