@@ -93,8 +93,7 @@ go build -o bin/capsuled-client ./cmd/client
 2. **engine (Rust)** - デバッグ・リリースビルドとテスト実行
 3. **client (Go)** - 以下の3種類のビルド:
    - 標準ビルド (CGO 有効)
-   - 静的ビルド (CGO_ENABLED=0)
-   - Alpine Linux 向けビルド
+   - 静的ビルド (CGO_ENABLED=0、Alpine/musl 対応)
 4. **統合テスト** - 全コンポーネントのビルドと依存関係の検証
 
 ### リリース
@@ -103,8 +102,7 @@ go build -o bin/capsuled-client ./cmd/client
 - `adep_logic.wasm` - Wasm バイナリ
 - `capsuled-engine` - Engine バイナリ (Linux x86_64)
 - `capsuled-client-linux-x86_64` - Client バイナリ (標準)
-- `capsuled-client-linux-x86_64-static` - Client バイナリ (静的)
-- `capsuled-client-alpine-x86_64` - Client バイナリ (Alpine)
+- `capsuled-client-linux-x86_64-static` - Client バイナリ (静的、Alpine/musl 対応)
 
 ### アーティファクト
 
