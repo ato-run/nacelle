@@ -91,7 +91,7 @@ go build -o bin/capsuled-client ./cmd/client
 
 1. **adep-logic (Wasm)** - Rust → Wasm32 のリリースビルド
 2. **engine (Rust)** - デバッグ・リリースビルドとテスト実行
-3. **client (Go)** - 以下の3種類のビルド:
+3. **client (Go)** - 以下の2種類のビルド:
    - 標準ビルド (CGO 有効)
    - 静的ビルド (CGO_ENABLED=0、Alpine/musl 対応)
 4. **統合テスト** - 全コンポーネントのビルドと依存関係の検証
