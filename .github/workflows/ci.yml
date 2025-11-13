@@ -1,0 +1,262 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Rust - adep-logic (Wasm build)
+  build-adep-logic:
+    name: Build adep-logic (Wasm)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            adep-logic/target
+          key: ${{ runner.os }}-cargo-adep-logic-${{ hashFiles('adep-logic/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-adep-logic-
+
+      - name: Build adep-logic (Wasm)
+        working-directory: adep-logic
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Run adep-logic tests
+        working-directory: adep-logic
+        run: cargo test
+
+      - name: Upload Wasm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: adep-logic-wasm
+          path: adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm
+          retention-days: 7
+
+  # Rust - engine
+  build-engine:
+    name: Build engine
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            engine/target
+          key: ${{ runner.os }}-cargo-engine-${{ hashFiles('engine/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-engine-
+
+      - name: Build engine (debug)
+        working-directory: engine
+        run: cargo build
+
+      - name: Run engine tests
+        working-directory: engine
+        run: cargo test
+
+      - name: Build engine (release)
+        working-directory: engine
+        run: cargo build --release
+
+      - name: Upload engine binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: capsuled-engine-linux-x86_64
+          path: engine/target/release/capsuled-engine
+          retention-days: 7
+
+  # Go - client
+  build-client:
+    name: Build client (Go)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Standard build
+          - goos: linux
+            goarch: amd64
+            cgo: "1"
+            name: linux-x86_64
+          # CGO_ENABLED=0 build
+          - goos: linux
+            goarch: amd64
+            cgo: "0"
+            name: linux-x86_64-static
+          # Alpine/musl build (static)
+          - goos: linux
+            goarch: amd64
+            cgo: "0"
+            name: alpine-x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: client/go.sum
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Build client
+        working-directory: client
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          go build -o capsuled-client-${{ matrix.name }} ./cmd/client
+
+      - name: Upload client binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: capsuled-client-${{ matrix.name }}
+          path: client/capsuled-client-${{ matrix.name }}
+          retention-days: 7
+
+  # Go tests
+  test-client:
+    name: Test client (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: client/go.sum
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install dependencies
+        working-directory: client
+        run: go mod download
+
+      - name: Run tests
+        working-directory: client
+        run: go test -v ./pkg/...
+
+      - name: Run integration tests (excluding protoc-dependent tests)
+        working-directory: client
+        run: go test -v ./e2e -run TestGpuSimulationE2E
+
+  # Full integration test
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [build-adep-logic, build-engine, build-client]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: client/go.sum
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install buf
+        run: |
+          BUF_VERSION=1.28.1
+          curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
+          chmod +x /usr/local/bin/buf
+        continue-on-error: true
+
+      - name: Build all components
+        run: make all
+
+      - name: Verify artifacts exist
+        run: |
+          ls -lh bin/
+          ls -lh wasm/
+
+  # Create release on tag push
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-adep-logic, build-engine, build-client, integration-test]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/adep-logic-wasm/adep_logic.wasm
+            artifacts/capsuled-engine-linux-x86_64/capsuled-engine
+            artifacts/capsuled-client-linux-x86_64/capsuled-client-linux-x86_64
+            artifacts/capsuled-client-linux-x86_64-static/capsuled-client-linux-x86_64-static
+            artifacts/capsuled-client-alpine-x86_64/capsuled-client-alpine-x86_64
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
