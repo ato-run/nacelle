@@ -32,6 +32,12 @@ Personal Cloud OS - モノレポ
 - Wasmer による Wasm 実行
 
 ### `engine/` - Engine (Rust)
+> NOTE: 用語の統一 — `capsuled` では以下の名称を採用します。
+>
+>- `Capsuled Client` (旧: `rig-client`)
+>- `Capsuled Engine` (旧: `rig-manager`)
+>
+> この用語は `documents/capsuled/GLOSSARY.md` に記載されています。
 
 - gRPC サーバー
 - コンテナ実行
@@ -47,7 +53,11 @@ Personal Cloud OS - モノレポ
 
 ### `proto/` - gRPC 定義
 
-- engine.proto
+- `coordinator.proto` (推奨・Canonical)
+- `engine.proto` (レガシー: 非推奨 — `coordinator.proto` に統合予定)
+
+> NOTE: ドキュメントのシングルソースは `documents/capsuled/` を参照してください。用語統一と設計決定は `documents/capsuled/GLOSSARY.md` と `DOCUMENTATION_GUIDELINES.md` に従ってください。
+> `coordinator.proto` を単一の真実のソース (single source of truth) として採用しています。
 - buf.yaml
 
 ## ビルド
