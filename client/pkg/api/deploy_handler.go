@@ -13,6 +13,7 @@ import (
 	"github.com/onescluster/coordinator/pkg/db"
 	pb "github.com/onescluster/coordinator/pkg/proto"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
+	"github.com/onescluster/coordinator/pkg/wasm"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -117,6 +118,7 @@ type DeployHandler struct {
 	NodeStore         *db.NodeStore
 	Scheduler         *gpu.Scheduler
 	AgentClientFactory AgentClientFactory // Optional: for testing (nil = use default)
+	WasmHost          *wasm.WasmerHost   // Optional: for Wasm validation
 }
 
 // NewDeployHandler creates a new deploy handler
@@ -125,6 +127,7 @@ func NewDeployHandler(nodeStore *db.NodeStore, scheduler *gpu.Scheduler) *Deploy
 		NodeStore:          nodeStore,
 		Scheduler:          scheduler,
 		AgentClientFactory: nil, // Use default (localhost:50051)
+		WasmHost:          nil, // Initialize on first use
 	}
 }
 
@@ -154,6 +157,21 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	// 1.5 Validate manifest with Wasm (if available)
+	if h.WasmHost != nil {
+		valid, err := h.WasmHost.ValidateManifest(body)
+		if err != nil {
+			log.Printf("⚠️ Wasm validation error: %v", err)
+			// Don't fail on Wasm error, just log and continue
+		} else if !valid {
+			log.Printf("❌ Manifest validation failed (Wasm)")
+			http.Error(w, "Invalid manifest: name and version are required", http.StatusBadRequest)
+			return
+		} else {
+			log.Println("✅ Manifest validation passed (Wasm)")
+		}
+	}
 
 	var manifest AdepManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {

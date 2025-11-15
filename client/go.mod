@@ -10,6 +10,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/rqlite/gorqlite v0.0.0-20230708021416-2acd02b70b79
 	github.com/stretchr/testify v1.11.1
+	github.com/wasmerio/wasmer-go v1.0.4
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
