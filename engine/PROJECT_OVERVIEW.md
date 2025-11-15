@@ -1,8 +1,11 @@
-# Rig-Manager Project Overview
+# Capsuled Engine - Project Overview
 
-**最終更新:** 2025年11月7日
+**最終更新:** 2025年11月15日
 **バージョン:** 0.1.0
 **ステータス:** Phase 1 開発中
+
+> **Note**: このドキュメントは Engine コンポーネントの歴史的な開発記録として保持されています。
+> 最新のアーキテクチャ情報については、リポジトリルートの [ARCHITECTURE.md](../ARCHITECTURE.md) を参照してください。
 
 ---
 
@@ -24,7 +27,7 @@
 
 ### 目的
 
-**Rig-Manager** は、OCI互換のコンテナランタイムを管理するための制御プレーン（Control Plane）です。リモートOCI Rig上でカプセル（コンテナ）をデプロイし、HTTPS経由で公開することを目的としています。
+**Capsuled Engine** は、Capsuled 分散システムの実行エージェントです。Coordinator（Client コンポーネント）からの指示を受けて、OCI互換のコンテナランタイムを使用してカプセル（コンテナ）を実行します。各ノード上で動作し、ハードウェアリソース（特にGPU）の監視と管理を行います。
 
 ### 主な機能
 
@@ -51,14 +54,19 @@
 
 ```
 ┌──────────────────┐
-│  Tauriクライアント  │
-│   (Desktop App)   │
+│  外部クライアント   │
+│  (CLI/Desktop)   │
 └────────┬─────────┘
-         │ API (Tailscale VPN)
-         │ + API Key認証
+         │ HTTPS API
          ▼
 ┌─────────────────────────────────┐
-│      Rig-Manager (Axum)         │
+│  Capsuled Coordinator (Client)  │
+│         (Go)                    │
+└────────┬────────────────────────┘
+         │ gRPC
+         ▼
+┌─────────────────────────────────┐
+│   Capsuled Engine (このコンポーネント) │
 │  ┌───────────────────────────┐  │
 │  │  API エンドポイント        │  │
 │  │  - POST /v1/deployments   │  │
