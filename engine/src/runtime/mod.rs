@@ -612,3 +612,300 @@ impl From<RuntimeError> for CommandOutput {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oci_spec::runtime::{ProcessBuilder, RootBuilder, SpecBuilder};
+
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// Helper to create a minimal valid OCI spec for testing
+    fn create_test_spec(root_path: &str) -> Spec {
+        let root = RootBuilder::default()
+            .path(root_path)
+            .build()
+            .expect("Failed to build root");
+
+        let process = ProcessBuilder::default()
+            .args(vec!["sh".to_string(), "-c".to_string(), "sleep 1".to_string()])
+            .build()
+            .expect("Failed to build process");
+
+        SpecBuilder::default()
+            .root(root)
+            .process(process)
+            .build()
+            .expect("Failed to build spec")
+    }
+
+    #[test]
+    fn test_runtime_kind_from_str() {
+        assert_eq!(RuntimeKind::from_str("youki"), Some(RuntimeKind::Youki));
+        assert_eq!(RuntimeKind::from_str("YOUKI"), Some(RuntimeKind::Youki));
+        assert_eq!(RuntimeKind::from_str("runc"), Some(RuntimeKind::Runc));
+        assert_eq!(RuntimeKind::from_str("RUNC"), Some(RuntimeKind::Runc));
+        assert_eq!(RuntimeKind::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_runtime_kind_binary_candidates() {
+        assert_eq!(RuntimeKind::Youki.binary_candidates(), &["youki"]);
+        assert_eq!(RuntimeKind::Runc.binary_candidates(), &["runc"]);
+    }
+
+    #[test]
+    fn test_infer_kind_from_path() {
+        let youki_path = PathBuf::from("/usr/bin/youki");
+        assert_eq!(infer_kind_from_path(&youki_path), Some(RuntimeKind::Youki));
+
+        let runc_path = PathBuf::from("/usr/bin/runc");
+        assert_eq!(infer_kind_from_path(&runc_path), Some(RuntimeKind::Runc));
+
+        let invalid_path = PathBuf::from("/usr/bin/unknown");
+        assert_eq!(infer_kind_from_path(&invalid_path), None);
+    }
+
+    #[test]
+    fn test_hook_related_failure() {
+        assert!(hook_related_failure("Error: hook failed"));
+        assert!(hook_related_failure("nvidia hook error"));
+        assert!(hook_related_failure("HOOK: failed to execute"));
+        assert!(!hook_related_failure("Container failed to start"));
+        assert!(!hook_related_failure("Unknown error"));
+    }
+
+    #[test]
+    fn test_runtime_config_defaults() {
+        // Test with no configuration
+        let config = RuntimeConfig::from_section(None);
+        
+        // Should either find a runtime or return an error
+        match config {
+            Ok(cfg) => {
+                // If successful, validate the config
+                assert!(cfg.binary_path.exists() || !cfg.binary_path.as_os_str().is_empty());
+                assert!(cfg.bundle_root.to_string_lossy().contains("bundles"));
+                assert!(cfg.state_root.to_string_lossy().contains("state"));
+                assert!(cfg.log_dir.to_string_lossy().contains("logs"));
+                assert_eq!(cfg.hook_retry_attempts, DEFAULT_HOOK_RETRY_ATTEMPTS);
+            }
+            Err(e) => {
+                // If no runtime found, error should mention "not found"
+                assert!(e.to_string().contains("not found"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_container_runtime_new() {
+        // Create a minimal runtime config for testing
+        let temp_dir = TempDir::new().unwrap();
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config.clone());
+        assert_eq!(runtime.config().kind, RuntimeKind::Runc);
+        assert_eq!(runtime.config().hook_retry_attempts, 1);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_bundle_creates_directories() {
+        let temp_dir = TempDir::new().unwrap();
+        let root_path = temp_dir.path().join("rootfs");
+        tokio::fs::create_dir_all(&root_path).await.unwrap();
+
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let spec = create_test_spec(root_path.to_str().unwrap());
+
+        let result = runtime.prepare_bundle("test-workload", &spec).await;
+        assert!(result.is_ok());
+
+        let bundle_path = result.unwrap();
+        assert!(bundle_path.exists());
+        assert!(bundle_path.join("config.json").exists());
+    }
+
+    #[tokio::test]
+    async fn test_prepare_bundle_invalid_rootfs() {
+        let temp_dir = TempDir::new().unwrap();
+        let nonexistent_root = temp_dir.path().join("nonexistent");
+
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let spec = create_test_spec(nonexistent_root.to_str().unwrap());
+
+        let result = runtime.prepare_bundle("test-workload", &spec).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_prepare_log_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let log_path = runtime.prepare_log_path("test-workload").await;
+
+        assert!(log_path.is_ok());
+        let path = log_path.unwrap();
+        assert!(path.to_string_lossy().contains("test-workload.log"));
+        assert!(path.parent().unwrap().exists());
+    }
+
+    #[tokio::test]
+    async fn test_write_manifest_snapshot() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let manifest_json = r#"{"name":"test","version":"1.0.0"}"#;
+
+        let result = runtime
+            .write_manifest_snapshot("test-workload", Some(manifest_json))
+            .await;
+
+        assert!(result.is_ok());
+
+        let snapshot_path = temp_dir
+            .path()
+            .join("bundles/test-workload/manifest.json");
+        assert!(snapshot_path.exists());
+
+        let content = tokio::fs::read_to_string(snapshot_path).await.unwrap();
+        assert_eq!(content, manifest_json);
+    }
+
+    #[tokio::test]
+    async fn test_write_manifest_snapshot_none() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let result = runtime.write_manifest_snapshot("test-workload", None).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_runtime_error_display() {
+        let err = RuntimeError::BinaryNotFound {
+            tried: vec!["youki".to_string(), "runc".to_string()],
+        };
+        assert!(err.to_string().contains("not found"));
+        assert!(err.to_string().contains("youki"));
+
+        let err = RuntimeError::InvalidConfig("test error".to_string());
+        assert!(err.to_string().contains("invalid runtime configuration"));
+
+        let err = RuntimeError::CommandFailure {
+            operation: "create".to_string(),
+            exit_code: Some(1),
+            stderr: "error message".to_string(),
+        };
+        assert!(err.to_string().contains("create"));
+        assert!(err.to_string().contains("error message"));
+    }
+
+    #[tokio::test]
+    async fn test_ensure_directory_creates() {
+        let temp_dir = TempDir::new().unwrap();
+        let new_dir = temp_dir.path().join("new_directory");
+
+        assert!(!new_dir.exists());
+
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let result = runtime.ensure_directory(&new_dir).await;
+
+        assert!(result.is_ok());
+        assert!(new_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn test_ensure_directory_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let existing_dir = temp_dir.path();
+
+        let config = RuntimeConfig {
+            kind: RuntimeKind::Runc,
+            binary_path: PathBuf::from("/usr/bin/runc"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        let runtime = ContainerRuntime::new(config);
+        let result = runtime.ensure_directory(existing_dir).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_launch_result_fields() {
+        let result = LaunchResult {
+            pid: 12345,
+            bundle_path: PathBuf::from("/path/to/bundle"),
+            log_path: PathBuf::from("/path/to/log"),
+        };
+
+        assert_eq!(result.pid, 12345);
+        assert_eq!(result.bundle_path, PathBuf::from("/path/to/bundle"));
+        assert_eq!(result.log_path, PathBuf::from("/path/to/log"));
+    }
+}
