@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,14 +11,15 @@ import (
 
 // CapsuleHandler handles Capsule CRUD operations
 type CapsuleHandler struct {
-	NodeStore *db.NodeStore
-	// TODO: Add CapsuleStore when state management is implemented
+	NodeStore    *db.NodeStore
+	CapsuleStore *db.CapsuleStore
 }
 
 // NewCapsuleHandler creates a new capsule handler
-func NewCapsuleHandler(nodeStore *db.NodeStore) *CapsuleHandler {
+func NewCapsuleHandler(nodeStore *db.NodeStore, capsuleStore *db.CapsuleStore) *CapsuleHandler {
 	return &CapsuleHandler{
-		NodeStore: nodeStore,
+		NodeStore:    nodeStore,
+		CapsuleStore: capsuleStore,
 	}
 }
 
@@ -46,18 +46,22 @@ func (h *CapsuleHandler) HandleGetCapsule(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// TODO: Query capsule from CapsuleStore
-	// For now, return a placeholder response
-	response := map[string]interface{}{
-		"id":     capsuleID,
-		"status": "running",
-		"message": "Capsule retrieval not fully implemented yet",
-		"note": "This is a placeholder. Implement CapsuleStore in Phase 1 Week 1.",
+	ctx := r.Context()
+	
+	// Query capsule from CapsuleStore
+	capsule, err := h.CapsuleStore.Get(ctx, capsuleID)
+	if err != nil {
+		if strings.Contains(err.Error(), "capsule not found") {
+			http.Error(w, fmt.Sprintf("Capsule not found: %s", capsuleID), http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf("Failed to retrieve capsule: %v", err), http.StatusInternalServerError)
+		}
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(capsule)
 }
 
 // HandleListCapsules lists all capsules
@@ -70,19 +74,16 @@ func (h *CapsuleHandler) HandleListCapsules(w http.ResponseWriter, r *http.Reque
 
 	ctx := r.Context()
 	
-	// TODO: Query all capsules from CapsuleStore
-	// For now, return Rigs info as a workaround to show something
-	rigs, err := h.NodeStore.GetAllGpuRigs(ctx)
+	// Query all capsules from CapsuleStore
+	capsules, err := h.CapsuleStore.List(ctx, "", "")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to query rigs: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to list capsules: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	response := map[string]interface{}{
-		"capsules": []interface{}{},
-		"rigs_count": len(rigs),
-		"message": "Capsule listing not fully implemented yet",
-		"note": "This is a placeholder. Implement CapsuleStore in Phase 1 Week 1.",
+		"capsules": capsules,
+		"count":    len(capsules),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -112,19 +113,28 @@ func (h *CapsuleHandler) HandleDeleteCapsule(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ctx := context.Background()
-	_ = ctx
+	ctx := r.Context()
 
 	// TODO: Delete capsule via gRPC call to Engine
 	// 1. Query capsule to find which Rig it's on
 	// 2. Call Engine's StopWorkload RPC
 	// 3. Release VRAM reservation
-	// 4. Delete from CapsuleStore
+	// This will be implemented in Phase 1 Week 2
+
+	// For now, just delete from CapsuleStore
+	err := h.CapsuleStore.Delete(ctx, capsuleID)
+	if err != nil {
+		if strings.Contains(err.Error(), "capsule not found") {
+			http.Error(w, fmt.Sprintf("Capsule not found: %s", capsuleID), http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf("Failed to delete capsule: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
 
 	response := map[string]interface{}{
 		"success": true,
-		"message": fmt.Sprintf("Capsule %s deletion requested", capsuleID),
-		"note": "This is a placeholder. Implement deletion in Phase 1 Week 1.",
+		"message": fmt.Sprintf("Capsule %s deleted successfully", capsuleID),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
