@@ -42,6 +42,9 @@ nvml-wrapper = { version = "0.9", optional = true }
 # OCI runtime specification
 oci-spec = "0.6"
 
+# Storage management
+uuid = { version = "1.10", features = ["v4"] }
+
 # Storage and container management (optional, for future implementation)
 # libadep-core = { path = "../../libadep/core" }
 # lvm-sys2 = "0.2"

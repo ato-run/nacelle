@@ -8,4 +8,5 @@ pub mod oci;
 pub mod proto;
 pub mod runtime;
 pub mod status_reporter;
+pub mod storage;
 pub mod wasm_host;
