@@ -4,6 +4,8 @@ pub mod config;
 pub mod coordinator_service;
 pub mod grpc_server;
 pub mod hardware;
+pub mod logs;
+pub mod metrics;
 pub mod oci;
 pub mod proto;
 pub mod runtime;
