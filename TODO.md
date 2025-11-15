@@ -105,31 +105,31 @@
 
 ---
 
-#### 🔴 Task 1.4: Client Wasm 統合 (Client)
+#### 🔴 Task 1.4: Client Wasm 統合 (Client) ✅ **完了**
 **工数**: 2日  
 **優先度**: Critical  
 **担当**: Go Engineer
 
-- ⏳ `client/pkg/wasm/` パッケージ追加
-  - ⏳ `wasmer.go` - Wasmer バインディング実装
-  - ⏳ `NewWasmerHost()` - Wasm モジュールロード
-  - ⏳ `ValidateManifest()` - adep-logic 呼び出し
-  - ⏳ エラーハンドリング
+- ✅ `client/pkg/wasm/` パッケージ追加
+  - ✅ `wasmer.go` - Wasmer バインディング実装
+  - ✅ `NewWasmerHost()` - Wasm モジュールロード
+  - ✅ `ValidateManifest()` - adep-logic 呼び出し
+  - ✅ エラーハンドリング
 
-- ⏳ wasmer-go 依存関係追加
-  - ⏳ `go.mod` に追加: `github.com/wasmerio/wasmer-go v1.0.4`
-  - ⏳ adep_logic.wasm バイナリの埋め込み
+- ✅ wasmer-go 依存関係追加
+  - ✅ `go.mod` に追加: `github.com/wasmerio/wasmer-go v1.0.4`
+  - ✅ adep_logic.wasm バイナリの埋め込み
 
-- ⏳ API Handler への統合
-  - ⏳ `pkg/api/deploy_handler.go` 更新
-  - ⏳ マニフェストバリデーション追加
+- ✅ API Handler への統合
+  - ✅ `pkg/api/deploy_handler.go` 更新
+  - ✅ マニフェストバリデーション追加
 
-- ⏳ テスト追加
-  - ⏳ Wasm ロードテスト
-  - ⏳ バリデーション成功・失敗テスト
+- ✅ テスト追加
+  - ✅ Wasm ロードテスト
+  - ✅ バリデーション成功・失敗テスト (5 tests, all passing)
 
 **依存関係**: なし  
-**成果物**: Client 側で adep.json バリデーション可能
+**成果物**: Client 側で adep.json バリデーション可能 ✅
 
 ---
 
@@ -154,29 +154,36 @@
 
 ### Week 2: HTTP API 完成
 
-#### 🔴 Task 2.1: CRUD エンドポイント実装 (Client)
+#### 🔴 Task 2.1: CRUD エンドポイント実装 (Client) 🚧 **70% 完了**
 **工数**: 3日  
 **優先度**: Critical  
 **担当**: Go Engineer
 
-- ⏳ `client/pkg/api/capsule_handler.go` 拡張
-  - ⏳ `GetCapsuleHandler()` - GET /api/v1/capsules/:id
-  - ⏳ `ListCapsulesHandler()` - GET /api/v1/capsules
-  - ⏳ `DeleteCapsuleHandler()` - DELETE /api/v1/capsules/:id
+- ✅ `client/pkg/api/capsule_handler.go` 作成
+  - ✅ `HandleGetCapsule()` - GET /api/v1/capsules/:id (placeholder)
+  - ✅ `HandleListCapsules()` - GET /api/v1/capsules (placeholder)
+  - ✅ `HandleDeleteCapsule()` - DELETE /api/v1/capsules/:id (placeholder)
 
-- ⏳ `client/pkg/api/node_handler.go` 追加
-  - ⏳ `ListNodesHandler()` - GET /api/v1/nodes
+- ✅ `client/pkg/api/node_handler.go` 作成
+  - ✅ `HandleListNodes()` - GET /api/v1/nodes (fully functional)
+  - ✅ `HandleGetNode()` - GET /api/v1/nodes/:id (placeholder)
 
-- ⏳ エラーハンドリング
-  - ⏳ 標準エラーレスポンス (JSON)
-  - ⏳ HTTP ステータスコード統一
+- ✅ `client/pkg/api/health_handler.go` 作成
+  - ✅ `HandleHealth()` - GET /health
+  - ✅ `HandleReadiness()` - GET /ready
+  - ✅ `HandleLiveness()` - GET /live
 
-- ⏳ テスト追加
-  - ⏳ 各エンドポイントの単体テスト
-  - ⏳ 統合テスト
+- ✅ エラーハンドリング
+  - ✅ 標準エラーレスポンス (JSON)
+  - ✅ HTTP ステータスコード統一
+
+- ✅ テスト追加
+  - ✅ Health handler テスト (4 tests, all passing)
+  - ⏳ Capsule handler テスト (requires CapsuleStore)
+  - ⏳ Node handler テスト
 
 **依存関係**: Task 1.3  
-**成果物**: REST API で Capsule 管理可能
+**成果物**: REST API で Capsule/Node 管理可能 (部分実装)
 
 ---
 
@@ -787,22 +794,22 @@
 
 | Phase | 完了 | 進行中 | 予定 | 完了率 |
 |-------|------|--------|------|--------|
-| Phase 1 (Week 1-3) | 0 | 0 | 14 | 0% |
+| Phase 1 (Week 1-3) | 1 | 1 | 12 | 14% |
 | Phase 2 (Week 4-6) | 0 | 0 | 11 | 0% |
 | Phase 3 (Week 7-9) | 0 | 0 | 8 | 0% |
 | Phase 4 (Week 10-12) | 0 | 0 | 6 | 0% |
 | Phase 5 (Week 13-14) | 0 | 0 | 4 | 0% |
-| **Total** | **0** | **0** | **43** | **0%** |
+| **Total** | **1** | **1** | **41** | **5%** |
 
 ### 優先度別タスク
 
 | 優先度 | タスク数 | 完了 | 残り |
 |--------|----------|------|------|
-| 🔴 Critical | 7 | 0 | 7 |
+| 🔴 Critical | 7 | 1 | 6 |
 | 🟡 High | 18 | 0 | 18 |
 | 🟢 Medium | 15 | 0 | 15 |
 | ⚪ Low | 3 | 0 | 3 |
-| **Total** | **43** | **0** | **43** |
+| **Total** | **43** | **1** | **42** |
 
 ---
 
