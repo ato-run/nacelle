@@ -133,8 +133,8 @@ capsuled/
 │   └── Cargo.lock
 │
 ├── proto/                          # gRPC 定義
-│   ├── coordinator.proto           # Coordinator プロトコル (130 LOC)
-│   ├── engine.proto                # Engine プロトコル (52 LOC, レガシー)
+│   ├── coordinator.proto           # Coordinator プロトコル (130 LOC) — 推奨 (Canonical)
+│   ├── engine.proto                # Engine プロトコル (52 LOC, レガシー, 非推奨)
 │   ├── buf.yaml                    # buf 設定
 │   └── buf.gen.yaml                # コード生成設定
 │
