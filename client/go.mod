@@ -6,6 +6,7 @@ toolchain go1.24.10
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/memberlist v0.5.3
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/rqlite/gorqlite v0.0.0-20230708021416-2acd02b70b79
@@ -23,7 +24,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/go-metrics v0.5.4 // indirect
