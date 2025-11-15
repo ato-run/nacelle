@@ -217,8 +217,28 @@ let result = wasmer_instance.validate(adep_json)?;
 
 #### 定義ファイル
 
-- `engine.proto` - Engine サービス定義
-- `coordinator.proto` - Coordinator サービス定義（より新しい設計）
+- `engine.proto` - Engine サービス定義（レガシー、互換性のために保持）
+- `coordinator.proto` - Coordinator サービス定義（**推奨**: より包括的な設計）
+
+**プロトコル使用ガイドライン**:
+
+現在、プロジェクトには2つの gRPC プロトコル定義が存在します：
+
+1. **engine.proto** (旧設計)
+   - シンプルな Capsule デプロイメント用
+   - `DeployCapsule`, `StopCapsule` などの基本操作
+   - 初期実装との後方互換性のために保持
+
+2. **coordinator.proto** (新設計) ⭐ **推奨**
+   - より包括的な Workload 管理
+   - GPU/ハードウェア状態レポート機能
+   - スケジューリング情報（Taint/Toleration）
+   - 厳密に型付けされた AdePManifest スキーマ
+
+**推奨事項**:
+- 新規開発では `coordinator.proto` を使用
+- `engine.proto` は段階的に非推奨化を検討
+- 両プロトコルの統合を長期的な目標とする
 
 #### コード生成
 
