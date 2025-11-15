@@ -99,7 +99,7 @@ impl LvmManager {
         );
 
         // Convert bytes to megabytes for LVM
-        let size_mb = (size_bytes + 1024 * 1024 - 1) / (1024 * 1024);
+        let size_mb = size_bytes.div_ceil(1024 * 1024);
 
         // Execute lvcreate command
         let output = Command::new("lvcreate")
@@ -273,7 +273,7 @@ impl LvmManager {
         );
 
         // Convert bytes to megabytes
-        let size_mb = (size_bytes + 1024 * 1024 - 1) / (1024 * 1024);
+        let size_mb = size_bytes.div_ceil(1024 * 1024);
 
         // Execute lvcreate for snapshot
         let output = Command::new("lvcreate")
