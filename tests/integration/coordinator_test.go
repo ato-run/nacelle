@@ -14,6 +14,7 @@ import (
 	"github.com/onescluster/coordinator/pkg/gossip"
 	"github.com/onescluster/coordinator/pkg/headscale"
 	"github.com/onescluster/coordinator/pkg/master"
+	"github.com/onescluster/coordinator/tests/integration/testutil"
 )
 
 // Integration tests for Coordinator clustering and master election
@@ -35,13 +36,13 @@ func getRQLiteAddr() string {
 }
 
 func skipIfNoRQLite(t *testing.T) {
-	// Try to connect to rqlite
-	cfg := &db.Config{
-		Addresses:  []string{getRQLiteAddr()},
-		MaxRetries: 1,
-		RetryDelay: 100 * time.Millisecond,
-		Timeout:    2 * time.Second,
-	}
+	// Try to connect to rqlite with shorter timeouts for connection check
+	cfg := testutil.NewDBConfigWithOverrides(
+		[]string{getRQLiteAddr()},
+		1,                      // maxRetries
+		100*time.Millisecond,  // retryDelay
+		2*time.Second,         // timeout
+	)
 
 	client, err := db.NewClient(cfg)
 	if err != nil {
@@ -61,12 +62,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 
 	t.Run("single_node_election", func(t *testing.T) {
 		// Create rqlite client
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -132,12 +128,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 
 	t.Run("multi_node_election", func(t *testing.T) {
 		// Create three nodes and verify smallest ULID is elected
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -204,12 +195,7 @@ func TestStateConsistencyIntegration(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("node_crud_operations", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -271,12 +257,7 @@ func TestFailoverScenario(t *testing.T) {
 
 	// This test simulates master failure and verifies automatic re-election
 	t.Run("master_failure_recovery", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {

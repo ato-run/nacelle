@@ -10,6 +10,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/onescluster/coordinator/pkg/db"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
+	"github.com/onescluster/coordinator/tests/integration/testutil"
 )
 
 // Integration tests for GPU scheduler
@@ -29,12 +30,7 @@ func TestSchedulerBasicPlacement(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("schedule_to_node_with_sufficient_vram", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -107,12 +103,7 @@ func TestSchedulerBestFit(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("best_fit_selects_smallest_sufficient_node", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -196,12 +187,7 @@ func TestSchedulerVRAMFragmentation(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("accounts_for_used_vram", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -273,12 +259,7 @@ func TestSchedulerNoSuitableNode(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("returns_error_when_no_node_fits", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
