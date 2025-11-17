@@ -125,6 +125,64 @@ cargo test -- --nocapture
 cargo test --test storage_integration -- --ignored
 ```
 
+## Test Network Topology
+
+To improve test maintainability and consistency, test files use named constants for network addresses instead of hardcoded IPs.
+
+### Standard Test Network Configuration
+
+**Integration and E2E tests** use the following standard addresses:
+
+```go
+const (
+    // Local addresses for coordinator/server components
+    testLocalAddr    = "127.0.0.1:8080"     // Primary local coordinator
+    testLocalAddrAlt = "192.168.1.100:8080" // Alternative for multi-node tests
+    
+    // Distributed node addresses for GPU scheduling tests
+    testNodeAddr1    = "192.168.1.10:50051" // Node 1 (various VRAM configs)
+    testNodeAddr2    = "192.168.1.20:50051" // Node 2 (various VRAM configs)
+    testNodeAddr3    = "192.168.1.30:50051" // Node 3 (various VRAM configs)
+)
+```
+
+### Test Network Segments
+
+- **127.0.0.1**: Local loopback for coordinator and server components
+- **192.168.1.0/24**: Simulated distributed cluster network for:
+  - GPU-enabled Rigs (10-19 range)
+  - Standard compute nodes (20-99 range)
+  - Test coordinators (100+ range)
+
+### E2E Test Configurations
+
+**GPU Simulation Tests** (`client/e2e/gpu_simulation_test.go`):
+- Uses dynamic port allocation (`:0`) for local testing
+- Simulates 3 GPU rigs with different VRAM configurations:
+  - Rig A (192.168.1.10): 2x RTX 4090 GPUs
+  - Rig B (192.168.1.11): 1x RTX 4090 GPU
+  - Rig C (192.168.1.12): 4x A100 GPUs
+
+**Integration Tests** (`tests/integration/`):
+- Uses standard node addresses for distributed scheduling tests
+- Tests coordinator clustering and master election scenarios
+- Simulates varying VRAM capacities and utilization patterns
+
+### Modifying Test Networks
+
+When adding new tests:
+1. Use existing constants when possible for consistency
+2. Add new constants at the package level if needed
+3. Document the purpose of each address in comments
+4. Follow the network segmentation scheme above
+
+Example:
+```go
+const (
+    testNodeAddr4 = "192.168.1.40:50051" // Node 4: High-memory node
+)
+```
+
 ## Test Categories
 
 ### Unit Tests

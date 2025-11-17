@@ -25,6 +25,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Test network topology constants
+// These represent the simulated network configuration for GPU-enabled Rigs
+const (
+	testNodeAddr1 = "192.168.1.10" // Rig A: 2x RTX 4090
+	testNodeAddr2 = "192.168.1.11" // Rig B: 1x RTX 4090
+	testNodeAddr3 = "192.168.1.12" // Rig C: 4x A100
+)
+
 // mockAgentServer simulates an Agent's gRPC server for Week 4 E2E test
 type mockAgentServer struct {
 	pb.UnimplementedCoordinatorServer
@@ -89,21 +97,21 @@ func TestGpuSimulationE2E(t *testing.T) {
 	_, err = testDB.Exec(`
 		INSERT INTO nodes (id, address, headscale_name, status, is_master, last_seen, created_at, updated_at, total_vram_bytes, used_vram_bytes, cuda_driver_version)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, "rig-a", "192.168.1.10", "rig-a", "active", 0, now, now, now, 96*1024*1024*1024, 40*1024*1024*1024, "12.2")
+	`, "rig-a", testNodeAddr1, "rig-a", "active", 0, now, now, now, 96*1024*1024*1024, 40*1024*1024*1024, "12.2")
 	require.NoError(t, err)
 
 	// Rig B: 1x RTX 4090 (48 GB total, 10 GB used)
 	_, err = testDB.Exec(`
 		INSERT INTO nodes (id, address, headscale_name, status, is_master, last_seen, created_at, updated_at, total_vram_bytes, used_vram_bytes, cuda_driver_version)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, "rig-b", "192.168.1.11", "rig-b", "active", 0, now, now, now, 48*1024*1024*1024, 10*1024*1024*1024, "12.2")
+	`, "rig-b", testNodeAddr2, "rig-b", "active", 0, now, now, now, 48*1024*1024*1024, 10*1024*1024*1024, "12.2")
 	require.NoError(t, err)
 
 	// Rig C: 4x A100 (320 GB total, 300 GB used - nearly full)
 	_, err = testDB.Exec(`
 		INSERT INTO nodes (id, address, headscale_name, status, is_master, last_seen, created_at, updated_at, total_vram_bytes, used_vram_bytes, cuda_driver_version)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, "rig-c", "192.168.1.12", "rig-c", "active", 0, now, now, now, 320*1024*1024*1024, 300*1024*1024*1024, "12.2")
+	`, "rig-c", testNodeAddr3, "rig-c", "active", 0, now, now, now, 320*1024*1024*1024, 300*1024*1024*1024, "12.2")
 	require.NoError(t, err)
 
 	// --- Setup: Mock Agent gRPC Server ---

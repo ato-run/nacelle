@@ -20,6 +20,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Test network topology constants
+const (
+	testLocalAddr = "127.0.0.1" // Local address for test gRPC server
+)
+
 func TestAgentCoordinatorVRAME2E(t *testing.T) {
     t.Parallel()
 
@@ -35,7 +40,7 @@ func TestAgentCoordinatorVRAME2E(t *testing.T) {
 
     nodeStore := db.NewNodeStore(sqlite)
 
-    lis, err := net.Listen("tcp", "127.0.0.1:0")
+    lis, err := net.Listen("tcp", testLocalAddr+":0")
     if err != nil {
         t.Fatalf("failed to listen: %v", err)
     }

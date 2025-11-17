@@ -19,6 +19,13 @@ import (
 // Integration tests for Coordinator clustering and master election
 // These tests require a running rqlite instance
 
+// Test network topology constants
+// These represent the simulated network configuration for coordinator clustering
+const (
+	testLocalAddr    = "127.0.0.1:8080"     // Local coordinator address
+	testLocalAddrAlt = "192.168.1.100:8080" // Alternative local address for multi-node tests
+)
+
 func getRQLiteAddr() string {
 	addr := os.Getenv("RQLITE_ADDR")
 	if addr == "" {
@@ -84,7 +91,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 		// Register this node
 		node := &db.Node{
 			ID:        nodeID,
-			Address:   "127.0.0.1:8080",
+			Address:   testLocalAddr,
 			Status:    db.NodeStatusActive,
 			Resources: db.NodeResources{},
 			LastSeen:  time.Now(),
@@ -153,7 +160,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 		for _, nid := range []string{node1ID, node2ID, node3ID} {
 			node := &db.Node{
 				ID:       nid,
-				Address:  "127.0.0.1:8080",
+				Address:  testLocalAddr,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 			}
@@ -220,7 +227,7 @@ func TestStateConsistencyIntegration(t *testing.T) {
 		// Create node
 		node := &db.Node{
 			ID:       nodeID,
-			Address:  "192.168.1.100:8080",
+			Address:  testLocalAddrAlt,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 		}
@@ -291,7 +298,7 @@ func TestFailoverScenario(t *testing.T) {
 		for _, nid := range []string{masterID, node2ID, node3ID} {
 			node := &db.Node{
 				ID:       nid,
-				Address:  "127.0.0.1:8080",
+				Address:  testLocalAddr,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 			}
