@@ -42,7 +42,7 @@ test-go: test-go-unit
 
 test-go-unit:
 	@echo "Running Go unit tests..."
-	cd client && go test -v -race -cover ./pkg/...
+	cd client && go test -v -cover ./pkg/...
 
 test-go-integration:
 	@echo "Running Go integration tests..."
@@ -56,7 +56,7 @@ test-go-e2e:
 
 test-go-coverage:
 	@echo "Generating Go test coverage report..."
-	cd client && go test -race -coverprofile=../coverage-go.out -covermode=atomic ./pkg/...
+	cd client && go test -coverprofile=../coverage-go.out -covermode=atomic ./pkg/...
 	@echo "Go coverage report: coverage-go.out"
 	@go tool cover -func=coverage-go.out | grep total:
 

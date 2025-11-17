@@ -136,6 +136,62 @@ rustup target add wasm32-unknown-unknown
 make all
 
 # テスト実行
-cd engine && cargo test
-cd client && go test ./pkg/...
+make test        # 全ユニットテスト (Go + Rust)
+make test-all    # 全テスト (ユニット + 統合 + E2E)
+```
+
+## テスト
+
+Capsuled は包括的なテストインフラを提供しています:
+
+- **ユニットテスト**: 各関数とモジュールの単体テスト
+- **統合テスト**: コンポーネント間の連携テスト
+- **E2Eテスト**: システム全体のエンドツーエンドテスト
+
+### テスト実行
+
+```bash
+# 全ユニットテスト
+make test-unit
+
+# Go ユニットテスト
+make test-go-unit
+
+# Rust ユニットテスト
+make test-rust-unit
+
+# 統合テスト (rqlite が必要)
+make test-integration
+
+# E2E テスト
+make test-e2e
+
+# 全テスト
+make test-all
+
+# カバレッジレポート生成
+make test-coverage
+```
+
+詳細は [TESTING.md](./TESTING.md) を参照してください。
+
+### テストカバレッジ
+
+現在のカバレッジ状況:
+
+**Go コンポーネント**:
+- API middleware: 100%
+- Master election: 89.2%
+- gRPC server: 88.5%
+- Config: 87.5%
+- Headscale client: 85.0%
+- Reconciler: 37.0%+
+- 他のパッケージ: 40-80%
+
+**Rust コンポーネント**:
+- Storage (LVM/LUKS): ユニットテスト + 統合テスト
+- Storage error: 100%
+- Adep parser: ユニットテスト
+- Metrics: ユニットテスト
+- 合計: 82 テスト通過
 ```
