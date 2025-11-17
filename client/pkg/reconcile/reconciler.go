@@ -46,6 +46,11 @@ type Reconciler struct {
 
 	once   sync.Once
 	stopCh chan struct{}
+
+	// testSyncCh is used only in tests for synchronization (optional, can be nil)
+	testSyncCh chan struct{}
+	// testDoneCh signals when the reconciler goroutine exits (test-only)
+	testDoneCh chan struct{}
 }
 
 // New creates a new reconciliation loop with the provided interval.
@@ -67,8 +72,18 @@ func NewWithNodeStore(nodeStore *db.NodeStore, interval time.Duration) *Reconcil
 
 // Start launches the reconciliation loop. It returns a function that can be used to stop the loop.
 func (r *Reconciler) Start(ctx context.Context) func() {
+	if r.testDoneCh == nil && r.testSyncCh != nil {
+		// For tests, create a channel to signal when goroutine exits
+		r.testDoneCh = make(chan struct{})
+	}
+
 	r.once.Do(func() {
-		go r.run(ctx)
+		go func() {
+			r.run(ctx)
+			if r.testDoneCh != nil {
+				close(r.testDoneCh)
+			}
+		}()
 	})
 
 	return func() {
@@ -77,6 +92,10 @@ func (r *Reconciler) Start(ctx context.Context) func() {
 			return
 		default:
 			close(r.stopCh)
+		}
+		if r.testDoneCh != nil {
+			// Wait for goroutine to exit when testDoneCh is set
+			<-r.testDoneCh
 		}
 	}
 }
@@ -94,6 +113,14 @@ func (r *Reconciler) run(ctx context.Context) {
 		case <-ticker.C:
 			if err := r.reconcileOnce(ctx); err != nil {
 				log.Printf("⚠️ Reconcile iteration failed: %v", err)
+			}
+			// Signal test synchronization if channel is set
+			if r.testSyncCh != nil {
+				select {
+				case r.testSyncCh <- struct{}{}:
+				default:
+					// Non-blocking send to avoid deadlock
+				}
 			}
 		}
 	}

@@ -129,14 +129,23 @@ func TestReconcilerStartAndStop(t *testing.T) {
 	// Create reconciler with short interval for testing
 	r := New(store, 50*time.Millisecond)
 
+	// Add test synchronization channel
+	syncCh := make(chan struct{}, 1)
+	r.testSyncCh = syncCh
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	// Start reconciler
 	stop := r.Start(ctx)
 
-	// Wait for at least one reconciliation cycle
-	time.Sleep(100 * time.Millisecond)
+	// Wait for at least one reconciliation cycle via channel
+	select {
+	case <-syncCh:
+		// Successfully received signal that reconciliation ran
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timeout waiting for reconciliation cycle")
+	}
 
 	// Stop reconciler
 	stop()
@@ -153,17 +162,34 @@ func TestReconcilerContextCancellation(t *testing.T) {
 
 	r := New(store, 50*time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	// Add test synchronization channel with buffer to handle concurrent signals
+	syncCh := make(chan struct{}, 10)
+	r.testSyncCh = syncCh
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Start reconciler
 	r.Start(ctx)
 
-	// Wait for context to cancel
-	<-ctx.Done()
+	// Wait for at least one reconciliation cycle to ensure it started
+	select {
+	case <-syncCh:
+		// Successfully received signal that reconciliation ran
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timeout waiting for initial reconciliation cycle")
+	}
 
-	// Give it a moment to clean up
-	time.Sleep(50 * time.Millisecond)
+	// Cancel context
+	cancel()
+
+	// Wait for the reconciler goroutine to exit
+	// This is the deterministic way to verify context cancellation stops the reconciler
+	select {
+	case <-r.testDoneCh:
+		// Reconciler stopped as expected
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timeout waiting for reconciler to stop after context cancellation")
+	}
 }
 
 func TestReconcilerDefaultInterval(t *testing.T) {
