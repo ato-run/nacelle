@@ -7,6 +7,11 @@ package gpu
 
 import "github.com/Masterminds/semver/v3"
 
+const (
+	// Gigabyte represents one gigabyte in bytes (1 GB = 1024^3 bytes)
+	Gigabyte = 1024 * 1024 * 1024
+)
+
 // RigGpuInfo represents GPU resource information reported by an Agent and stored in the database.
 // This corresponds to the Rust RigHardwareReport from the Agent.
 type RigGpuInfo struct {

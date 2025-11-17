@@ -48,7 +48,7 @@ func TestListNodes(t *testing.T) {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		
+
 		response := ListNodesResponse{Nodes: testNodes}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("Failed to encode response: %v", err)
@@ -158,7 +158,7 @@ func TestGetNodeByName(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		
+
 		response := ListNodesResponse{Nodes: testNodes}
 		json.NewEncoder(w).Encode(response)
 	}))
@@ -194,28 +194,28 @@ func TestGetNodeByName(t *testing.T) {
 
 func TestGetQuorumSize(t *testing.T) {
 	tests := []struct {
-		name          string
-		nodeCount     int
+		name           string
+		nodeCount      int
 		expectedQuorum int
 	}{
 		{
-			name:          "3 nodes",
-			nodeCount:     3,
+			name:           "3 nodes",
+			nodeCount:      3,
 			expectedQuorum: 3,
 		},
 		{
-			name:          "5 nodes",
-			nodeCount:     5,
+			name:           "5 nodes",
+			nodeCount:      5,
 			expectedQuorum: 5,
 		},
 		{
-			name:          "1 node",
-			nodeCount:     1,
+			name:           "1 node",
+			nodeCount:      1,
 			expectedQuorum: 1,
 		},
 		{
-			name:          "0 nodes",
-			nodeCount:     0,
+			name:           "0 nodes",
+			nodeCount:      0,
 			expectedQuorum: 0,
 		},
 	}
@@ -227,7 +227,7 @@ func TestGetQuorumSize(t *testing.T) {
 			for i := 0; i < tt.nodeCount; i++ {
 				nodes[i] = Node{
 					ID:     string(rune(i + 1)),
-					Name:   "node-" + string(rune(i + 1)),
+					Name:   "node-" + string(rune(i+1)),
 					Online: true,
 				}
 			}
@@ -235,7 +235,7 @@ func TestGetQuorumSize(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				
+
 				response := ListNodesResponse{Nodes: nodes}
 				json.NewEncoder(w).Encode(response)
 			}))
@@ -340,7 +340,7 @@ func TestClientContextCancellation(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "test-api-key", 5*time.Second)
-	
+
 	// Create context that gets cancelled after 100ms
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -361,7 +361,7 @@ func TestClientContextCancellation(t *testing.T) {
 
 // Helper function
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		len(s) > len(substr)+1 && s[1:len(substr)+1] == substr))
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			len(s) > len(substr)+1 && s[1:len(substr)+1] == substr))
 }

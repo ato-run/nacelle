@@ -7,10 +7,10 @@ import (
 func TestNodeResourcesCalculateAvailableResources(t *testing.T) {
 	resources := &NodeResources{
 		NodeID:           "node-1",
-		CPUTotal:         8000,  // 8 cores in millicores
-		CPUAllocated:     3000,  // 3 cores allocated
-		MemoryTotal:      16000000000, // 16 GB
-		MemoryAllocated:  8000000000,  // 8 GB allocated
+		CPUTotal:         8000,          // 8 cores in millicores
+		CPUAllocated:     3000,          // 3 cores allocated
+		MemoryTotal:      16000000000,   // 16 GB
+		MemoryAllocated:  8000000000,    // 8 GB allocated
 		StorageTotal:     1000000000000, // 1 TB
 		StorageAllocated: 500000000000,  // 500 GB allocated
 	}

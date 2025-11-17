@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	_ "modernc.org/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 
 	"github.com/onescluster/coordinator/pkg/db"
 )
