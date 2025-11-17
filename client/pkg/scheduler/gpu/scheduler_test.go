@@ -127,21 +127,21 @@ func TestGpuScheduling_MultipleCandidates(t *testing.T) {
 	// Three Rigs with different utilization profiles
 	rigs := []*RigGpuInfo{
 		{
-			RigID:             "rig-low-util",    // 25% utilized -> will be 50% after placement
+			RigID:             "rig-low-util", // 25% utilized -> will be 50% after placement
 			TotalVRAMBytes:    64 * GB,
-			UsedVRAMBytes:     16 * GB,           // 48 GB free
+			UsedVRAMBytes:     16 * GB, // 48 GB free
 			CudaDriverVersion: "12.2",
 		},
 		{
 			RigID:             "rig-medium-util", // 50% utilized -> will be 75% after placement
 			TotalVRAMBytes:    64 * GB,
-			UsedVRAMBytes:     32 * GB,           // 32 GB free
+			UsedVRAMBytes:     32 * GB, // 32 GB free
 			CudaDriverVersion: "12.2",
 		},
 		{
-			RigID:             "rig-high-util",   // 75% utilized -> will be 100% after placement
+			RigID:             "rig-high-util", // 75% utilized -> will be 100% after placement
 			TotalVRAMBytes:    64 * GB,
-			UsedVRAMBytes:     48 * GB,           // 16 GB free
+			UsedVRAMBytes:     48 * GB, // 16 GB free
 			CudaDriverVersion: "12.2",
 		},
 	}
@@ -177,9 +177,9 @@ func TestGpuScheduling_CPUOnlyWorkload(t *testing.T) {
 		},
 		{
 			RigID:             "rig-cpu-only",
-			TotalVRAMBytes:    0,             // No GPU
+			TotalVRAMBytes:    0, // No GPU
 			UsedVRAMBytes:     0,
-			CudaDriverVersion: "",            // No CUDA
+			CudaDriverVersion: "", // No CUDA
 		},
 	}
 
@@ -227,10 +227,10 @@ func TestGpuScheduling_ExactVRAMMatch(t *testing.T) {
 // TestGpuScheduling_CudaVersionComparison verifies semantic version comparison.
 func TestGpuScheduling_CudaVersionComparison(t *testing.T) {
 	testCases := []struct {
-		name              string
-		rigCuda           string
-		requiredCuda      string
-		shouldPass        bool
+		name         string
+		rigCuda      string
+		requiredCuda string
+		shouldPass   bool
 	}{
 		{"ExactMatch", "12.0", "12.0", true},
 		{"NewerMinor", "12.1", "12.0", true},

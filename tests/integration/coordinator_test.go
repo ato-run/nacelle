@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -14,10 +15,18 @@ import (
 	"github.com/onescluster/coordinator/pkg/gossip"
 	"github.com/onescluster/coordinator/pkg/headscale"
 	"github.com/onescluster/coordinator/pkg/master"
+	"github.com/onescluster/coordinator/tests/integration/testutil"
 )
 
 // Integration tests for Coordinator clustering and master election
 // These tests require a running rqlite instance
+
+// Test network topology constants
+// These represent the simulated network configuration for coordinator clustering
+const (
+	testLocalAddr    = "127.0.0.1:8080"     // Local coordinator address
+	testLocalAddrAlt = "192.168.1.100:8080" // Alternative local address for multi-node tests
+)
 
 func getRQLiteAddr() string {
 	addr := os.Getenv("RQLITE_ADDR")
@@ -28,13 +37,13 @@ func getRQLiteAddr() string {
 }
 
 func skipIfNoRQLite(t *testing.T) {
-	// Try to connect to rqlite
-	cfg := &db.Config{
-		Addresses:  []string{getRQLiteAddr()},
-		MaxRetries: 1,
-		RetryDelay: 100 * time.Millisecond,
-		Timeout:    2 * time.Second,
-	}
+	// Try to connect to rqlite with shorter timeouts for connection check
+	cfg := testutil.NewDBConfigWithOverrides(
+		[]string{getRQLiteAddr()},
+		1,                    // maxRetries
+		100*time.Millisecond, // retryDelay
+		2*time.Second,        // timeout
+	)
 
 	client, err := db.NewClient(cfg)
 	if err != nil {
@@ -54,12 +63,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 
 	t.Run("single_node_election", func(t *testing.T) {
 		// Create rqlite client
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -84,7 +88,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 		// Register this node
 		node := &db.Node{
 			ID:        nodeID,
-			Address:   "127.0.0.1:8080",
+			Address:   testLocalAddr,
 			Status:    db.NodeStatusActive,
 			Resources: db.NodeResources{},
 			LastSeen:  time.Now(),
@@ -125,12 +129,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 
 	t.Run("multi_node_election", func(t *testing.T) {
 		// Create three nodes and verify smallest ULID is elected
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -153,7 +152,7 @@ func TestMasterElectionIntegration(t *testing.T) {
 		for _, nid := range []string{node1ID, node2ID, node3ID} {
 			node := &db.Node{
 				ID:       nid,
-				Address:  "127.0.0.1:8080",
+				Address:  testLocalAddr,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 			}
@@ -197,12 +196,7 @@ func TestStateConsistencyIntegration(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("node_crud_operations", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -220,7 +214,7 @@ func TestStateConsistencyIntegration(t *testing.T) {
 		// Create node
 		node := &db.Node{
 			ID:       nodeID,
-			Address:  "192.168.1.100:8080",
+			Address:  testLocalAddrAlt,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 		}
@@ -264,12 +258,7 @@ func TestFailoverScenario(t *testing.T) {
 
 	// This test simulates master failure and verifies automatic re-election
 	t.Run("master_failure_recovery", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -291,7 +280,7 @@ func TestFailoverScenario(t *testing.T) {
 		for _, nid := range []string{masterID, node2ID, node3ID} {
 			node := &db.Node{
 				ID:       nid,
-				Address:  "127.0.0.1:8080",
+				Address:  testLocalAddr,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 			}

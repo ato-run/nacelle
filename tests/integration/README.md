@@ -43,10 +43,25 @@ docker stop rqlite-test && docker rm rqlite-test
 
 ### Environment Variables
 
+#### General Test Configuration
 - `RQLITE_ADDR`: rqlite address (default: http://localhost:4001)
 - `HEADSCALE_MOCK`: Use mock headscale server (default: true)
 - `AGENT_ADDR`: Agent gRPC address for testing
 - `SKIP_SLOW_TESTS`: Skip slow integration tests
+
+#### Test Configuration (via testutil)
+The `testutil` package provides shared configuration with environment variable overrides:
+- `TEST_MAX_RETRIES`: Maximum retry attempts for database connections (default: 3)
+- `TEST_RETRY_DELAY`: Retry delay in seconds (default: 1)
+- `TEST_TIMEOUT`: Request timeout in seconds (default: 10)
+
+Example:
+```bash
+# Run with custom timeout settings
+TEST_TIMEOUT=20 TEST_MAX_RETRIES=5 go test -v -tags=integration ./tests/integration/...
+```
+
+See [testutil/README.md](testutil/README.md) for more details on test configuration.
 
 ## Test Coverage
 

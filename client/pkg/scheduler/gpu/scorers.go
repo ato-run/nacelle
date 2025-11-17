@@ -25,15 +25,16 @@ type ScoreFunc func(rig *RigGpuInfo, constraints *GpuConstraints) int64
 //  3. Higher utilization = higher score = higher priority
 //
 // Example Scenario:
-//   Rig A: 96 GB total, 40 GB used (56 GB free)
-//   Rig B: 48 GB total, 10 GB used (38 GB free)
-//   Request: 30 GB
 //
-//   After placement:
-//   Rig A: (40 + 30) / 96 = 72.9% utilization -> score 72
-//   Rig B: (10 + 30) / 48 = 83.3% utilization -> score 83
+//	Rig A: 96 GB total, 40 GB used (56 GB free)
+//	Rig B: 48 GB total, 10 GB used (38 GB free)
+//	Request: 30 GB
 //
-//   Result: Rig B is chosen (higher score) because it achieves better bin packing
+//	After placement:
+//	Rig A: (40 + 30) / 96 = 72.9% utilization -> score 72
+//	Rig B: (10 + 30) / 48 = 83.3% utilization -> score 83
+//
+//	Result: Rig B is chosen (higher score) because it achieves better bin packing
 //
 // Benefits:
 // - Consolidates workloads onto fewer nodes

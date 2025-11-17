@@ -12,14 +12,17 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"github.com/onescluster/coordinator/pkg/db"
 	server "github.com/onescluster/coordinator/pkg/grpc"
 	pb "github.com/onescluster/coordinator/pkg/proto"
 	"google.golang.org/grpc"
+	_ "modernc.org/sqlite"
 )
 
-const gigabyte = uint64(1024 * 1024 * 1024)
+const (
+	gigabyte      = uint64(1024 * 1024 * 1024)
+	testLocalAddr = "127.0.0.1" // Local address for test gRPC server
+)
 
 func TestAgentCoordinatorVRAME2E(t *testing.T) {
 	t.Parallel()
@@ -37,7 +40,7 @@ func TestAgentCoordinatorVRAME2E(t *testing.T) {
 
 	nodeStore := db.NewNodeStore(sqlite)
 
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	lis, err := net.Listen("tcp", testLocalAddr+":0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}

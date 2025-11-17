@@ -45,9 +45,9 @@ type Scheduler struct {
 func NewScheduler() *Scheduler {
 	return &Scheduler{
 		FilterFuncs: []FilterFunc{
-			FilterHasGPU,          // 1. Check if Rig has any GPU at all
-			FilterByVRAM,          // 2. Check VRAM availability
-			FilterByCudaVersion,   // 3. Check CUDA version compatibility
+			FilterHasGPU,        // 1. Check if Rig has any GPU at all
+			FilterByVRAM,        // 2. Check VRAM availability
+			FilterByCudaVersion, // 3. Check CUDA version compatibility
 		},
 		ScoreFuncs: []struct {
 			Func   ScoreFunc
