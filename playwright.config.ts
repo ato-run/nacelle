@@ -7,6 +7,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     trace: "on-first-retry",
+    baseURL: process.env.COORDINATOR_URL || "http://localhost:8080",
   },
   projects: [
     {
@@ -14,4 +15,7 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
+  // Web server configuration for local testing
+  // The coordinator must be started separately for these tests to pass
+  // Run: cd client && go run ./cmd/client/main.go -config test-config.yaml
 });
