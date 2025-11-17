@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/onescluster/coordinator/pkg/api"
-	"github.com/onescluster/coordinator/pkg/db"
 )
 
 //go:embed web/*
@@ -19,28 +18,22 @@ var webFS embed.FS
 // Server represents the HTTP server for the coordinator UI and API
 type Server struct {
 	addr          string
-	nodeStore     *db.NodeStore
 	healthHandler *api.HealthHandler
-	nodeHandler   *api.NodeHandler
 	server        *http.Server
 }
 
 // Config holds HTTP server configuration
 type Config struct {
-	Addr      string
-	NodeStore *db.NodeStore
+	Addr string
 }
 
 // NewServer creates a new HTTP server instance
 func NewServer(cfg Config) *Server {
 	healthHandler := api.NewHealthHandler()
-	nodeHandler := api.NewNodeHandler(cfg.NodeStore)
 
 	s := &Server{
 		addr:          cfg.Addr,
-		nodeStore:     cfg.NodeStore,
 		healthHandler: healthHandler,
-		nodeHandler:   nodeHandler,
 	}
 
 	mux := http.NewServeMux()
@@ -58,9 +51,6 @@ func NewServer(cfg Config) *Server {
 	mux.HandleFunc("/health", healthHandler.HandleHealth)
 	mux.HandleFunc("/ready", healthHandler.HandleReadiness)
 	mux.HandleFunc("/live", healthHandler.HandleLiveness)
-
-	// API endpoints
-	mux.HandleFunc("/api/nodes", nodeHandler.HandleListNodes)
 
 	s.server = &http.Server{
 		Addr:         cfg.Addr,

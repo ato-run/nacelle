@@ -15,6 +15,7 @@ import (
 	"github.com/onescluster/coordinator/pkg/db"
 	"github.com/onescluster/coordinator/pkg/gossip"
 	"github.com/onescluster/coordinator/pkg/headscale"
+	"github.com/onescluster/coordinator/pkg/httpserver"
 	"github.com/onescluster/coordinator/pkg/master"
 	"github.com/onescluster/coordinator/pkg/reconcile"
 )
@@ -199,10 +200,32 @@ func main() {
 	stopReconciler := reconciler.Start(rootCtx)
 	defer stopReconciler()
 
+	// Start HTTP API server for coordinator UI and health checks
+	log.Println("Starting HTTP API server...")
+	httpAddr := ":8080" // Default address for coordinator UI
+	httpSrv := httpserver.NewServer(httpserver.Config{
+		Addr: httpAddr,
+	})
+
+	// Start HTTP server in background
+	go func() {
+		if err := httpSrv.Start(); err != nil {
+			log.Printf("HTTP server stopped: %v", err)
+		}
+	}()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("HTTP server shutdown error: %v", err)
+		}
+	}()
+
+	log.Printf("HTTP UI and API server listening on %s", httpAddr)
+
 	// TODO: Next steps
 	// 1. Initialize Wasmer runtime for adep-logic.wasm
 	// 2. Start gRPC client to communicate with agents
-	// 3. Start HTTP API server
 
 	log.Println("Coordinator initialized successfully")
 	log.Printf("Node: %s (%s)", node.ID, node.HeadscaleName)
