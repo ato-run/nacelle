@@ -69,7 +69,7 @@ func TestGetHistoricalLogs(t *testing.T) {
 	handler := NewLogsHandler()
 
 	logs := handler.getHistoricalLogs("test-capsule", 10)
-	
+
 	// Should return at most 5 mock entries (as per implementation)
 	assert.LessOrEqual(t, len(logs), 5)
 	assert.LessOrEqual(t, len(logs), 10)

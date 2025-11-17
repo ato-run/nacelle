@@ -20,15 +20,15 @@ import (
 
 // AdepManifest represents the adep.json structure (simplified for Week 4)
 type AdepManifest struct {
-	Name       string            `json:"name"`
-	Scheduling SchedulingConfig  `json:"scheduling"`
-	Compute    ComputeConfig     `json:"compute"`
-	Volumes    []VolumeConfig    `json:"volumes"`
+	Name       string           `json:"name"`
+	Scheduling SchedulingConfig `json:"scheduling"`
+	Compute    ComputeConfig    `json:"compute"`
+	Volumes    []VolumeConfig   `json:"volumes"`
 }
 
 type SchedulingConfig struct {
-	GPU *GpuConstraints `json:"gpu"`
-	Strategy string      `json:"strategy,omitempty"`
+	GPU      *GpuConstraints `json:"gpu"`
+	Strategy string          `json:"strategy,omitempty"`
 }
 
 type GpuConstraints struct {
@@ -115,10 +115,10 @@ type AgentClientFactory func(ctx context.Context, rigID string) (pb.CoordinatorC
 
 // DeployHandler handles workload deployment requests
 type DeployHandler struct {
-	NodeStore         *db.NodeStore
-	Scheduler         *gpu.Scheduler
+	NodeStore          *db.NodeStore
+	Scheduler          *gpu.Scheduler
 	AgentClientFactory AgentClientFactory // Optional: for testing (nil = use default)
-	WasmHost          *wasm.WasmerHost   // Optional: for Wasm validation
+	WasmHost           *wasm.WasmerHost   // Optional: for Wasm validation
 }
 
 // NewDeployHandler creates a new deploy handler
@@ -127,7 +127,7 @@ func NewDeployHandler(nodeStore *db.NodeStore, scheduler *gpu.Scheduler) *Deploy
 		NodeStore:          nodeStore,
 		Scheduler:          scheduler,
 		AgentClientFactory: nil, // Use default (localhost:50051)
-		WasmHost:          nil, // Initialize on first use
+		WasmHost:           nil, // Initialize on first use
 	}
 }
 

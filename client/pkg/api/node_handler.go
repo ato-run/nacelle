@@ -22,15 +22,15 @@ func NewNodeHandler(nodeStore *db.NodeStore) *NodeHandler {
 
 // NodeInfo represents node information for API response
 type NodeInfo struct {
-	RigID              string         `json:"rig_id"`
-	Status             string         `json:"status"`
-	TotalVRAM          uint64         `json:"total_vram_bytes"`
-	AllocatedVRAM      uint64         `json:"allocated_vram_bytes"`
-	AvailableVRAM      uint64         `json:"available_vram_bytes"`
-	GPUs               []GPUInfo      `json:"gpus"`
-	CudaVersion        string         `json:"cuda_version,omitempty"`
-	DriverVersion      string         `json:"driver_version,omitempty"`
-	RunningWorkloads   int            `json:"running_workloads"`
+	RigID            string    `json:"rig_id"`
+	Status           string    `json:"status"`
+	TotalVRAM        uint64    `json:"total_vram_bytes"`
+	AllocatedVRAM    uint64    `json:"allocated_vram_bytes"`
+	AvailableVRAM    uint64    `json:"available_vram_bytes"`
+	GPUs             []GPUInfo `json:"gpus"`
+	CudaVersion      string    `json:"cuda_version,omitempty"`
+	DriverVersion    string    `json:"driver_version,omitempty"`
+	RunningWorkloads int       `json:"running_workloads"`
 }
 
 // GPUInfo represents GPU information for API response

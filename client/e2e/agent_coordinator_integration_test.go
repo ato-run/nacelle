@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"github.com/onescluster/coordinator/pkg/db"
 	server "github.com/onescluster/coordinator/pkg/grpc"
 	pb "github.com/onescluster/coordinator/pkg/proto"
 	"google.golang.org/grpc"
+	_ "modernc.org/sqlite"
 )
 
 const (

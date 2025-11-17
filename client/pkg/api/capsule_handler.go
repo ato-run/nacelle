@@ -47,7 +47,7 @@ func (h *CapsuleHandler) HandleGetCapsule(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
-	
+
 	// Query capsule from CapsuleStore
 	capsule, err := h.CapsuleStore.Get(ctx, capsuleID)
 	if err != nil {
@@ -73,7 +73,7 @@ func (h *CapsuleHandler) HandleListCapsules(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := r.Context()
-	
+
 	// Query all capsules from CapsuleStore
 	capsules, err := h.CapsuleStore.List(ctx, "", "")
 	if err != nil {
