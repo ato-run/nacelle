@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package testutil
@@ -62,8 +63,9 @@ func LoadConfig() IntegrationTestConfig {
 // The addresses parameter should contain rqlite node addresses.
 //
 // Example:
-//   cfg := testutil.NewDBConfig([]string{"http://localhost:4001"})
-//   client, err := db.NewClient(cfg)
+//
+//	cfg := testutil.NewDBConfig([]string{"http://localhost:4001"})
+//	client, err := db.NewClient(cfg)
 func NewDBConfig(addrs []string) *db.Config {
 	cfg := LoadConfig()
 	return &db.Config{
@@ -79,7 +81,8 @@ func NewDBConfig(addrs []string) *db.Config {
 // (e.g., shorter timeouts for connection checks).
 //
 // Example:
-//   cfg := testutil.NewDBConfigWithOverrides([]string{"http://localhost:4001"}, 1, 100*time.Millisecond, 2*time.Second)
+//
+//	cfg := testutil.NewDBConfigWithOverrides([]string{"http://localhost:4001"}, 1, 100*time.Millisecond, 2*time.Second)
 func NewDBConfigWithOverrides(addrs []string, maxRetries int, retryDelay, timeout time.Duration) *db.Config {
 	return &db.Config{
 		Addresses:  addrs,

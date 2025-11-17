@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -53,7 +54,7 @@ func TestSchedulerBasicPlacement(t *testing.T) {
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
-				TotalVRAMBytes: 8 * gpu.Gigabyte,  // 8GB
+				TotalVRAMBytes: 8 * gpu.Gigabyte, // 8GB
 				UsedVRAMBytes:  0,
 			},
 		}
