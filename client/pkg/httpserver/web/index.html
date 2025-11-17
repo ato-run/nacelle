@@ -116,8 +116,7 @@
             <ul>
                 <li><a href="/health">Health Check</a></li>
                 <li><a href="/ready">Readiness Check</a></li>
-                <li><a href="/api/nodes">Node Status API</a></li>
-                <li><a href="/api/capsules">Capsules API</a></li>
+                <li><a href="/live">Liveness Check</a></li>
             </ul>
         </div>
     </main>
@@ -141,20 +140,13 @@
                     document.getElementById('version').textContent = data.version;
                 }
                 
-                // Try to get node info
-                try {
-                    const nodesResponse = await fetch('/api/nodes');
-                    const nodesData = await nodesResponse.json();
-                    if (nodesData && nodesData.length > 0) {
-                        document.getElementById('node-id').textContent = nodesData[0].id || 'Unknown';
-                    }
-                } catch (e) {
-                    document.getElementById('node-id').textContent = 'N/A';
-                }
+                // Node ID not available yet - Phase 2 feature
+                document.getElementById('node-id').textContent = 'Phase 2';
             } catch (error) {
                 console.error('Failed to fetch health:', error);
                 document.getElementById('status').textContent = 'Unknown';
                 document.getElementById('status').style.backgroundColor = '#e74c3c';
+                document.getElementById('uptime').textContent = 'N/A';
             }
         }
         
