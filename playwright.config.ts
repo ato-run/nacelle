@@ -7,7 +7,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     trace: "on-first-retry",
-    baseURL: process.env.COORDINATOR_URL || "http://localhost:8080",
+    baseURL: "http://localhost:8080",
   },
   projects: [
     {
@@ -15,7 +15,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  // Web server configuration for local testing
-  // The coordinator must be started separately for these tests to pass
-  // Run: cd client && go run ./cmd/client/main.go -config test-config.yaml
+  // Web server configuration for automated testing
+  // This starts a lightweight test server that serves the coordinator UI
+  webServer: {
+    command: "node tests/e2e/playwright/test-server.js",
+    port: 8080,
+    reuseExistingServer: !process.env.CI,
+    timeout: 10 * 1000,
+  },
 });
