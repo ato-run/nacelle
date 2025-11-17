@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -10,21 +11,27 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/onescluster/coordinator/pkg/db"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
+	"github.com/onescluster/coordinator/tests/integration/testutil"
 )
 
 // Integration tests for GPU scheduler
 // These tests verify the scheduler works correctly with a real database
 
+// Test network topology constants
+// These represent the simulated network configuration for distributed GPU scheduling
+const (
+	testNodeAddr1    = "192.168.1.10:50051" // Node 1
+	testNodeAddr2    = "192.168.1.20:50051" // Node 2
+	testNodeAddr3    = "192.168.1.30:50051" // Node 3
+	testLocalAddr    = "127.0.0.1:8080"     // Local coordinator address
+	testLocalAddrAlt = "192.168.1.100:8080" // Alternative local address
+)
+
 func TestSchedulerBasicPlacement(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("schedule_to_node_with_sufficient_vram", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -43,18 +50,18 @@ func TestSchedulerBasicPlacement(t *testing.T) {
 
 		node1 := &db.Node{
 			ID:       node1ID,
-			Address:  "192.168.1.10:50051",
+			Address:  testNodeAddr1,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
-				TotalVRAMBytes: 8 * gpu.Gigabyte,  // 8GB
+				TotalVRAMBytes: 8 * gpu.Gigabyte, // 8GB
 				UsedVRAMBytes:  0,
 			},
 		}
 
 		node2 := &db.Node{
 			ID:       node2ID,
-			Address:  "192.168.1.20:50051",
+			Address:  testNodeAddr2,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -97,12 +104,7 @@ func TestSchedulerBestFit(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("best_fit_selects_smallest_sufficient_node", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -123,7 +125,7 @@ func TestSchedulerBestFit(t *testing.T) {
 		nodes := []*db.Node{
 			{
 				ID:       nodeSmallID,
-				Address:  "192.168.1.10:50051",
+				Address:  testNodeAddr1,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 				Resources: db.NodeResources{
@@ -133,7 +135,7 @@ func TestSchedulerBestFit(t *testing.T) {
 			},
 			{
 				ID:       nodeMediumID,
-				Address:  "192.168.1.20:50051",
+				Address:  testNodeAddr2,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 				Resources: db.NodeResources{
@@ -143,7 +145,7 @@ func TestSchedulerBestFit(t *testing.T) {
 			},
 			{
 				ID:       nodeLargeID,
-				Address:  "192.168.1.30:50051",
+				Address:  testNodeAddr3,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 				Resources: db.NodeResources{
@@ -186,12 +188,7 @@ func TestSchedulerVRAMFragmentation(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("accounts_for_used_vram", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -210,7 +207,7 @@ func TestSchedulerVRAMFragmentation(t *testing.T) {
 
 		node1 := &db.Node{
 			ID:       node1ID,
-			Address:  "192.168.1.10:50051",
+			Address:  testNodeAddr1,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -221,7 +218,7 @@ func TestSchedulerVRAMFragmentation(t *testing.T) {
 
 		node2 := &db.Node{
 			ID:       node2ID,
-			Address:  "192.168.1.20:50051",
+			Address:  testNodeAddr2,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -263,12 +260,7 @@ func TestSchedulerNoSuitableNode(t *testing.T) {
 	skipIfNoRQLite(t)
 
 	t.Run("returns_error_when_no_node_fits", func(t *testing.T) {
-		cfg := &db.Config{
-			Addresses:  []string{getRQLiteAddr()},
-			MaxRetries: 3,
-			RetryDelay: 1 * time.Second,
-			Timeout:    10 * time.Second,
-		}
+		cfg := testutil.NewDBConfig([]string{getRQLiteAddr()})
 
 		client, err := db.NewClient(cfg)
 		if err != nil {
@@ -286,7 +278,7 @@ func TestSchedulerNoSuitableNode(t *testing.T) {
 
 		node1 := &db.Node{
 			ID:       node1ID,
-			Address:  "192.168.1.10:50051",
+			Address:  testNodeAddr1,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
