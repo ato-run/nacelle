@@ -1,0 +1,775 @@
+# capsuled OCI A1インスタンスデプロイメント タスク一覧
+# ============================================================
+# バージョン: 1.0.0
+# 最終更新: 2025-11-17
+# 目的: OCIのA1インスタンスにcapsuledをデプロイし、MacBookからdesktopで操作できる状態にする
+#
+# このドキュメントは、各作業を個別のissueとして起票可能に細分化しています。
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-11-17"
+  target_platform: "OCI A1 (ARM64/aarch64)"
+  description: "capsuledをOCIのA1インスタンスにデプロイし、MacBookから操作可能にするための作業一覧"
+  estimated_total_effort: "15-20 人日"
+
+# ============================================================
+# Phase 0: 環境準備・前提条件確認
+# ============================================================
+
+phase_0_preparation:
+  title: "環境準備・前提条件確認"
+  estimated_effort: "2-3 人日"
+  priority: "critical"
+  
+  tasks:
+    - task_id: "P0-1"
+      title: "OCI A1インスタンスの起動と基本設定"
+      description: |
+        OCI A1インスタンスを起動し、基本的なネットワーク設定とSSHアクセスを確立する
+      priority: "critical"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "OCI A1インスタンスの作成（Ubuntu 22.04 LTS ARM64推奨）"
+        - "SSHキーペアの生成・登録"
+        - "セキュリティグループ/ファイアウォールルールの初期設定"
+        - "インスタンスへのSSH接続確認"
+        - "基本パッケージの更新（apt update && apt upgrade）"
+      dependencies: []
+      deliverables:
+        - "起動済みのOCI A1インスタンス"
+        - "SSH接続可能な状態"
+      
+    - task_id: "P0-2"
+      title: "ビルド用依存パッケージのインストール確認"
+      description: |
+        Rust、Go、Python、システムライブラリなど、capsuledのビルドに必要な依存パッケージを確認・インストール
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "Rustツールチェーンのインストール（rustup）"
+        - "wasm32-unknown-unknownターゲットの追加"
+        - "Go 1.23+のインストール"
+        - "Python 3.10+およびpipのインストール"
+        - "protobuf-compilerのインストール"
+        - "bufのインストール（オプション）"
+        - "build-essential、pkg-config、libssl-devなど開発ツールのインストール"
+        - "LVM2、cryptsetupのインストール（ストレージ管理用）"
+        - "youki OCI runtimeのインストール（v0.3.3推奨）"
+        - "Caddyのインストール（ネットワーク管理用）"
+        - "各ツールのバージョン確認とテスト"
+      dependencies:
+        - "P0-1"
+      deliverables:
+        - "全依存パッケージのインストール完了"
+        - "バージョン確認レポート"
+      related_files:
+        - "engine/provisioning/scripts/deploy.py"
+        - "README.md"
+      
+    - task_id: "P0-3"
+      title: "ビルド環境の検証"
+      description: |
+        ARM64環境でのビルドが正常に動作することを確認
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "Rustでの簡単なコンパイルテスト"
+        - "Goでの簡単なビルドテスト"
+        - "Wasmビルドのテスト（cargo build --target wasm32-unknown-unknown）"
+        - "protobufコード生成のテスト（buf generate）"
+      dependencies:
+        - "P0-2"
+      deliverables:
+        - "ビルド環境検証レポート"
+
+# ============================================================
+# Phase 1: capsuled本体のビルド
+# ============================================================
+
+phase_1_build:
+  title: "capsuled本体のビルドとARM対応バイナリ作成"
+  estimated_effort: "3-4 人日"
+  priority: "critical"
+  
+  tasks:
+    - task_id: "P1-1"
+      title: "リポジトリのクローンと初期セットアップ"
+      description: |
+        capsuledリポジトリをクローンし、初期設定を実施
+      priority: "critical"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "GitHubからcapsuledリポジトリをクローン"
+        - "サブモジュールの初期化（存在する場合）"
+        - "ディレクトリ構造の確認"
+        - "READMEとドキュメントの確認"
+      dependencies:
+        - "P0-3"
+      deliverables:
+        - "クローン済みのリポジトリ"
+      
+    - task_id: "P1-2"
+      title: "adep-logic (Wasm)のビルド"
+      description: |
+        共通ロジックのWasmモジュールをビルド
+      priority: "critical"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "cd adep-logic && cargo build --target wasm32-unknown-unknown --release"
+        - "adep_logic.wasmの生成確認"
+        - "wasmディレクトリへのコピー"
+        - "wasmファイルのサイズ・整合性確認"
+      dependencies:
+        - "P1-1"
+      deliverables:
+        - "wasm/adep_logic.wasm"
+      related_files:
+        - "adep-logic/Cargo.toml"
+        - "Makefile"
+      
+    - task_id: "P1-3"
+      title: "capsuled-engine (Rust)のビルド"
+      description: |
+        Engine（Rust）をARM64向けにビルド
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "protoファイルからgRPCコードの生成（buf generate）"
+        - "cd engine && cargo build --release"
+        - "ビルドエラーの解決（ARM64特有の問題対応）"
+        - "バイナリサイズの確認"
+        - "依存ライブラリのリンク確認"
+        - "bin/capsuled-engineへのコピー"
+      dependencies:
+        - "P1-2"
+      deliverables:
+        - "bin/capsuled-engine（ARM64バイナリ）"
+      related_files:
+        - "engine/Cargo.toml"
+        - "proto/coordinator.proto"
+        - "Makefile"
+      
+    - task_id: "P1-4"
+      title: "capsuled-client (Go)のビルド"
+      description: |
+        Client（Go）をARM64向けにビルド
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "cd client && go mod download"
+        - "protoファイルからgRPCコードの生成"
+        - "go build -o ../bin/capsuled-client ./cmd/client"
+        - "CGO_ENABLED=0でのスタティックビルドテスト"
+        - "バイナリの動作確認（--versionフラグなど）"
+      dependencies:
+        - "P1-2"
+      deliverables:
+        - "bin/capsuled-client（ARM64バイナリ）"
+      related_files:
+        - "client/go.mod"
+        - "client/cmd/client/main.go"
+        - "Makefile"
+      
+    - task_id: "P1-5"
+      title: "ビルド成果物の検証とパッケージング"
+      description: |
+        全バイナリの動作確認とパッケージング
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "全バイナリの実行権限確認"
+        - "バイナリの依存ライブラリ確認（ldd）"
+        - "簡単な動作テスト（--help、--versionなど）"
+        - "デプロイ用アーカイブの作成（tar.gz）"
+        - "チェックサムの生成"
+      dependencies:
+        - "P1-3"
+        - "P1-4"
+      deliverables:
+        - "capsuled-arm64-v{version}.tar.gz"
+        - "SHA256チェックサム"
+
+# ============================================================
+# Phase 2: デプロイと設定
+# ============================================================
+
+phase_2_deployment:
+  title: "OCIインスタンスへのデプロイと設定"
+  estimated_effort: "4-5 人日"
+  priority: "critical"
+  
+  tasks:
+    - task_id: "P2-1"
+      title: "バイナリの転送と配置"
+      description: |
+        ビルドしたバイナリをOCIインスタンスに転送し、適切な場所に配置
+      priority: "critical"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "バイナリのOCIインスタンスへの転送（scp/rsync）"
+        - "/usr/local/binへの配置"
+        - "実行権限の付与（chmod +x）"
+        - "PATHの確認"
+        - "バイナリの動作確認"
+      dependencies:
+        - "P1-5"
+      deliverables:
+        - "/usr/local/bin/capsuled-engine"
+        - "/usr/local/bin/capsuled-client"
+      
+    - task_id: "P2-2"
+      title: "設定ファイルの作成と配置"
+      description: |
+        config.yaml等の設定ファイルを作成・配置
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "config.yamlのテンプレート作成"
+        - "Engine用設定の作成（/etc/capsuled/engine.yaml）"
+        - "Client用設定の作成（/etc/capsuled/client.yaml）"
+        - "データベースパスの設定"
+        - "ログディレクトリの設定"
+        - "gRPCエンドポイントの設定"
+        - "GPU設定（mock/real）"
+        - "ストレージ設定（LVM/LUKS）"
+        - "ネットワーク設定（Caddy）"
+        - "設定ファイルの権限設定"
+      dependencies:
+        - "P2-1"
+      deliverables:
+        - "/etc/capsuled/engine.yaml"
+        - "/etc/capsuled/client.yaml"
+      related_files:
+        - "engine/config/production.toml"
+      
+    - task_id: "P2-3"
+      title: "必要なディレクトリの作成"
+      description: |
+        ログ、データ、キャッシュ用のディレクトリを作成
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "/var/log/capsuled/の作成"
+        - "/var/lib/capsuled/の作成"
+        - "/var/run/capsuled/の作成"
+        - "/etc/capsuled/の作成"
+        - "適切な権限の設定（chown、chmod）"
+        - "ディレクトリ構造のドキュメント化"
+      dependencies:
+        - "P2-1"
+      deliverables:
+        - "必要なディレクトリ一式"
+      
+    - task_id: "P2-4"
+      title: "環境変数の設定"
+      description: |
+        必要な環境変数を設定
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - ".envファイルの作成"
+        - "RUST_LOGの設定"
+        - "DATABASE_URLの設定"
+        - "YOUKI_PATHの設定"
+        - "API_KEYSの設定"
+        - "/etc/environmentへの追加（必要に応じて）"
+        - "systemd環境ファイルの作成"
+      dependencies:
+        - "P2-2"
+      deliverables:
+        - "/etc/capsuled/.env"
+        - "環境変数ドキュメント"
+      
+    - task_id: "P2-5"
+      title: "データベースの初期化"
+      description: |
+        SQLiteデータベースの作成とマイグレーション実行
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "sqlx-cliのインストール"
+        - "データベースディレクトリの作成"
+        - "マイグレーションファイルの配置"
+        - "sqlx migrate runの実行"
+        - "データベースの整合性確認"
+        - "初期データの投入（必要に応じて）"
+      dependencies:
+        - "P2-3"
+      deliverables:
+        - "/var/lib/capsuled/capsuled.db"
+      related_files:
+        - "engine/migrations/"
+      
+    - task_id: "P2-6"
+      title: "systemdサービスファイルの作成と設定"
+      description: |
+        capsuledを自動起動するためのsystemdサービス設定
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "capsuled-engine.serviceの作成"
+        - "capsuled-client.serviceの作成"
+        - "依存関係の設定（After、Requires）"
+        - "再起動ポリシーの設定"
+        - "環境ファイルの指定"
+        - "/etc/systemd/system/への配置"
+        - "systemctl daemon-reloadの実行"
+        - "サービスの有効化（enable）"
+        - "サービスの起動テスト"
+      dependencies:
+        - "P2-4"
+        - "P2-5"
+      deliverables:
+        - "/etc/systemd/system/capsuled-engine.service"
+        - "/etc/systemd/system/capsuled-client.service"
+      related_files:
+        - "engine/provisioning/systemd/"
+        - "engine/provisioning/scripts/manage_services.py"
+
+# ============================================================
+# Phase 3: ネットワークとセキュリティ
+# ============================================================
+
+phase_3_network_security:
+  title: "ネットワーク設定とセキュリティ強化"
+  estimated_effort: "3-4 人日"
+  priority: "high"
+  
+  tasks:
+    - task_id: "P3-1"
+      title: "ファイアウォール設定（基本）"
+      description: |
+        UFWまたはiptablesを使用したファイアウォール設定
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "UFWのインストールと有効化"
+        - "デフォルトポリシーの設定（deny incoming, allow outgoing）"
+        - "SSH（22番ポート）の許可"
+        - "HTTP（80番ポート）の許可（ACME用）"
+        - "HTTPS（443番ポート）の許可"
+        - "gRPCポート（設定に応じて）の許可"
+        - "内部通信ポートの設定"
+        - "ファイアウォールルールのテスト"
+        - "ルールの永続化"
+      dependencies:
+        - "P2-6"
+      deliverables:
+        - "設定済みファイアウォール"
+        - "ファイアウォールルール文書"
+      related_files:
+        - "engine/provisioning/scripts/deploy.py"
+      
+    - task_id: "P3-2"
+      title: "desktop（MacBook）からのアクセス設定"
+      description: |
+        MacBookからOCIインスタンスへの安全なアクセスを設定
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "Tailscaleのインストールと設定"
+        - "Tailscaleネットワークへの参加"
+        - "MacBookとOCIインスタンス間の接続確認"
+        - "プライベートIPアドレスの確認"
+        - "ファイアウォールでTailscaleインターフェースを許可"
+        - "SSH over Tailscaleのテスト"
+        - "API over Tailscaleのテスト"
+      dependencies:
+        - "P3-1"
+      deliverables:
+        - "Tailscale設定完了"
+        - "MacBookからの接続確認"
+      related_files:
+        - "engine/provisioning/scripts/deploy.py"
+      
+    - task_id: "P3-3"
+      title: "SSL/TLS証明書の設定"
+      description: |
+        Caddyを使用したSSL/TLS証明書の自動取得と設定
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "Caddyfileの作成"
+        - "ドメイン名の設定（または自己署名証明書）"
+        - "Let's Encrypt自動証明書取得の設定"
+        - "HTTPSリダイレクトの設定"
+        - "証明書の自動更新設定"
+        - "Caddyサービスの起動"
+      dependencies:
+        - "P2-6"
+      deliverables:
+        - "Caddyfile設定"
+        - "SSL証明書"
+      
+    - task_id: "P3-4"
+      title: "SSH鍵管理とセキュリティ強化"
+      description: |
+        SSH接続のセキュリティ強化
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "SSHパスワード認証の無効化"
+        - "SSH鍵認証の確認"
+        - "rootログインの無効化"
+        - "fail2banのインストールと設定"
+        - "SSH接続の監視設定"
+        - ".ssh/authorized_keysの権限確認"
+      dependencies:
+        - "P3-2"
+      deliverables:
+        - "強化されたSSH設定"
+      
+    - task_id: "P3-5"
+      title: "不要なサービスの停止"
+      description: |
+        セキュリティリスクを減らすため不要なサービスを停止
+      priority: "medium"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "実行中のサービス一覧の確認（systemctl list-units）"
+        - "不要なサービスの特定"
+        - "不要サービスの停止と無効化"
+        - "開いているポートの確認（netstat、ss）"
+        - "サービス停止後の動作確認"
+      dependencies:
+        - "P2-6"
+      deliverables:
+        - "最小限のサービス構成"
+        - "セキュリティチェックリスト"
+
+# ============================================================
+# Phase 4: 動作確認とテスト
+# ============================================================
+
+phase_4_testing:
+  title: "動作確認とテスト"
+  estimated_effort: "3-4 人日"
+  priority: "high"
+  
+  tasks:
+    - task_id: "P4-1"
+      title: "サービス起動確認"
+      description: |
+        capsuledサービスが正常に起動することを確認
+      priority: "critical"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "capsuled-engineサービスの起動確認"
+        - "capsuled-clientサービスの起動確認"
+        - "systemctl statusでの状態確認"
+        - "プロセスの確認（ps aux）"
+        - "ポートリスニング確認（netstat、ss）"
+        - "起動エラーの確認とトラブルシューティング"
+      dependencies:
+        - "P2-6"
+        - "P3-1"
+      deliverables:
+        - "起動確認レポート"
+      
+    - task_id: "P4-2"
+      title: "ログ出力確認"
+      description: |
+        ログが正しく記録されているか確認
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "journalctl -u capsuled-engine -fでログ確認"
+        - "journalctl -u capsuled-client -fでログ確認"
+        - "ログファイルの存在確認（/var/log/capsuled/）"
+        - "ログローテーション設定の確認"
+        - "エラーログの分析"
+        - "ログレベルの調整"
+      dependencies:
+        - "P4-1"
+      deliverables:
+        - "ログ確認レポート"
+      
+    - task_id: "P4-3"
+      title: "API疎通確認"
+      description: |
+        REST APIが正常に動作することを確認
+      priority: "critical"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "Health APIの確認（GET /health）"
+        - "Readiness APIの確認（GET /ready）"
+        - "ノード一覧APIの確認（GET /api/v1/nodes）"
+        - "認証テスト（API Key）"
+        - "curlコマンドでの動作確認"
+        - "MacBookからのAPIアクセステスト"
+        - "レスポンスタイムの測定"
+      dependencies:
+        - "P4-1"
+        - "P3-2"
+      deliverables:
+        - "API疎通確認レポート"
+        - "APIテストスクリプト"
+      
+    - task_id: "P4-4"
+      title: "gRPC通信確認"
+      description: |
+        ClientとEngine間のgRPC通信を確認
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "gRPCエンドポイントの確認"
+        - "ClientからEngineへの接続テスト"
+        - "gRPCリクエスト/レスポンスの確認"
+        - "エラーハンドリングの確認"
+        - "grpcurlでのテスト（オプション）"
+      dependencies:
+        - "P4-1"
+      deliverables:
+        - "gRPC通信確認レポート"
+      
+    - task_id: "P4-5"
+      title: "簡単なコンテナデプロイテスト"
+      description: |
+        簡単なコンテナをデプロイして動作確認
+      priority: "high"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "テスト用adep.jsonの作成"
+        - "シンプルなコンテナイメージの準備"
+        - "デプロイAPIの実行"
+        - "コンテナ起動確認"
+        - "コンテナログの確認"
+        - "コンテナ停止・削除のテスト"
+        - "エラーケースのテスト"
+      dependencies:
+        - "P4-3"
+        - "P4-4"
+      deliverables:
+        - "コンテナデプロイテストレポート"
+        - "テストフィクスチャ"
+      
+    - task_id: "P4-6"
+      title: "自動起動確認"
+      description: |
+        サーバー再起動時にサービスが自動起動することを確認
+      priority: "medium"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "systemctl enableの確認"
+        - "サーバー再起動テスト"
+        - "再起動後のサービス状態確認"
+        - "再起動後のAPI疎通確認"
+        - "起動順序の確認"
+      dependencies:
+        - "P4-1"
+      deliverables:
+        - "自動起動確認レポート"
+
+# ============================================================
+# Phase 5: 監視と運用準備
+# ============================================================
+
+phase_5_operations:
+  title: "監視設定と運用準備"
+  estimated_effort: "2-3 人日"
+  priority: "medium"
+  
+  tasks:
+    - task_id: "P5-1"
+      title: "監視設定（基本）"
+      description: |
+        システムリソースとサービスの基本的な監視を設定
+      priority: "medium"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "Prometheusメトリクスエンドポイントの確認"
+        - "システムメトリクスの収集設定"
+        - "アラート閾値の設定"
+        - "ディスク使用量監視"
+        - "メモリ使用量監視"
+        - "CPU使用率監視"
+        - "サービス死活監視"
+      dependencies:
+        - "P4-1"
+      deliverables:
+        - "監視設定ファイル"
+        - "アラート設定"
+      
+    - task_id: "P5-2"
+      title: "バックアップ設定"
+      description: |
+        データベースと設定ファイルのバックアップを設定
+      priority: "medium"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "バックアップスクリプトの作成"
+        - "データベースバックアップの設定"
+        - "設定ファイルバックアップの設定"
+        - "cronジョブの設定"
+        - "バックアップ保存先の設定"
+        - "リストアテスト"
+      dependencies:
+        - "P2-5"
+      deliverables:
+        - "バックアップスクリプト"
+        - "cronジョブ設定"
+      
+    - task_id: "P5-3"
+      title: "運用ドキュメントの作成"
+      description: |
+        日常運用のためのドキュメントを作成
+      priority: "high"
+      estimated_effort: "1 人日"
+      subtasks:
+        - "デプロイ手順書の作成"
+        - "トラブルシューティングガイドの作成"
+        - "よくある問題と解決策のまとめ"
+        - "バックアップ・リストア手順"
+        - "アップデート手順"
+        - "緊急時の連絡先と手順"
+        - "設定ファイルの説明"
+        - "ログの見方"
+      dependencies:
+        - "P4-6"
+      deliverables:
+        - "docs/DEPLOYMENT_OCI_A1.md"
+        - "docs/OPERATIONS_GUIDE.md"
+        - "docs/TROUBLESHOOTING.md"
+
+# ============================================================
+# Phase 6: 最終確認とドキュメント化
+# ============================================================
+
+phase_6_finalization:
+  title: "最終確認とドキュメント化"
+  estimated_effort: "1-2 人日"
+  priority: "high"
+  
+  tasks:
+    - task_id: "P6-1"
+      title: "エンドツーエンドテスト"
+      description: |
+        MacBookからの完全な操作フローをテスト
+      priority: "critical"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "MacBookからSSH接続テスト"
+        - "MacBookからAPI呼び出しテスト"
+        - "コンテナのデプロイから削除までの一連のフローテスト"
+        - "複数コンテナの同時実行テスト"
+        - "エラーハンドリングのテスト"
+        - "パフォーマンス測定"
+      dependencies:
+        - "P4-5"
+        - "P3-2"
+      deliverables:
+        - "E2Eテストレポート"
+        - "パフォーマンスベンチマーク"
+      
+    - task_id: "P6-2"
+      title: "セキュリティチェック"
+      description: |
+        セキュリティ設定の最終確認
+      priority: "high"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "開いているポートの確認"
+        - "ファイアウォールルールの確認"
+        - "SSH設定の確認"
+        - "証明書の確認"
+        - "権限設定の確認"
+        - "パスワードポリシーの確認"
+        - "セキュリティスキャンの実行（オプション）"
+      dependencies:
+        - "P3-5"
+      deliverables:
+        - "セキュリティチェックリスト"
+        - "セキュリティ監査レポート"
+      
+    - task_id: "P6-3"
+      title: "デプロイメントチェックリストの作成"
+      description: |
+        今後のデプロイ用チェックリストを作成
+      priority: "medium"
+      estimated_effort: "0.5 人日"
+      subtasks:
+        - "デプロイ前チェックリスト"
+        - "デプロイ中チェックリスト"
+        - "デプロイ後チェックリスト"
+        - "ロールバック手順"
+        - "検証項目リスト"
+      dependencies:
+        - "P6-1"
+        - "P6-2"
+      deliverables:
+        - "DEPLOYMENT_CHECKLIST.md"
+
+# ============================================================
+# リスクと対策
+# ============================================================
+
+risks_and_mitigations:
+  - risk: "ARM64特有のビルドエラー"
+    severity: "high"
+    mitigation: "事前に小規模なテストビルドを実施。必要に応じてクロスコンパイルを検討"
+    
+  - risk: "youkiのARM64互換性問題"
+    severity: "medium"
+    mitigation: "youkiの代わりにruncをフォールバックオプションとして準備"
+    
+  - risk: "ネットワーク遅延（日本⇔OCI）"
+    severity: "low"
+    mitigation: "Tailscaleを使用して効率的なルーティングを確保"
+    
+  - risk: "OCI A1インスタンスのリソース不足"
+    severity: "medium"
+    mitigation: "最小要件（4GB RAM、2 vCPU）の確認。必要に応じてインスタンスサイズを拡大"
+    
+  - risk: "SSL証明書取得の失敗"
+    severity: "low"
+    mitigation: "自己署名証明書をフォールバックとして使用"
+
+# ============================================================
+# 推奨リソース
+# ============================================================
+
+recommended_resources:
+  oci_instance:
+    shape: "VM.Standard.A1.Flex"
+    ocpus: "2-4"
+    memory_gb: "8-16"
+    boot_volume_gb: "100"
+    os: "Ubuntu 22.04 LTS (ARM64)"
+    
+  network:
+    ingress_ports:
+      - "22 (SSH)"
+      - "80 (HTTP)"
+      - "443 (HTTPS)"
+      - "Custom gRPC port (e.g., 50051)"
+    egress: "Allow all"
+
+# ============================================================
+# 付録: 有用なコマンド集
+# ============================================================
+
+useful_commands:
+  check_architecture: "uname -m"
+  check_rust_version: "rustc --version"
+  check_go_version: "go version"
+  check_youki_version: "youki --version"
+  check_service_status: "systemctl status capsuled-engine capsuled-client"
+  view_logs: "journalctl -u capsuled-engine -f"
+  check_listening_ports: "ss -tuln"
+  check_firewall_status: "sudo ufw status verbose"
+  test_api: "curl -H 'X-API-Key: YOUR_KEY' http://localhost:8080/health"
+  check_disk_usage: "df -h"
+  check_memory_usage: "free -h"
+
+# ============================================================
+# 参照ドキュメント
+# ============================================================
+
+reference_documents:
+  - "README.md - プロジェクト概要とビルド手順"
+  - "TODO.md - 全体の実装ロードマップ"
+  - "engine/provisioning/scripts/deploy.py - デプロイスクリプトの実装"
+  - "engine/provisioning/MIGRATION.md - プロビジョニング統合ガイド"
+  - "docs/CI_CD.md - CI/CDパイプライン"
+  - ".github/workflows/ci.yml - GitHub Actions設定"
