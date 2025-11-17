@@ -1,0 +1,33 @@
+{
+  "name": "capsuled",
+  "version": "1.0.0",
+  "description": "Personal Cloud OS - モノレポ",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OnesCluster/capsuled.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/OnesCluster/capsuled/issues"
+  },
+  "homepage": "https://github.com/OnesCluster/capsuled#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0"
+  }
+}

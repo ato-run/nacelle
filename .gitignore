@@ -57,3 +57,5 @@ engine/provisioning/scripts/venv/
 
 # Compiled binaries
 client/client
+
+node_modules/
