@@ -15,6 +15,16 @@ import (
 // Integration tests for GPU scheduler
 // These tests verify the scheduler works correctly with a real database
 
+// Test network topology constants
+// These represent the simulated network configuration for distributed GPU scheduling
+const (
+	testNodeAddr1    = "192.168.1.10:50051" // Node 1
+	testNodeAddr2    = "192.168.1.20:50051" // Node 2
+	testNodeAddr3    = "192.168.1.30:50051" // Node 3
+	testLocalAddr    = "127.0.0.1:8080"     // Local coordinator address
+	testLocalAddrAlt = "192.168.1.100:8080" // Alternative local address
+)
+
 func TestSchedulerBasicPlacement(t *testing.T) {
 	skipIfNoRQLite(t)
 
@@ -43,7 +53,7 @@ func TestSchedulerBasicPlacement(t *testing.T) {
 
 		node1 := &db.Node{
 			ID:       node1ID,
-			Address:  "192.168.1.10:50051",
+			Address:  testNodeAddr1,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -54,7 +64,7 @@ func TestSchedulerBasicPlacement(t *testing.T) {
 
 		node2 := &db.Node{
 			ID:       node2ID,
-			Address:  "192.168.1.20:50051",
+			Address:  testNodeAddr2,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -123,7 +133,7 @@ func TestSchedulerBestFit(t *testing.T) {
 		nodes := []*db.Node{
 			{
 				ID:       nodeSmallID,
-				Address:  "192.168.1.10:50051",
+				Address:  testNodeAddr1,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 				Resources: db.NodeResources{
@@ -133,7 +143,7 @@ func TestSchedulerBestFit(t *testing.T) {
 			},
 			{
 				ID:       nodeMediumID,
-				Address:  "192.168.1.20:50051",
+				Address:  testNodeAddr2,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 				Resources: db.NodeResources{
@@ -143,7 +153,7 @@ func TestSchedulerBestFit(t *testing.T) {
 			},
 			{
 				ID:       nodeLargeID,
-				Address:  "192.168.1.30:50051",
+				Address:  testNodeAddr3,
 				Status:   db.NodeStatusActive,
 				LastSeen: time.Now(),
 				Resources: db.NodeResources{
@@ -210,7 +220,7 @@ func TestSchedulerVRAMFragmentation(t *testing.T) {
 
 		node1 := &db.Node{
 			ID:       node1ID,
-			Address:  "192.168.1.10:50051",
+			Address:  testNodeAddr1,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -221,7 +231,7 @@ func TestSchedulerVRAMFragmentation(t *testing.T) {
 
 		node2 := &db.Node{
 			ID:       node2ID,
-			Address:  "192.168.1.20:50051",
+			Address:  testNodeAddr2,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
@@ -286,7 +296,7 @@ func TestSchedulerNoSuitableNode(t *testing.T) {
 
 		node1 := &db.Node{
 			ID:       node1ID,
-			Address:  "192.168.1.10:50051",
+			Address:  testNodeAddr1,
 			Status:   db.NodeStatusActive,
 			LastSeen: time.Now(),
 			Resources: db.NodeResources{
