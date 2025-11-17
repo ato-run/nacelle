@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package integration
@@ -32,9 +33,9 @@ func skipIfNoRQLite(t *testing.T) {
 	// Try to connect to rqlite with shorter timeouts for connection check
 	cfg := testutil.NewDBConfigWithOverrides(
 		[]string{getRQLiteAddr()},
-		1,                      // maxRetries
-		100*time.Millisecond,  // retryDelay
-		2*time.Second,         // timeout
+		1,                    // maxRetries
+		100*time.Millisecond, // retryDelay
+		2*time.Second,        // timeout
 	)
 
 	client, err := db.NewClient(cfg)

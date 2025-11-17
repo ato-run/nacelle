@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package testutil
@@ -25,7 +26,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	os.Unsetenv("TEST_TIMEOUT")
 
 	cfg := LoadConfig()
-	
+
 	assert.Equal(t, 3, cfg.MaxRetries, "LoadConfig should return default MaxRetries")
 	assert.Equal(t, 1*time.Second, cfg.RetryDelay, "LoadConfig should return default RetryDelay")
 	assert.Equal(t, 10*time.Second, cfg.Timeout, "LoadConfig should return default Timeout")
@@ -43,7 +44,7 @@ func TestLoadConfig_EnvironmentOverrides(t *testing.T) {
 	}()
 
 	cfg := LoadConfig()
-	
+
 	assert.Equal(t, 5, cfg.MaxRetries, "MaxRetries should be overridden by environment variable")
 	assert.Equal(t, 2*time.Second, cfg.RetryDelay, "RetryDelay should be overridden by environment variable")
 	assert.Equal(t, 20*time.Second, cfg.Timeout, "Timeout should be overridden by environment variable")
@@ -61,7 +62,7 @@ func TestLoadConfig_InvalidEnvironmentVariables(t *testing.T) {
 	}()
 
 	cfg := LoadConfig()
-	
+
 	// Should fall back to defaults when invalid values are provided
 	assert.Equal(t, 3, cfg.MaxRetries, "Should use default MaxRetries when env var is invalid")
 	assert.Equal(t, 1*time.Second, cfg.RetryDelay, "Should use default RetryDelay when env var is invalid")
