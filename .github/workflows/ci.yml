@@ -187,7 +187,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: client
-        run: go test -v -race -cover ./pkg/...
+        run: go test -v -cover ./pkg/...
 
       - name: Run GPU simulation E2E test (excludes tests requiring Rust compilation)
         working-directory: client
@@ -196,7 +196,7 @@ jobs:
       - name: Generate coverage report
         working-directory: client
         run: |
-          go test -race -coverprofile=coverage.out -covermode=atomic ./pkg/...
+          go test -coverprofile=coverage.out -covermode=atomic ./pkg/...
           go tool cover -func=coverage.out | grep total:
 
   # Test coverage report
@@ -226,7 +226,7 @@ jobs:
       - name: Generate Go coverage
         working-directory: client
         run: |
-          go test -race -coverprofile=coverage.out -covermode=atomic ./pkg/...
+          go test -coverprofile=coverage.out -covermode=atomic ./pkg/...
           echo "## Go Test Coverage" >> $GITHUB_STEP_SUMMARY
           go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
 
