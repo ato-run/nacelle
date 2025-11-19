@@ -3,8 +3,8 @@ use tonic::{transport::Server, Request, Response, Status};
 use tracing::{error, info, warn};
 
 use crate::capsule_manager::CapsuleManager;
-use crate::coordinator_service::CoordinatorService;
-use crate::proto::onescluster::coordinator::v1::coordinator_server::CoordinatorServer;
+use crate::coordinator_service::AgentService;
+use crate::proto::onescluster::coordinator::v1::agent_service_server::AgentServiceServer;
 use crate::proto::onescluster::engine::v1::{
     engine_server::{Engine, EngineServer},
     DeployRequest, DeployResponse, GetResourcesRequest, ResourceInfo, StopRequest, StopResponse,
@@ -213,13 +213,13 @@ pub async fn start_grpc_server(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = addr.parse()?;
     let engine_service = EngineService::new(Arc::clone(&capsule_manager), Arc::clone(&wasm_host));
-    let coordinator_service = CoordinatorService::new(capsule_manager, runtime);
+    let agent_service = AgentService::new(capsule_manager, runtime);
 
     info!("Engine gRPC server listening on {}", addr);
 
     Server::builder()
         .add_service(EngineServer::new(engine_service))
-        .add_service(CoordinatorServer::new(coordinator_service))
+        .add_service(AgentServiceServer::new(agent_service))
         .serve(addr)
         .await?;
 

@@ -3,13 +3,19 @@ package onescluster.coordinator.v1;
 
 option go_package = "github.com/onescluster/coordinator/pkg/proto;proto";
 
-// Coordinator service - handles communication between Agents and Coordinator
-service Coordinator {
+// Coordinator service - handles communication FROM Agents TO Coordinator
+service CoordinatorService {
   // Agent reports its observed state (hardware + running workloads)
   rpc ReportStatus(StatusReportRequest) returns (StatusReportResponse);
+}
 
+// Agent service - handles communication FROM Coordinator TO Agents
+service AgentService {
   // Coordinator instructs Agent to deploy a workload
   rpc DeployWorkload(DeployWorkloadRequest) returns (DeployWorkloadResponse);
+
+  // Coordinator instructs Agent to stop a workload
+  rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
 }
 
 // Report submitted by Agent containing current hardware + workload state
@@ -92,6 +98,17 @@ message DeployWorkloadRequest {
 message DeployWorkloadResponse {
   bool success = 1;
   string message = 2;  // Success message or error details
+}
+
+// Request to stop a workload (Coordinator → Agent)
+message StopWorkloadRequest {
+  string workload_id = 1;
+}
+
+// Response to stop request
+message StopWorkloadResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // Strict schema for adep.json manifest

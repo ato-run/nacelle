@@ -19,147 +19,255 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Coordinator_ReportStatus_FullMethodName   = "/onescluster.coordinator.v1.Coordinator/ReportStatus"
-	Coordinator_DeployWorkload_FullMethodName = "/onescluster.coordinator.v1.Coordinator/DeployWorkload"
+	CoordinatorService_ReportStatus_FullMethodName = "/onescluster.coordinator.v1.CoordinatorService/ReportStatus"
 )
 
-// CoordinatorClient is the client API for Coordinator service.
+// CoordinatorServiceClient is the client API for CoordinatorService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Coordinator service - handles communication between Agents and Coordinator
-type CoordinatorClient interface {
+// Coordinator service - handles communication FROM Agents TO Coordinator
+type CoordinatorServiceClient interface {
 	// Agent reports its observed state (hardware + running workloads)
 	ReportStatus(ctx context.Context, in *StatusReportRequest, opts ...grpc.CallOption) (*StatusReportResponse, error)
-	// Coordinator instructs Agent to deploy a workload
-	DeployWorkload(ctx context.Context, in *DeployWorkloadRequest, opts ...grpc.CallOption) (*DeployWorkloadResponse, error)
 }
 
-type coordinatorClient struct {
+type coordinatorServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewCoordinatorClient(cc grpc.ClientConnInterface) CoordinatorClient {
-	return &coordinatorClient{cc}
+func NewCoordinatorServiceClient(cc grpc.ClientConnInterface) CoordinatorServiceClient {
+	return &coordinatorServiceClient{cc}
 }
 
-func (c *coordinatorClient) ReportStatus(ctx context.Context, in *StatusReportRequest, opts ...grpc.CallOption) (*StatusReportResponse, error) {
+func (c *coordinatorServiceClient) ReportStatus(ctx context.Context, in *StatusReportRequest, opts ...grpc.CallOption) (*StatusReportResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StatusReportResponse)
-	err := c.cc.Invoke(ctx, Coordinator_ReportStatus_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, CoordinatorService_ReportStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *coordinatorClient) DeployWorkload(ctx context.Context, in *DeployWorkloadRequest, opts ...grpc.CallOption) (*DeployWorkloadResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeployWorkloadResponse)
-	err := c.cc.Invoke(ctx, Coordinator_DeployWorkload_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// CoordinatorServer is the server API for Coordinator service.
-// All implementations must embed UnimplementedCoordinatorServer
+// CoordinatorServiceServer is the server API for CoordinatorService service.
+// All implementations must embed UnimplementedCoordinatorServiceServer
 // for forward compatibility.
 //
-// Coordinator service - handles communication between Agents and Coordinator
-type CoordinatorServer interface {
+// Coordinator service - handles communication FROM Agents TO Coordinator
+type CoordinatorServiceServer interface {
 	// Agent reports its observed state (hardware + running workloads)
 	ReportStatus(context.Context, *StatusReportRequest) (*StatusReportResponse, error)
-	// Coordinator instructs Agent to deploy a workload
-	DeployWorkload(context.Context, *DeployWorkloadRequest) (*DeployWorkloadResponse, error)
-	mustEmbedUnimplementedCoordinatorServer()
+	mustEmbedUnimplementedCoordinatorServiceServer()
 }
 
-// UnimplementedCoordinatorServer must be embedded to have
+// UnimplementedCoordinatorServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedCoordinatorServer struct{}
+type UnimplementedCoordinatorServiceServer struct{}
 
-func (UnimplementedCoordinatorServer) ReportStatus(context.Context, *StatusReportRequest) (*StatusReportResponse, error) {
+func (UnimplementedCoordinatorServiceServer) ReportStatus(context.Context, *StatusReportRequest) (*StatusReportResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportStatus not implemented")
 }
-func (UnimplementedCoordinatorServer) DeployWorkload(context.Context, *DeployWorkloadRequest) (*DeployWorkloadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeployWorkload not implemented")
-}
-func (UnimplementedCoordinatorServer) mustEmbedUnimplementedCoordinatorServer() {}
-func (UnimplementedCoordinatorServer) testEmbeddedByValue()                     {}
+func (UnimplementedCoordinatorServiceServer) mustEmbedUnimplementedCoordinatorServiceServer() {}
+func (UnimplementedCoordinatorServiceServer) testEmbeddedByValue()                            {}
 
-// UnsafeCoordinatorServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to CoordinatorServer will
+// UnsafeCoordinatorServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to CoordinatorServiceServer will
 // result in compilation errors.
-type UnsafeCoordinatorServer interface {
-	mustEmbedUnimplementedCoordinatorServer()
+type UnsafeCoordinatorServiceServer interface {
+	mustEmbedUnimplementedCoordinatorServiceServer()
 }
 
-func RegisterCoordinatorServer(s grpc.ServiceRegistrar, srv CoordinatorServer) {
-	// If the following call pancis, it indicates UnimplementedCoordinatorServer was
+func RegisterCoordinatorServiceServer(s grpc.ServiceRegistrar, srv CoordinatorServiceServer) {
+	// If the following call pancis, it indicates UnimplementedCoordinatorServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&Coordinator_ServiceDesc, srv)
+	s.RegisterService(&CoordinatorService_ServiceDesc, srv)
 }
 
-func _Coordinator_ReportStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _CoordinatorService_ReportStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StatusReportRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CoordinatorServer).ReportStatus(ctx, in)
+		return srv.(CoordinatorServiceServer).ReportStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Coordinator_ReportStatus_FullMethodName,
+		FullMethod: CoordinatorService_ReportStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CoordinatorServer).ReportStatus(ctx, req.(*StatusReportRequest))
+		return srv.(CoordinatorServiceServer).ReportStatus(ctx, req.(*StatusReportRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Coordinator_DeployWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+// CoordinatorService_ServiceDesc is the grpc.ServiceDesc for CoordinatorService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var CoordinatorService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "onescluster.coordinator.v1.CoordinatorService",
+	HandlerType: (*CoordinatorServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ReportStatus",
+			Handler:    _CoordinatorService_ReportStatus_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "coordinator.proto",
+}
+
+const (
+	AgentService_DeployWorkload_FullMethodName = "/onescluster.coordinator.v1.AgentService/DeployWorkload"
+	AgentService_StopWorkload_FullMethodName   = "/onescluster.coordinator.v1.AgentService/StopWorkload"
+)
+
+// AgentServiceClient is the client API for AgentService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Agent service - handles communication FROM Coordinator TO Agents
+type AgentServiceClient interface {
+	// Coordinator instructs Agent to deploy a workload
+	DeployWorkload(ctx context.Context, in *DeployWorkloadRequest, opts ...grpc.CallOption) (*DeployWorkloadResponse, error)
+	// Coordinator instructs Agent to stop a workload
+	StopWorkload(ctx context.Context, in *StopWorkloadRequest, opts ...grpc.CallOption) (*StopWorkloadResponse, error)
+}
+
+type agentServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAgentServiceClient(cc grpc.ClientConnInterface) AgentServiceClient {
+	return &agentServiceClient{cc}
+}
+
+func (c *agentServiceClient) DeployWorkload(ctx context.Context, in *DeployWorkloadRequest, opts ...grpc.CallOption) (*DeployWorkloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeployWorkloadResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeployWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) StopWorkload(ctx context.Context, in *StopWorkloadRequest, opts ...grpc.CallOption) (*StopWorkloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopWorkloadResponse)
+	err := c.cc.Invoke(ctx, AgentService_StopWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AgentServiceServer is the server API for AgentService service.
+// All implementations must embed UnimplementedAgentServiceServer
+// for forward compatibility.
+//
+// Agent service - handles communication FROM Coordinator TO Agents
+type AgentServiceServer interface {
+	// Coordinator instructs Agent to deploy a workload
+	DeployWorkload(context.Context, *DeployWorkloadRequest) (*DeployWorkloadResponse, error)
+	// Coordinator instructs Agent to stop a workload
+	StopWorkload(context.Context, *StopWorkloadRequest) (*StopWorkloadResponse, error)
+	mustEmbedUnimplementedAgentServiceServer()
+}
+
+// UnimplementedAgentServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAgentServiceServer struct{}
+
+func (UnimplementedAgentServiceServer) DeployWorkload(context.Context, *DeployWorkloadRequest) (*DeployWorkloadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeployWorkload not implemented")
+}
+func (UnimplementedAgentServiceServer) StopWorkload(context.Context, *StopWorkloadRequest) (*StopWorkloadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopWorkload not implemented")
+}
+func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
+func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
+
+// UnsafeAgentServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AgentServiceServer will
+// result in compilation errors.
+type UnsafeAgentServiceServer interface {
+	mustEmbedUnimplementedAgentServiceServer()
+}
+
+func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer) {
+	// If the following call pancis, it indicates UnimplementedAgentServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AgentService_ServiceDesc, srv)
+}
+
+func _AgentService_DeployWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeployWorkloadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CoordinatorServer).DeployWorkload(ctx, in)
+		return srv.(AgentServiceServer).DeployWorkload(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Coordinator_DeployWorkload_FullMethodName,
+		FullMethod: AgentService_DeployWorkload_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CoordinatorServer).DeployWorkload(ctx, req.(*DeployWorkloadRequest))
+		return srv.(AgentServiceServer).DeployWorkload(ctx, req.(*DeployWorkloadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Coordinator_ServiceDesc is the grpc.ServiceDesc for Coordinator service.
+func _AgentService_StopWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopWorkloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).StopWorkload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_StopWorkload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).StopWorkload(ctx, req.(*StopWorkloadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Coordinator_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "onescluster.coordinator.v1.Coordinator",
-	HandlerType: (*CoordinatorServer)(nil),
+var AgentService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "onescluster.coordinator.v1.AgentService",
+	HandlerType: (*AgentServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ReportStatus",
-			Handler:    _Coordinator_ReportStatus_Handler,
+			MethodName: "DeployWorkload",
+			Handler:    _AgentService_DeployWorkload_Handler,
 		},
 		{
-			MethodName: "DeployWorkload",
-			Handler:    _Coordinator_DeployWorkload_Handler,
+			MethodName: "StopWorkload",
+			Handler:    _AgentService_StopWorkload_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

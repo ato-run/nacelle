@@ -10,22 +10,23 @@ use crate::adep::{
 use crate::capsule_manager::CapsuleManager;
 use crate::oci::spec_builder::build_oci_spec;
 use crate::proto::onescluster::coordinator::v1::{
-    coordinator_server::Coordinator, AdePManifest as ProtoAdePManifest, DeployWorkloadRequest,
-    DeployWorkloadResponse, SchedulingConfig as ProtoSchedulingConfig, StatusReportRequest,
-    StatusReportResponse,
+    agent_service_server::{AgentService as AgentServiceTrait, AgentServiceServer},
+    AdePManifest as ProtoAdePManifest, DeployWorkloadRequest, DeployWorkloadResponse,
+    SchedulingConfig as ProtoSchedulingConfig, StopWorkloadRequest, StopWorkloadResponse,
 };
 use crate::runtime::{ContainerRuntime, LaunchRequest, RuntimeError};
 
-/// CoordinatorService implements the Coordinator gRPC service for Agent
+/// AgentService implements the Agent gRPC service
 ///
 /// This service handles requests from the Coordinator to the Agent:
-/// 1. DeployWorkload - Coordinator instructs Agent to deploy a workload (Week 4)
-pub struct CoordinatorService {
+/// 1. DeployWorkload - Coordinator instructs Agent to deploy a workload
+/// 2. StopWorkload - Coordinator instructs Agent to stop a workload
+pub struct AgentService {
     runtime: Arc<ContainerRuntime>,
     capsule_manager: Arc<CapsuleManager>,
 }
 
-impl CoordinatorService {
+impl AgentService {
     pub fn new(capsule_manager: Arc<CapsuleManager>, runtime: Arc<ContainerRuntime>) -> Self {
         Self {
             runtime,
@@ -115,21 +116,8 @@ fn convert_scheduling(proto: Option<&ProtoSchedulingConfig>) -> AdepSchedulingCo
 }
 
 #[tonic::async_trait]
-impl Coordinator for CoordinatorService {
-    /// Coordinator currently does not accept status reports from the Coordinator->Agent stream.
-    ///
-    /// Agents originate ReportStatus calls toward the Coordinator (Go service),
-    /// so the Agent-side gRPC server returns Unimplemented to callers.
-    async fn report_status(
-        &self,
-        _request: Request<StatusReportRequest>,
-    ) -> Result<Response<StatusReportResponse>, Status> {
-        Err(Status::unimplemented(
-            "ReportStatus should be invoked against the Coordinator service",
-        ))
-    }
-
-    /// Coordinator instructs Agent to deploy a workload (Week 4)
+impl AgentServiceTrait for AgentService {
+    /// Coordinator instructs Agent to deploy a workload
     ///
     /// Flow:
     /// 1. Receive adep_manifest_json from Coordinator
@@ -262,6 +250,31 @@ impl Coordinator for CoordinatorService {
                 launch_result.bundle_path.display()
             ),
         }))
+    }
+
+    async fn stop_workload(
+        &self,
+        request: Request<StopWorkloadRequest>,
+    ) -> Result<Response<StopWorkloadResponse>, Status> {
+        let req = request.into_inner();
+        info!("StopWorkload request: workload_id={}", req.workload_id);
+
+        match self.capsule_manager.stop_capsule(&req.workload_id).await {
+            Ok(_) => {
+                info!("Workload {} stopped successfully", req.workload_id);
+                Ok(Response::new(StopWorkloadResponse {
+                    success: true,
+                    message: "Stopped successfully".to_string(),
+                }))
+            }
+            Err(e) => {
+                error!("Failed to stop workload {}: {}", req.workload_id, e);
+                Ok(Response::new(StopWorkloadResponse {
+                    success: false,
+                    message: format!("Failed to stop: {}", e),
+                }))
+            }
+        }
     }
 }
 

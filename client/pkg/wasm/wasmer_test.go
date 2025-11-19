@@ -16,7 +16,9 @@ func TestWasmerHost_ValidateManifest_Valid(t *testing.T) {
 
 	validJSON := []byte(`{
 		"name": "test-workload",
-		"version": "1.0.0"
+		"compute": {
+			"image": "nginx:latest"
+		}
 	}`)
 
 	isValid, err := host.ValidateManifest(validJSON)
@@ -38,7 +40,9 @@ func TestWasmerHost_ValidateManifest_MissingName(t *testing.T) {
 
 	invalidJSON := []byte(`{
 		"name": "",
-		"version": "1.0.0"
+		"compute": {
+			"image": "nginx:latest"
+		}
 	}`)
 
 	isValid, err := host.ValidateManifest(invalidJSON)
@@ -51,7 +55,7 @@ func TestWasmerHost_ValidateManifest_MissingName(t *testing.T) {
 	}
 }
 
-func TestWasmerHost_ValidateManifest_MissingVersion(t *testing.T) {
+func TestWasmerHost_ValidateManifest_MissingImage(t *testing.T) {
 	host, err := NewWasmerHost("adep_logic.wasm")
 	if err != nil {
 		t.Fatalf("Failed to create WasmerHost: %v", err)
@@ -60,7 +64,9 @@ func TestWasmerHost_ValidateManifest_MissingVersion(t *testing.T) {
 
 	invalidJSON := []byte(`{
 		"name": "test-workload",
-		"version": ""
+		"compute": {
+			"image": ""
+		}
 	}`)
 
 	isValid, err := host.ValidateManifest(invalidJSON)
@@ -69,7 +75,7 @@ func TestWasmerHost_ValidateManifest_MissingVersion(t *testing.T) {
 	}
 
 	if isValid {
-		t.Error("Expected invalid manifest (empty version), got valid")
+		t.Error("Expected invalid manifest (empty image), got valid")
 	}
 }
 
@@ -100,7 +106,7 @@ func TestWasmerHost_MultipleValidations(t *testing.T) {
 	defer host.Close()
 
 	// First validation (valid)
-	validJSON := []byte(`{"name": "test1", "version": "1.0.0"}`)
+	validJSON := []byte(`{"name": "test1", "compute": {"image": "nginx"}}`)
 	isValid, err := host.ValidateManifest(validJSON)
 	if err != nil {
 		t.Fatalf("First validation failed: %v", err)
@@ -110,7 +116,7 @@ func TestWasmerHost_MultipleValidations(t *testing.T) {
 	}
 
 	// Second validation (invalid)
-	invalidJSON := []byte(`{"name": "", "version": "1.0.0"}`)
+	invalidJSON := []byte(`{"name": "", "compute": {"image": "nginx"}}`)
 	isValid, err = host.ValidateManifest(invalidJSON)
 	if err != nil {
 		t.Fatalf("Second validation failed: %v", err)
@@ -120,7 +126,7 @@ func TestWasmerHost_MultipleValidations(t *testing.T) {
 	}
 
 	// Third validation (valid again)
-	validJSON2 := []byte(`{"name": "test2", "version": "2.0.0"}`)
+	validJSON2 := []byte(`{"name": "test2", "compute": {"image": "nginx"}}`)
 	isValid, err = host.ValidateManifest(validJSON2)
 	if err != nil {
 		t.Fatalf("Third validation failed: %v", err)

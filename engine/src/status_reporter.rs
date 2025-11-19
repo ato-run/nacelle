@@ -15,12 +15,12 @@ use crate::{
     capsule_manager::{Capsule, CapsuleManager, CapsuleStatus},
     hardware::{GpuDetectionError, GpuDetector, GpuProcessMonitor, RigHardwareReport},
     proto::onescluster::coordinator::v1::{
-        coordinator_client::CoordinatorClient, GpuInfo as ProtoGpuInfo, HardwareState, RigStatus,
+        coordinator_service_client::CoordinatorServiceClient, GpuInfo as ProtoGpuInfo, HardwareState, RigStatus,
         StatusReportRequest, Taint, WorkloadPhase, WorkloadStatus,
     },
 };
 
-type GrpcClient = CoordinatorClient<tonic::transport::Channel>;
+type GrpcClient = CoordinatorServiceClient<tonic::transport::Channel>;
 
 const INITIAL_BACKOFF_SECS: u64 = 1;
 const MAX_BACKOFF_SECS: u64 = 60;
@@ -299,7 +299,7 @@ impl StatusReporter {
                 return Ok(client.clone());
             }
 
-            match CoordinatorClient::connect(self.coordinator_endpoint.clone()).await {
+            match CoordinatorServiceClient::connect(self.coordinator_endpoint.clone()).await {
                 Ok(client) => {
                     self.backoff.reset();
                     self.client = Some(client);

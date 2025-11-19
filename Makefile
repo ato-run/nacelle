@@ -19,6 +19,9 @@ wasm:
 	cargo build --release --target wasm32-unknown-unknown
 	@mkdir -p wasm
 	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/
+	@mkdir -p client/pkg/wasm
+	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm client/pkg/wasm/
+	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/
 
 # Client ビルド
 client: proto wasm
@@ -38,7 +41,7 @@ engine: proto wasm
 # =============================================================================
 
 # Go Tests
-test-go: test-go-unit
+test-go: wasm test-go-unit
 
 test-go-unit:
 	@echo "Running Go unit tests..."

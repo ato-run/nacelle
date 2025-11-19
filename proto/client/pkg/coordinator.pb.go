@@ -721,6 +721,104 @@ func (x *DeployWorkloadResponse) GetMessage() string {
 	return ""
 }
 
+// Request to stop a workload (Coordinator → Agent)
+type StopWorkloadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkloadId    string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopWorkloadRequest) Reset() {
+	*x = StopWorkloadRequest{}
+	mi := &file_coordinator_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopWorkloadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopWorkloadRequest) ProtoMessage() {}
+
+func (x *StopWorkloadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_coordinator_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopWorkloadRequest.ProtoReflect.Descriptor instead.
+func (*StopWorkloadRequest) Descriptor() ([]byte, []int) {
+	return file_coordinator_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *StopWorkloadRequest) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+// Response to stop request
+type StopWorkloadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopWorkloadResponse) Reset() {
+	*x = StopWorkloadResponse{}
+	mi := &file_coordinator_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopWorkloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopWorkloadResponse) ProtoMessage() {}
+
+func (x *StopWorkloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_coordinator_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopWorkloadResponse.ProtoReflect.Descriptor instead.
+func (*StopWorkloadResponse) Descriptor() ([]byte, []int) {
+	return file_coordinator_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *StopWorkloadResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *StopWorkloadResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 // Strict schema for adep.json manifest
 type AdePManifest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -735,7 +833,7 @@ type AdePManifest struct {
 
 func (x *AdePManifest) Reset() {
 	*x = AdePManifest{}
-	mi := &file_coordinator_proto_msgTypes[9]
+	mi := &file_coordinator_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -747,7 +845,7 @@ func (x *AdePManifest) String() string {
 func (*AdePManifest) ProtoMessage() {}
 
 func (x *AdePManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_coordinator_proto_msgTypes[9]
+	mi := &file_coordinator_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -760,7 +858,7 @@ func (x *AdePManifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdePManifest.ProtoReflect.Descriptor instead.
 func (*AdePManifest) Descriptor() ([]byte, []int) {
-	return file_coordinator_proto_rawDescGZIP(), []int{9}
+	return file_coordinator_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AdePManifest) GetName() string {
@@ -808,7 +906,7 @@ type SchedulingConfig struct {
 
 func (x *SchedulingConfig) Reset() {
 	*x = SchedulingConfig{}
-	mi := &file_coordinator_proto_msgTypes[10]
+	mi := &file_coordinator_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -820,7 +918,7 @@ func (x *SchedulingConfig) String() string {
 func (*SchedulingConfig) ProtoMessage() {}
 
 func (x *SchedulingConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_coordinator_proto_msgTypes[10]
+	mi := &file_coordinator_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -833,7 +931,7 @@ func (x *SchedulingConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SchedulingConfig.ProtoReflect.Descriptor instead.
 func (*SchedulingConfig) Descriptor() ([]byte, []int) {
-	return file_coordinator_proto_rawDescGZIP(), []int{10}
+	return file_coordinator_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SchedulingConfig) GetGpu() *GpuConstraints {
@@ -860,7 +958,7 @@ type GpuConstraints struct {
 
 func (x *GpuConstraints) Reset() {
 	*x = GpuConstraints{}
-	mi := &file_coordinator_proto_msgTypes[11]
+	mi := &file_coordinator_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +970,7 @@ func (x *GpuConstraints) String() string {
 func (*GpuConstraints) ProtoMessage() {}
 
 func (x *GpuConstraints) ProtoReflect() protoreflect.Message {
-	mi := &file_coordinator_proto_msgTypes[11]
+	mi := &file_coordinator_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +983,7 @@ func (x *GpuConstraints) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GpuConstraints.ProtoReflect.Descriptor instead.
 func (*GpuConstraints) Descriptor() ([]byte, []int) {
-	return file_coordinator_proto_rawDescGZIP(), []int{11}
+	return file_coordinator_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GpuConstraints) GetVramMinGb() uint64 {
@@ -913,7 +1011,7 @@ type ComputeConfig struct {
 
 func (x *ComputeConfig) Reset() {
 	*x = ComputeConfig{}
-	mi := &file_coordinator_proto_msgTypes[12]
+	mi := &file_coordinator_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -925,7 +1023,7 @@ func (x *ComputeConfig) String() string {
 func (*ComputeConfig) ProtoMessage() {}
 
 func (x *ComputeConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_coordinator_proto_msgTypes[12]
+	mi := &file_coordinator_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -938,7 +1036,7 @@ func (x *ComputeConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComputeConfig.ProtoReflect.Descriptor instead.
 func (*ComputeConfig) Descriptor() ([]byte, []int) {
-	return file_coordinator_proto_rawDescGZIP(), []int{12}
+	return file_coordinator_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ComputeConfig) GetImage() string {
@@ -974,7 +1072,7 @@ type Volume struct {
 
 func (x *Volume) Reset() {
 	*x = Volume{}
-	mi := &file_coordinator_proto_msgTypes[13]
+	mi := &file_coordinator_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -986,7 +1084,7 @@ func (x *Volume) String() string {
 func (*Volume) ProtoMessage() {}
 
 func (x *Volume) ProtoReflect() protoreflect.Message {
-	mi := &file_coordinator_proto_msgTypes[13]
+	mi := &file_coordinator_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -999,7 +1097,7 @@ func (x *Volume) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Volume.ProtoReflect.Descriptor instead.
 func (*Volume) Descriptor() ([]byte, []int) {
-	return file_coordinator_proto_rawDescGZIP(), []int{13}
+	return file_coordinator_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Volume) GetType() string {
@@ -1079,6 +1177,12 @@ const file_coordinator_proto_rawDesc = "" +
 	"\rmanifest_json\x18\x03 \x01(\tR\fmanifestJson\"L\n" +
 	"\x16DeployWorkloadResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"6\n" +
+	"\x13StopWorkloadRequest\x12\x1f\n" +
+	"\vworkload_id\x18\x01 \x01(\tR\n" +
+	"workloadId\"J\n" +
+	"\x14StopWorkloadResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x84\x03\n" +
 	"\fAdePManifest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12L\n" +
@@ -1118,10 +1222,12 @@ const file_coordinator_proto_rawDesc = "" +
 	"\vTaintEffect\x12\x1c\n" +
 	"\x18TAINT_EFFECT_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18TAINT_EFFECT_NO_SCHEDULE\x10\x01\x12#\n" +
-	"\x1fTAINT_EFFECT_PREFER_NO_SCHEDULE\x10\x022\xf9\x01\n" +
-	"\vCoordinator\x12q\n" +
-	"\fReportStatus\x12/.onescluster.coordinator.v1.StatusReportRequest\x1a0.onescluster.coordinator.v1.StatusReportResponse\x12w\n" +
-	"\x0eDeployWorkload\x121.onescluster.coordinator.v1.DeployWorkloadRequest\x1a2.onescluster.coordinator.v1.DeployWorkloadResponseB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
+	"\x1fTAINT_EFFECT_PREFER_NO_SCHEDULE\x10\x022\x87\x01\n" +
+	"\x12CoordinatorService\x12q\n" +
+	"\fReportStatus\x12/.onescluster.coordinator.v1.StatusReportRequest\x1a0.onescluster.coordinator.v1.StatusReportResponse2\xfa\x01\n" +
+	"\fAgentService\x12w\n" +
+	"\x0eDeployWorkload\x121.onescluster.coordinator.v1.DeployWorkloadRequest\x1a2.onescluster.coordinator.v1.DeployWorkloadResponse\x12q\n" +
+	"\fStopWorkload\x12/.onescluster.coordinator.v1.StopWorkloadRequest\x1a0.onescluster.coordinator.v1.StopWorkloadResponseB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
 
 var (
 	file_coordinator_proto_rawDescOnce sync.Once
@@ -1136,7 +1242,7 @@ func file_coordinator_proto_rawDescGZIP() []byte {
 }
 
 var file_coordinator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_coordinator_proto_goTypes = []any{
 	(WorkloadPhase)(0),             // 0: onescluster.coordinator.v1.WorkloadPhase
 	(TaintEffect)(0),               // 1: onescluster.coordinator.v1.TaintEffect
@@ -1149,13 +1255,15 @@ var file_coordinator_proto_goTypes = []any{
 	(*Taint)(nil),                  // 8: onescluster.coordinator.v1.Taint
 	(*DeployWorkloadRequest)(nil),  // 9: onescluster.coordinator.v1.DeployWorkloadRequest
 	(*DeployWorkloadResponse)(nil), // 10: onescluster.coordinator.v1.DeployWorkloadResponse
-	(*AdePManifest)(nil),           // 11: onescluster.coordinator.v1.AdePManifest
-	(*SchedulingConfig)(nil),       // 12: onescluster.coordinator.v1.SchedulingConfig
-	(*GpuConstraints)(nil),         // 13: onescluster.coordinator.v1.GpuConstraints
-	(*ComputeConfig)(nil),          // 14: onescluster.coordinator.v1.ComputeConfig
-	(*Volume)(nil),                 // 15: onescluster.coordinator.v1.Volume
-	nil,                            // 16: onescluster.coordinator.v1.AdePManifest.MetadataEntry
-	nil,                            // 17: onescluster.coordinator.v1.ComputeConfig.EnvEntry
+	(*StopWorkloadRequest)(nil),    // 11: onescluster.coordinator.v1.StopWorkloadRequest
+	(*StopWorkloadResponse)(nil),   // 12: onescluster.coordinator.v1.StopWorkloadResponse
+	(*AdePManifest)(nil),           // 13: onescluster.coordinator.v1.AdePManifest
+	(*SchedulingConfig)(nil),       // 14: onescluster.coordinator.v1.SchedulingConfig
+	(*GpuConstraints)(nil),         // 15: onescluster.coordinator.v1.GpuConstraints
+	(*ComputeConfig)(nil),          // 16: onescluster.coordinator.v1.ComputeConfig
+	(*Volume)(nil),                 // 17: onescluster.coordinator.v1.Volume
+	nil,                            // 18: onescluster.coordinator.v1.AdePManifest.MetadataEntry
+	nil,                            // 19: onescluster.coordinator.v1.ComputeConfig.EnvEntry
 }
 var file_coordinator_proto_depIdxs = []int32{
 	4,  // 0: onescluster.coordinator.v1.StatusReportRequest.status:type_name -> onescluster.coordinator.v1.RigStatus
@@ -1165,19 +1273,21 @@ var file_coordinator_proto_depIdxs = []int32{
 	6,  // 4: onescluster.coordinator.v1.HardwareState.gpus:type_name -> onescluster.coordinator.v1.GpuInfo
 	0,  // 5: onescluster.coordinator.v1.WorkloadStatus.phase:type_name -> onescluster.coordinator.v1.WorkloadPhase
 	1,  // 6: onescluster.coordinator.v1.Taint.effect:type_name -> onescluster.coordinator.v1.TaintEffect
-	11, // 7: onescluster.coordinator.v1.DeployWorkloadRequest.manifest:type_name -> onescluster.coordinator.v1.AdePManifest
-	12, // 8: onescluster.coordinator.v1.AdePManifest.scheduling:type_name -> onescluster.coordinator.v1.SchedulingConfig
-	14, // 9: onescluster.coordinator.v1.AdePManifest.compute:type_name -> onescluster.coordinator.v1.ComputeConfig
-	15, // 10: onescluster.coordinator.v1.AdePManifest.volumes:type_name -> onescluster.coordinator.v1.Volume
-	16, // 11: onescluster.coordinator.v1.AdePManifest.metadata:type_name -> onescluster.coordinator.v1.AdePManifest.MetadataEntry
-	13, // 12: onescluster.coordinator.v1.SchedulingConfig.gpu:type_name -> onescluster.coordinator.v1.GpuConstraints
-	17, // 13: onescluster.coordinator.v1.ComputeConfig.env:type_name -> onescluster.coordinator.v1.ComputeConfig.EnvEntry
-	2,  // 14: onescluster.coordinator.v1.Coordinator.ReportStatus:input_type -> onescluster.coordinator.v1.StatusReportRequest
-	9,  // 15: onescluster.coordinator.v1.Coordinator.DeployWorkload:input_type -> onescluster.coordinator.v1.DeployWorkloadRequest
-	3,  // 16: onescluster.coordinator.v1.Coordinator.ReportStatus:output_type -> onescluster.coordinator.v1.StatusReportResponse
-	10, // 17: onescluster.coordinator.v1.Coordinator.DeployWorkload:output_type -> onescluster.coordinator.v1.DeployWorkloadResponse
-	16, // [16:18] is the sub-list for method output_type
-	14, // [14:16] is the sub-list for method input_type
+	13, // 7: onescluster.coordinator.v1.DeployWorkloadRequest.manifest:type_name -> onescluster.coordinator.v1.AdePManifest
+	14, // 8: onescluster.coordinator.v1.AdePManifest.scheduling:type_name -> onescluster.coordinator.v1.SchedulingConfig
+	16, // 9: onescluster.coordinator.v1.AdePManifest.compute:type_name -> onescluster.coordinator.v1.ComputeConfig
+	17, // 10: onescluster.coordinator.v1.AdePManifest.volumes:type_name -> onescluster.coordinator.v1.Volume
+	18, // 11: onescluster.coordinator.v1.AdePManifest.metadata:type_name -> onescluster.coordinator.v1.AdePManifest.MetadataEntry
+	15, // 12: onescluster.coordinator.v1.SchedulingConfig.gpu:type_name -> onescluster.coordinator.v1.GpuConstraints
+	19, // 13: onescluster.coordinator.v1.ComputeConfig.env:type_name -> onescluster.coordinator.v1.ComputeConfig.EnvEntry
+	2,  // 14: onescluster.coordinator.v1.CoordinatorService.ReportStatus:input_type -> onescluster.coordinator.v1.StatusReportRequest
+	9,  // 15: onescluster.coordinator.v1.AgentService.DeployWorkload:input_type -> onescluster.coordinator.v1.DeployWorkloadRequest
+	11, // 16: onescluster.coordinator.v1.AgentService.StopWorkload:input_type -> onescluster.coordinator.v1.StopWorkloadRequest
+	3,  // 17: onescluster.coordinator.v1.CoordinatorService.ReportStatus:output_type -> onescluster.coordinator.v1.StatusReportResponse
+	10, // 18: onescluster.coordinator.v1.AgentService.DeployWorkload:output_type -> onescluster.coordinator.v1.DeployWorkloadResponse
+	12, // 19: onescluster.coordinator.v1.AgentService.StopWorkload:output_type -> onescluster.coordinator.v1.StopWorkloadResponse
+	17, // [17:20] is the sub-list for method output_type
+	14, // [14:17] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
 	14, // [14:14] is the sub-list for extension extendee
 	0,  // [0:14] is the sub-list for field type_name
@@ -1194,9 +1304,9 @@ func file_coordinator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coordinator_proto_rawDesc), len(file_coordinator_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_coordinator_proto_goTypes,
 		DependencyIndexes: file_coordinator_proto_depIdxs,

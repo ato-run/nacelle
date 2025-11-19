@@ -164,11 +164,18 @@ jobs:
   test-client:
     name: Test client (Go)
     runs-on: ubuntu-latest
+    needs: build-adep-logic
     permissions:
       contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download adep-logic Wasm
+        uses: actions/download-artifact@v4
+        with:
+          name: adep-logic-wasm
+          path: client/pkg/wasm
 
       - name: Setup Go
         uses: actions/setup-go@v5

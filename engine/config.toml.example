@@ -6,9 +6,9 @@
 listen_addr = "0.0.0.0:50051"
 
 # TLS configuration (optional)
-tls_enabled = false
-tls_cert = ""
-tls_key = ""
+tls_enabled = true
+tls_cert = "../certs/server-cert.pem"
+tls_key = "../certs/server-key.pem"
 
 # Request timeout in seconds
 timeout = 30
