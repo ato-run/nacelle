@@ -19,6 +19,9 @@ pub struct GpuInfo {
     /// Current VRAM usage in bytes (if available)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vram_used_bytes: Option<u64>,
+
+    /// GPU UUID (Unique Identifier)
+    pub uuid: String,
 }
 
 impl GpuInfo {
@@ -108,6 +111,7 @@ mod tests {
             vram_total_bytes: 8_589_934_592, // 8 GB
             cuda_compute_capability: Some("8.0".to_string()),
             vram_used_bytes: None,
+            uuid: "GPU-MOCK-0".to_string(),
         };
         assert_eq!(gpu.vram_gb(), 8.0);
     }
@@ -120,6 +124,7 @@ mod tests {
             vram_total_bytes: 8_589_934_592, // 8 GB
             cuda_compute_capability: None,
             vram_used_bytes: Some(4_294_967_296), // 4 GB used
+            uuid: "GPU-MOCK-0".to_string(),
         };
         assert_eq!(gpu.vram_available_bytes(), 4_294_967_296); // 4 GB available
     }
@@ -133,6 +138,7 @@ mod tests {
             vram_total_bytes: 8_589_934_592, // 8 GB
             cuda_compute_capability: None,
             vram_used_bytes: None,
+            uuid: "GPU-MOCK-0".to_string(),
         });
         report.gpus.push(GpuInfo {
             index: 1,
@@ -140,6 +146,7 @@ mod tests {
             vram_total_bytes: 8_589_934_592, // 8 GB
             cuda_compute_capability: None,
             vram_used_bytes: None,
+            uuid: "GPU-MOCK-1".to_string(),
         });
 
         assert_eq!(report.gpu_count(), 2);
@@ -156,6 +163,7 @@ mod tests {
             vram_total_bytes: 8_589_934_592,
             cuda_compute_capability: None,
             vram_used_bytes: None,
+            uuid: "GPU-MOCK-0".to_string(),
         });
 
         assert!(report.get_gpu(0).is_some());

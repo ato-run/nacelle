@@ -281,6 +281,7 @@ impl StatusReporter {
                 vram_total_bytes: gpu.vram_total_bytes,
                 cuda_compute_capability: gpu.cuda_compute_capability.clone().unwrap_or_default(),
                 vram_available_bytes: gpu.vram_available_bytes(),
+                uuid: gpu.uuid.clone(),
             })
             .collect();
 
@@ -438,6 +439,7 @@ mod tests {
             vram_total_bytes: 8 * 1_073_741_824,
             cuda_compute_capability: Some("8.0".to_string()),
             vram_used_bytes: Some(0),
+            uuid: "GPU-MOCK-0".to_string(),
         });
         report
     }

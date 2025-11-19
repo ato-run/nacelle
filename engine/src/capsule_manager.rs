@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 use tracing::{debug, info, warn};
 
 use crate::adep::AdepManifest;
+use crate::hardware::scrubber::GpuScrubber;
 use crate::runtime::{LaunchResult, RuntimeError};
 
 /// Capsule represents a running capsule instance
@@ -219,39 +220,54 @@ impl CapsuleManager {
         Ok(())
     }
 
-    /// Stop a running capsule
-    pub async fn stop_capsule(&self, capsule_id: &str) -> Result<String> {
+    /// Stop and remove a capsule
+    pub async fn stop_capsule(&self, capsule_id: &str) -> Result<()> {
         info!("Stopping capsule: {}", capsule_id);
 
-        let mut capsules = self
-            .capsules
-            .write()
-            .map_err(|e| anyhow!("Lock error: {}", e))?;
-
-        let capsule = capsules
-            .get_mut(capsule_id)
-            .ok_or_else(|| anyhow!("Capsule {} not found", capsule_id))?;
-
-        if capsule.status != CapsuleStatus::Running {
-            return Err(anyhow!(
-                "Capsule {} is not running (status: {:?})",
-                capsule_id,
-                capsule.status
-            ));
+        // 1. Update status to Stopped (to prevent new requests)
+        {
+            let mut capsules = self
+                .capsules
+                .write()
+                .map_err(|e| anyhow!("Lock error: {}", e))?;
+            if let Some(capsule) = capsules.get_mut(capsule_id) {
+                capsule.status = CapsuleStatus::Stopped;
+            } else {
+                return Err(anyhow!("Capsule {} not found", capsule_id));
+            }
         }
 
-        // TODO: Actual stop steps
-        // 1. Stop container (runc/youki kill)
-        // 2. Clean up resources
-        // 3. Optionally unmount/remove storage
+        // TODO: Call OCI runtime to kill/delete container
+        // self.runtime.kill(capsule_id, "SIGKILL").await?;
+        // self.runtime.delete(capsule_id).await?;
 
-        capsule.status = CapsuleStatus::Stopped;
-        capsule.pid = None;
-        capsule.reserved_vram_bytes = 0;
-        capsule.observed_vram_bytes = None;
-        info!("Capsule {} stopped successfully", capsule_id);
+        // 2. VRAM Scrubbing (Post-Stop Hook)
+        // TODO: Get assigned GPU index from capsule state
+        // For now, we assume single GPU (index 0) if this is a GPU workload
+        // In Phase 2, we will look up the actual assigned GPU ID.
+        let assigned_gpu_index = 0; // Mock: Always scrub GPU 0
 
-        Ok(CapsuleStatus::Stopped.to_string())
+        info!("Executing VRAM Scrubbing for GPU {}...", assigned_gpu_index);
+        match GpuScrubber::scrub_device(assigned_gpu_index) {
+            Ok(_) => info!("VRAM Scrubbing successful for capsule {}", capsule_id),
+            Err(e) => {
+                // In production, this should be a critical alert
+                warn!("VRAM Scrubbing failed: {:?}. Security risk!", e);
+                // Don't return error here to allow cleanup to proceed, but log heavily
+            }
+        }
+
+        // 3. Remove from manager
+        {
+            let mut capsules = self
+                .capsules
+                .write()
+                .map_err(|e| anyhow!("Lock error: {}", e))?;
+            capsules.remove(capsule_id);
+        }
+
+        info!("Capsule {} stopped and removed", capsule_id);
+        Ok(())
     }
 
     /// Get a capsule by ID
@@ -357,12 +373,10 @@ mod tests {
         // Stop
         let result = manager.stop_capsule("test-capsule").await;
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "stopped");
 
-        // Verify status
-        let capsule = manager.get_capsule("test-capsule").unwrap();
-        assert_eq!(capsule.status, CapsuleStatus::Stopped);
-        assert_eq!(capsule.pid, None);
+        // Verify capsule is removed
+        let capsule = manager.get_capsule("test-capsule");
+        assert!(capsule.is_err());
     }
 
     #[tokio::test]

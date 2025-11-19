@@ -176,7 +176,7 @@ impl GpuDetector for FixedGpuDetector {
             device_name: "Test GPU".into(),
             vram_total_bytes: self.total_vram_bytes,
             cuda_compute_capability: Some("8.0".into()),
-            vram_used_bytes: Some(self.observed_used_vram),
+            uuid: "GPU-TEST-UUID".into(),            vram_used_bytes: Some(self.observed_used_vram),
         });
         Ok(report)
     }

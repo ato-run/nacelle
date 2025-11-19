@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 /// * `rootfs_path` - Path to the container rootfs (extracted OCI image layers)
 /// * `compute` - Compute configuration from adep.json
 /// * `volumes` - Volume mounts (e.g., GGUF model files)
-/// * `requires_gpu` - Whether this workload requires GPU resources
+/// * `gpu_uuids` - List of GPU UUIDs to assign (None if no GPU required)
 ///
 /// # Returns
 ///
@@ -38,20 +38,22 @@ pub fn build_oci_spec(
     rootfs_path: &Path,
     compute: &ComputeConfig,
     volumes: &[AdepVolume],
-    requires_gpu: bool,
+    gpu_uuids: Option<&[String]>,
 ) -> Result<Spec, String> {
     // --- 1. Build Process Configuration ---
     let mut process_envs = compute.env.clone();
 
     // Add GPU-specific environment variables if GPU is required
-    if requires_gpu {
-        // NVIDIA_VISIBLE_DEVICES controls which GPUs are visible in the container
-        // "all" = all GPUs are visible (for now; Week 4 will implement selective GPU allocation)
-        process_envs.push("NVIDIA_VISIBLE_DEVICES=all".to_string());
+    if let Some(uuids) = gpu_uuids {
+        if !uuids.is_empty() {
+            // NVIDIA_VISIBLE_DEVICES controls which GPUs are visible in the container
+            let visible_devices = uuids.join(",");
+            process_envs.push(format!("NVIDIA_VISIBLE_DEVICES={}", visible_devices));
 
-        // NVIDIA_DRIVER_CAPABILITIES controls which driver features are enabled
-        // "compute,utility" = CUDA compute + nvidia-smi utility
-        process_envs.push("NVIDIA_DRIVER_CAPABILITIES=compute,utility".to_string());
+            // NVIDIA_DRIVER_CAPABILITIES controls which driver features are enabled
+            // "compute,utility" = CUDA compute + nvidia-smi utility
+            process_envs.push("NVIDIA_DRIVER_CAPABILITIES=compute,utility".to_string());
+        }
     }
 
     let process = ProcessBuilder::default()
@@ -63,7 +65,7 @@ pub fn build_oci_spec(
         .map_err(|e| format!("Failed to build process config: {}", e))?;
 
     // --- 2. Build Hooks (GPU passthrough) ---
-    let hooks = if requires_gpu {
+    let hooks = if gpu_uuids.is_some() && !gpu_uuids.unwrap().is_empty() {
         // Create NVIDIA Container Toolkit prestart hook
         // This hook runs before the container starts and configures GPU devices
         let nvidia_hook = HookBuilder::default()
@@ -255,7 +257,7 @@ mod tests {
         };
         let volumes = vec![];
 
-        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, false).unwrap();
+        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, None).unwrap();
 
         // 1. Verify hooks are NOT injected for CPU-only workload
         assert!(
@@ -289,7 +291,8 @@ mod tests {
         };
         let volumes = vec![];
 
-        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, true).unwrap();
+        let gpu_uuids = vec!["GPU-1234".to_string(), "GPU-5678".to_string()];
+        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, Some(&gpu_uuids)).unwrap();
 
         // 1. Verify NVIDIA prestart hook is injected
         let hooks = spec
@@ -310,8 +313,8 @@ mod tests {
         // 2. Verify NVIDIA environment variables are injected
         let envs = spec.process().as_ref().unwrap().env().as_ref().unwrap();
         assert!(
-            envs.iter().any(|e| e == "NVIDIA_VISIBLE_DEVICES=all"),
-            "GPU workload should have NVIDIA_VISIBLE_DEVICES"
+            envs.iter().any(|e| e == "NVIDIA_VISIBLE_DEVICES=GPU-1234,GPU-5678"),
+            "GPU workload should have NVIDIA_VISIBLE_DEVICES with UUIDs"
         );
         assert!(
             envs.iter()
@@ -346,7 +349,7 @@ mod tests {
             },
         ];
 
-        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, true).unwrap();
+        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, Some(&vec!["GPU-1".to_string()])).unwrap();
 
         // Verify volume mounts are injected
         let mounts = spec.mounts().as_ref().unwrap();

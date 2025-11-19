@@ -54,6 +54,7 @@ message GpuInfo {
   uint64 vram_total_bytes = 3;          // Total VRAM in bytes
   string cuda_compute_capability = 4;   // CUDA compute capability (e.g., "8.9")
   uint64 vram_available_bytes = 5;      // Currently available VRAM (optional)
+  string uuid = 6;                      // GPU UUID (Unique Identifier)
 }
 
 // Workload instance currently running on the Rig
@@ -92,6 +93,7 @@ message DeployWorkloadRequest {
   string workload_id = 1;               // Unique workload identifier
   AdePManifest manifest = 2;            // Strongly typed adep manifest
   string manifest_json = 3;             // Original JSON payload (for compatibility)
+  repeated string resource_assignment = 4; // List of assigned GPU UUIDs
 }
 
 // Response to deploy request

@@ -76,6 +76,9 @@ pub struct GpuInfo {
     /// Currently available VRAM (optional)
     #[prost(uint64, tag = "5")]
     pub vram_available_bytes: u64,
+    /// GPU UUID (Unique Identifier)
+    #[prost(string, tag = "6")]
+    pub uuid: ::prost::alloc::string::String,
 }
 /// Workload instance currently running on the Rig
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -124,6 +127,9 @@ pub struct DeployWorkloadRequest {
     /// Original JSON payload (for compatibility)
     #[prost(string, tag = "3")]
     pub manifest_json: ::prost::alloc::string::String,
+    /// List of assigned GPU UUIDs
+    #[prost(string, repeated, tag = "4")]
+    pub resource_assignment: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Response to deploy request
 #[allow(clippy::derive_partial_eq_without_eq)]

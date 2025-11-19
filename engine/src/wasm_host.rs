@@ -141,7 +141,7 @@ mod tests {
         }
 
         let logic = AdepLogic::from_file(TEST_WASM_PATH).unwrap();
-        let valid_json = r#"{"name":"test-capsule","version":"1.0.0"}"#;
+        let valid_json = r#"{"name":"test-capsule","version":"1.0.0","compute":{"image":"alpine:latest"}}"#;
 
         let result = logic.validate_manifest(valid_json);
         assert!(result.is_ok());

@@ -10,7 +10,7 @@ use crate::adep::{
 use crate::capsule_manager::CapsuleManager;
 use crate::oci::spec_builder::build_oci_spec;
 use crate::proto::onescluster::coordinator::v1::{
-    agent_service_server::{AgentService as AgentServiceTrait, AgentServiceServer},
+    agent_service_server::{AgentService as AgentServiceTrait},
     AdePManifest as ProtoAdePManifest, DeployWorkloadRequest, DeployWorkloadResponse,
     SchedulingConfig as ProtoSchedulingConfig, StopWorkloadRequest, StopWorkloadResponse,
 };
@@ -179,7 +179,11 @@ impl AgentServiceTrait for AgentService {
             &rootfs_path,
             &manifest.compute,
             &manifest.volumes,
-            requires_gpu,
+            if requires_gpu {
+                Some(&req.resource_assignment)
+            } else {
+                None
+            },
         )
         .map_err(|e| Status::internal(format!("Failed to build OCI spec: {}", e)))?;
 

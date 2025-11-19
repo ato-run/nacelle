@@ -221,7 +221,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	log.Printf("  Available Rigs: %d", len(allRigs))
 
 	// 4. Use Scheduler to find best Rig
-	bestRig, err := h.Scheduler.FindBestRig(allRigs, constraints)
+	bestRig, assignedUUIDs, err := h.Scheduler.FindBestRigWithAssignment(allRigs, constraints)
 	if err != nil {
 		log.Printf("❌ Scheduling failed: %v", err)
 		http.Error(w, fmt.Sprintf("Scheduling failed: %v", err), http.StatusServiceUnavailable)
@@ -245,7 +245,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Call Agent's DeployWorkload gRPC endpoint
 	manifestJSONBytes, _ := json.Marshal(manifest)
-	deployResp, err := h.callAgentDeploy(ctx, bestRig.RigID, string(manifestJSONBytes), &manifest)
+	deployResp, err := h.callAgentDeploy(ctx, bestRig.RigID, string(manifestJSONBytes), &manifest, assignedUUIDs)
 	if err != nil {
 		log.Printf("❌ Agent deployment failed: %v", err)
 		// Rollback VRAM reservation
@@ -271,7 +271,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 }
 
 // callAgentDeploy calls the selected Agent's DeployWorkload gRPC endpoint
-func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manifestJSON string, manifest *AdepManifest) (*pb.DeployWorkloadResponse, error) {
+func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manifestJSON string, manifest *AdepManifest, assignedUUIDs []string) (*pb.DeployWorkloadResponse, error) {
 	var client pb.AgentServiceClient
 	var closeFunc func() error
 
@@ -314,9 +314,10 @@ func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manif
 	}
 
 	req := &pb.DeployWorkloadRequest{
-		WorkloadId:   manifest.Name,
-		Manifest:     manifestProto,
-		ManifestJson: manifestJSON,
+		WorkloadId:         manifest.Name,
+		Manifest:           manifestProto,
+		ManifestJson:       manifestJSON,
+		ResourceAssignment: assignedUUIDs,
 	}
 
 	resp, err := client.DeployWorkload(ctx, req)

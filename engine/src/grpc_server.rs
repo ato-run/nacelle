@@ -87,11 +87,11 @@ impl Engine for EngineService {
         info!("StopCapsule request: capsule_id={}", req.capsule_id);
 
         match self.capsule_manager.stop_capsule(&req.capsule_id).await {
-            Ok(status) => {
+            Ok(_) => {
                 info!("Capsule {} stopped successfully", req.capsule_id);
                 Ok(Response::new(StopResponse {
                     capsule_id: req.capsule_id,
-                    status,
+                    status: "stopped".to_string(),
                 }))
             }
             Err(e) => {

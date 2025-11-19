@@ -61,7 +61,18 @@ func setupTestDB(t *testing.T) (*sql.DB, *db.NodeStore) {
 		updated_at INTEGER NOT NULL DEFAULT 0
 	);
 
+	CREATE TABLE node_gpus (
+		id TEXT PRIMARY KEY,
+		node_id TEXT NOT NULL,
+		gpu_index INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		total_vram_bytes INTEGER NOT NULL,
+		used_vram_bytes INTEGER NOT NULL DEFAULT 0,
+		updated_at INTEGER NOT NULL
+	);
+
 	CREATE INDEX idx_nodes_gpu_available ON nodes(total_vram_bytes, used_vram_bytes) WHERE total_vram_bytes > 0;
+	CREATE INDEX idx_node_gpus_node_id ON node_gpus(node_id);
 	`
 
 	_, err = database.Exec(schema)

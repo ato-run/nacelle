@@ -101,6 +101,7 @@ impl GpuDetector for MockGpuDetector {
                 vram_total_bytes: self.vram_gb * 1_073_741_824, // GB to bytes
                 cuda_compute_capability: Some("8.0".to_string()),
                 vram_used_bytes: Some(0), // Mock: no usage initially
+                uuid: format!("GPU-MOCK-{}-UUID", i),
             });
         }
 
@@ -193,12 +194,20 @@ impl GpuDetector for NvmlGpuDetector {
                 .ok()
                 .map(|cc| format!("{}.{}", cc.major, cc.minor));
 
+            let uuid = device
+                .uuid()
+                .map_err(|e| GpuDetectionError::GpuQueryFailed {
+                    index: i,
+                    message: e.to_string(),
+                })?;
+
             report.gpus.push(GpuInfo {
                 index: i,
                 device_name: name,
                 vram_total_bytes: memory_info.total,
                 cuda_compute_capability,
                 vram_used_bytes: Some(memory_info.used),
+                uuid,
             });
         }
 
@@ -289,6 +298,7 @@ mod tests {
         assert!(gpu.device_name.contains("Mock NVIDIA GPU"));
         assert_eq!(gpu.vram_gb(), 10.0);
         assert_eq!(gpu.cuda_compute_capability, Some("8.0".to_string()));
+        assert!(gpu.uuid.starts_with("GPU-MOCK-0-UUID"));
     }
 
     #[test]

@@ -392,6 +392,7 @@ type GpuInfo struct {
 	VramTotalBytes        uint64                 `protobuf:"varint,3,opt,name=vram_total_bytes,json=vramTotalBytes,proto3" json:"vram_total_bytes,omitempty"`                     // Total VRAM in bytes
 	CudaComputeCapability string                 `protobuf:"bytes,4,opt,name=cuda_compute_capability,json=cudaComputeCapability,proto3" json:"cuda_compute_capability,omitempty"` // CUDA compute capability (e.g., "8.9")
 	VramAvailableBytes    uint64                 `protobuf:"varint,5,opt,name=vram_available_bytes,json=vramAvailableBytes,proto3" json:"vram_available_bytes,omitempty"`         // Currently available VRAM (optional)
+	Uuid                  string                 `protobuf:"bytes,6,opt,name=uuid,proto3" json:"uuid,omitempty"`                                                                  // GPU UUID (Unique Identifier)
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -459,6 +460,13 @@ func (x *GpuInfo) GetVramAvailableBytes() uint64 {
 		return x.VramAvailableBytes
 	}
 	return 0
+}
+
+func (x *GpuInfo) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
 }
 
 // Workload instance currently running on the Rig
@@ -609,12 +617,13 @@ func (x *Taint) GetEffect() TaintEffect {
 
 // Request to deploy a workload (Coordinator → Agent)
 type DeployWorkloadRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkloadId    string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`       // Unique workload identifier
-	Manifest      *AdePManifest          `protobuf:"bytes,2,opt,name=manifest,proto3" json:"manifest,omitempty"`                             // Strongly typed adep manifest
-	ManifestJson  string                 `protobuf:"bytes,3,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"` // Original JSON payload (for compatibility)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	WorkloadId         string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`                         // Unique workload identifier
+	Manifest           *AdePManifest          `protobuf:"bytes,2,opt,name=manifest,proto3" json:"manifest,omitempty"`                                               // Strongly typed adep manifest
+	ManifestJson       string                 `protobuf:"bytes,3,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"`                   // Original JSON payload (for compatibility)
+	ResourceAssignment []string               `protobuf:"bytes,4,rep,name=resource_assignment,json=resourceAssignment,proto3" json:"resource_assignment,omitempty"` // List of assigned GPU UUIDs
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *DeployWorkloadRequest) Reset() {
@@ -666,6 +675,13 @@ func (x *DeployWorkloadRequest) GetManifestJson() string {
 		return x.ManifestJson
 	}
 	return ""
+}
+
+func (x *DeployWorkloadRequest) GetResourceAssignment() []string {
+	if x != nil {
+		return x.ResourceAssignment
+	}
+	return nil
 }
 
 // Response to deploy request
@@ -1150,14 +1166,15 @@ const file_coordinator_proto_rawDesc = "" +
 	"\x13system_cuda_version\x18\x02 \x01(\tR\x11systemCudaVersion\x122\n" +
 	"\x15system_driver_version\x18\x03 \x01(\tR\x13systemDriverVersion\x12(\n" +
 	"\x10total_vram_bytes\x18\x04 \x01(\x04R\x0etotalVramBytes\x12&\n" +
-	"\x0fused_vram_bytes\x18\x05 \x01(\x04R\rusedVramBytes\"\xd4\x01\n" +
+	"\x0fused_vram_bytes\x18\x05 \x01(\x04R\rusedVramBytes\"\xe8\x01\n" +
 	"\aGpuInfo\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\rR\x05index\x12\x1f\n" +
 	"\vdevice_name\x18\x02 \x01(\tR\n" +
 	"deviceName\x12(\n" +
 	"\x10vram_total_bytes\x18\x03 \x01(\x04R\x0evramTotalBytes\x126\n" +
 	"\x17cuda_compute_capability\x18\x04 \x01(\tR\x15cudaComputeCapability\x120\n" +
-	"\x14vram_available_bytes\x18\x05 \x01(\x04R\x12vramAvailableBytes\"\xf8\x01\n" +
+	"\x14vram_available_bytes\x18\x05 \x01(\x04R\x12vramAvailableBytes\x12\x12\n" +
+	"\x04uuid\x18\x06 \x01(\tR\x04uuid\"\xf8\x01\n" +
 	"\x0eWorkloadStatus\x12\x1f\n" +
 	"\vworkload_id\x18\x01 \x01(\tR\n" +
 	"workloadId\x12\x12\n" +
@@ -1169,12 +1186,13 @@ const file_coordinator_proto_rawDesc = "" +
 	"\x05Taint\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12?\n" +
-	"\x06effect\x18\x03 \x01(\x0e2'.onescluster.coordinator.v1.TaintEffectR\x06effect\"\xa3\x01\n" +
+	"\x06effect\x18\x03 \x01(\x0e2'.onescluster.coordinator.v1.TaintEffectR\x06effect\"\xd4\x01\n" +
 	"\x15DeployWorkloadRequest\x12\x1f\n" +
 	"\vworkload_id\x18\x01 \x01(\tR\n" +
 	"workloadId\x12D\n" +
 	"\bmanifest\x18\x02 \x01(\v2(.onescluster.coordinator.v1.AdePManifestR\bmanifest\x12#\n" +
-	"\rmanifest_json\x18\x03 \x01(\tR\fmanifestJson\"L\n" +
+	"\rmanifest_json\x18\x03 \x01(\tR\fmanifestJson\x12/\n" +
+	"\x13resource_assignment\x18\x04 \x03(\tR\x12resourceAssignment\"L\n" +
 	"\x16DeployWorkloadResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"6\n" +
