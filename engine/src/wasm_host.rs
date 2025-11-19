@@ -49,6 +49,11 @@ impl AdepLogic {
             .get_typed_func::<(i32, i32), i32>(&mut store, "validate_manifest")
             .map_err(|e| anyhow!("Failed to get validate_manifest function: {}", e))?;
 
+        // Get the alloc function for safe memory allocation
+        let alloc_fn = instance
+            .get_typed_func::<i32, i32>(&mut store, "alloc")
+            .map_err(|e| anyhow!("Failed to get alloc function: {}", e))?;
+
         // Allocate memory in Wasm linear memory for the JSON string
         let memory = instance
             .get_memory(&mut store, "memory")
@@ -58,9 +63,12 @@ impl AdepLogic {
         let json_bytes = adep_json.as_bytes();
         let json_len = json_bytes.len();
 
-        // Simple allocation strategy: write at offset 0
-        // In production, you'd use a proper allocator
-        let json_ptr = 0i32;
+        // Allocate memory in Wasm
+        let json_ptr = alloc_fn
+            .call(&mut store, json_len as i32)
+            .map_err(|e| anyhow!("Failed to allocate Wasm memory: {}", e))?;
+
+        // Write data to the allocated memory
         memory
             .write(&mut store, json_ptr as usize, json_bytes)
             .map_err(|e| anyhow!("Failed to write to Wasm memory: {}", e))?;
@@ -70,6 +78,11 @@ impl AdepLogic {
             .call(&mut store, (json_ptr, json_len as i32))
             .map_err(|e| anyhow!("Wasm function call failed: {}", e))?;
 
+        // Note: In a production environment, we should also call `dealloc` here to prevent memory leaks
+        // inside the Wasm instance if the instance is long-lived.
+        // For now, since we might be creating a new store/instance or the logic is simple, we skip it,
+        // but it is recommended to add it.
+        
         if result == 1 {
             info!("Manifest validation succeeded");
             Ok(())

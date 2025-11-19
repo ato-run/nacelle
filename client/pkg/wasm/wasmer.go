@@ -60,6 +60,12 @@ func (h *WasmerHost) ValidateManifest(manifestJSON []byte) (bool, error) {
 		return false, fmt.Errorf("failed to get validate_manifest function: %w", err)
 	}
 
+	// Get the alloc function
+	allocFunc, err := h.instance.Exports.GetFunction("alloc")
+	if err != nil {
+		return false, fmt.Errorf("failed to get alloc function: %w", err)
+	}
+
 	// Allocate memory in Wasm for the JSON string
 	// Get the memory instance
 	memory, err := h.instance.Exports.GetMemory("memory")
@@ -67,23 +73,28 @@ func (h *WasmerHost) ValidateManifest(manifestJSON []byte) (bool, error) {
 		return false, fmt.Errorf("failed to get wasm memory: %w", err)
 	}
 
+	jsonLen := len(manifestJSON)
+
+	// Call alloc(len) to get a pointer
+	ptrVal, err := allocFunc(jsonLen)
+	if err != nil {
+		return false, fmt.Errorf("failed to allocate memory in wasm: %w", err)
+	}
+	ptr := ptrVal.(int32)
+
 	// Get the memory data
 	memoryData := memory.Data()
 
-	// Find a place to write the JSON (we'll use offset 0 for simplicity)
-	// In production, you might want a proper allocator
-	jsonLen := len(manifestJSON)
-	if jsonLen > len(memoryData) {
-		return false, fmt.Errorf("manifest JSON too large: %d bytes (max: %d)", jsonLen, len(memoryData))
+	// Check bounds (though alloc should have ensured space, we check against the view)
+	if int(ptr)+jsonLen > len(memoryData) {
+		return false, fmt.Errorf("allocated memory out of bounds")
 	}
 
-	// Copy JSON to Wasm memory
-	copy(memoryData, manifestJSON)
+	// Copy JSON to Wasm memory at the allocated pointer
+	copy(memoryData[ptr:], manifestJSON)
 
 	// Call validate_manifest(json_ptr, json_len)
-	// json_ptr = 0 (we wrote at offset 0)
-	// json_len = length of JSON
-	result, err := validateFunc(0, jsonLen)
+	result, err := validateFunc(ptr, jsonLen)
 	if err != nil {
 		return false, fmt.Errorf("failed to call validate_manifest: %w", err)
 	}
