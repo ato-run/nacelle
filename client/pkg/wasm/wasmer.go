@@ -4,15 +4,12 @@
 package wasm
 
 import (
-	_ "embed"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/wasmerio/wasmer-go/wasmer"
 )
-
-//go:embed adep_logic.wasm
-var adepLogicWasm []byte
 
 // WasmerHost provides Wasm-based adep.json validation using Wasmer runtime
 type WasmerHost struct {
@@ -20,8 +17,14 @@ type WasmerHost struct {
 	mu       sync.Mutex
 }
 
-// NewWasmerHost creates a new Wasmer host with the embedded adep_logic.wasm module
-func NewWasmerHost() (*WasmerHost, error) {
+// NewWasmerHost creates a new Wasmer host from the Wasm file at the given path
+func NewWasmerHost(wasmPath string) (*WasmerHost, error) {
+	// Read Wasm file
+	wasmBytes, err := os.ReadFile(wasmPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read wasm file: %w", err)
+	}
+
 	// Create a new Wasmer engine
 	engine := wasmer.NewEngine()
 
@@ -29,7 +32,7 @@ func NewWasmerHost() (*WasmerHost, error) {
 	store := wasmer.NewStore(engine)
 
 	// Compile the Wasm module
-	module, err := wasmer.NewModule(store, adepLogicWasm)
+	module, err := wasmer.NewModule(store, wasmBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile wasm module: %w", err)
 	}

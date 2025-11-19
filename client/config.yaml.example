@@ -48,8 +48,12 @@ headscale:
   # API key for authentication
   api_key: ""
 
-  # Request timeout (in seconds)
-  timeout: 10
+# TLS settings
+tls:
+  enabled: true
+  ca_cert: "../certs/ca-cert.pem"
+  client_cert: "../certs/client-cert.pem"
+  client_key: "../certs/client-key.pem"
 
 # HTTP API server settings
 api:

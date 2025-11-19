@@ -16,6 +16,15 @@ type Config struct {
 	Headscale   HeadscaleConfig   `yaml:"headscale"`
 	API         APIConfig         `yaml:"api"`
 	Logging     LoggingConfig     `yaml:"logging"`
+	TLS         TLSConfig         `yaml:"tls"`
+}
+
+// TLSConfig contains TLS settings for gRPC communication
+type TLSConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	CACert     string `yaml:"ca_cert"`
+	ClientCert string `yaml:"client_cert"`
+	ClientKey  string `yaml:"client_key"`
 }
 
 // CoordinatorConfig contains coordinator-specific settings

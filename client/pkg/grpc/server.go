@@ -11,7 +11,7 @@ import (
 
 // Server implements the Coordinator gRPC service
 type Server struct {
-	pb.UnimplementedCoordinatorServer
+	pb.UnimplementedCoordinatorServiceServer
 	NodeStore *db.NodeStore
 }
 

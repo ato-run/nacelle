@@ -111,7 +111,7 @@ type VolumeConfig struct {
 
 // AgentClientFactory creates a gRPC client for Agent communication
 // Allows dependency injection for testing
-type AgentClientFactory func(ctx context.Context, rigID string) (pb.CoordinatorClient, func() error, error)
+type AgentClientFactory func(ctx context.Context, rigID string) (pb.AgentServiceClient, func() error, error)
 
 // DeployHandler handles workload deployment requests
 type DeployHandler struct {
@@ -272,7 +272,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 // callAgentDeploy calls the selected Agent's DeployWorkload gRPC endpoint
 func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manifestJSON string, manifest *AdepManifest) (*pb.DeployWorkloadResponse, error) {
-	var client pb.CoordinatorClient
+	var client pb.AgentServiceClient
 	var closeFunc func() error
 
 	// Use factory if provided (for testing), otherwise use default
@@ -304,7 +304,7 @@ func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manif
 		}
 		defer conn.Close()
 
-		client = pb.NewCoordinatorClient(conn)
+		client = pb.NewAgentServiceClient(conn)
 	}
 
 	// Call DeployWorkload RPC

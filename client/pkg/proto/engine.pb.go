@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: proto/engine.proto
+// source: engine.proto
 
 package proto
 
@@ -29,7 +29,7 @@ type GetResourcesRequest struct {
 
 func (x *GetResourcesRequest) Reset() {
 	*x = GetResourcesRequest{}
-	mi := &file_proto_engine_proto_msgTypes[0]
+	mi := &file_engine_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -41,7 +41,7 @@ func (x *GetResourcesRequest) String() string {
 func (*GetResourcesRequest) ProtoMessage() {}
 
 func (x *GetResourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[0]
+	mi := &file_engine_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54,7 +54,7 @@ func (x *GetResourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourcesRequest.ProtoReflect.Descriptor instead.
 func (*GetResourcesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{0}
+	return file_engine_proto_rawDescGZIP(), []int{0}
 }
 
 type DeployRequest struct {
@@ -69,7 +69,7 @@ type DeployRequest struct {
 
 func (x *DeployRequest) Reset() {
 	*x = DeployRequest{}
-	mi := &file_proto_engine_proto_msgTypes[1]
+	mi := &file_engine_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -81,7 +81,7 @@ func (x *DeployRequest) String() string {
 func (*DeployRequest) ProtoMessage() {}
 
 func (x *DeployRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[1]
+	mi := &file_engine_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -94,7 +94,7 @@ func (x *DeployRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployRequest.ProtoReflect.Descriptor instead.
 func (*DeployRequest) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{1}
+	return file_engine_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *DeployRequest) GetCapsuleId() string {
@@ -135,7 +135,7 @@ type DeployResponse struct {
 
 func (x *DeployResponse) Reset() {
 	*x = DeployResponse{}
-	mi := &file_proto_engine_proto_msgTypes[2]
+	mi := &file_engine_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -147,7 +147,7 @@ func (x *DeployResponse) String() string {
 func (*DeployResponse) ProtoMessage() {}
 
 func (x *DeployResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[2]
+	mi := &file_engine_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -160,7 +160,7 @@ func (x *DeployResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployResponse.ProtoReflect.Descriptor instead.
 func (*DeployResponse) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{2}
+	return file_engine_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *DeployResponse) GetCapsuleId() string {
@@ -186,7 +186,7 @@ type StopRequest struct {
 
 func (x *StopRequest) Reset() {
 	*x = StopRequest{}
-	mi := &file_proto_engine_proto_msgTypes[3]
+	mi := &file_engine_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -198,7 +198,7 @@ func (x *StopRequest) String() string {
 func (*StopRequest) ProtoMessage() {}
 
 func (x *StopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[3]
+	mi := &file_engine_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,7 +211,7 @@ func (x *StopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRequest.ProtoReflect.Descriptor instead.
 func (*StopRequest) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{3}
+	return file_engine_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StopRequest) GetCapsuleId() string {
@@ -231,7 +231,7 @@ type StopResponse struct {
 
 func (x *StopResponse) Reset() {
 	*x = StopResponse{}
-	mi := &file_proto_engine_proto_msgTypes[4]
+	mi := &file_engine_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -243,7 +243,7 @@ func (x *StopResponse) String() string {
 func (*StopResponse) ProtoMessage() {}
 
 func (x *StopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[4]
+	mi := &file_engine_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -256,7 +256,7 @@ func (x *StopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopResponse.ProtoReflect.Descriptor instead.
 func (*StopResponse) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{4}
+	return file_engine_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *StopResponse) GetCapsuleId() string {
@@ -284,7 +284,7 @@ type ResourceInfo struct {
 
 func (x *ResourceInfo) Reset() {
 	*x = ResourceInfo{}
-	mi := &file_proto_engine_proto_msgTypes[5]
+	mi := &file_engine_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -296,7 +296,7 @@ func (x *ResourceInfo) String() string {
 func (*ResourceInfo) ProtoMessage() {}
 
 func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[5]
+	mi := &file_engine_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +309,7 @@ func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceInfo.ProtoReflect.Descriptor instead.
 func (*ResourceInfo) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{5}
+	return file_engine_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ResourceInfo) GetCpuCores() uint64 {
@@ -342,7 +342,7 @@ type ValidateRequest struct {
 
 func (x *ValidateRequest) Reset() {
 	*x = ValidateRequest{}
-	mi := &file_proto_engine_proto_msgTypes[6]
+	mi := &file_engine_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -354,7 +354,7 @@ func (x *ValidateRequest) String() string {
 func (*ValidateRequest) ProtoMessage() {}
 
 func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[6]
+	mi := &file_engine_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -367,7 +367,7 @@ func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{6}
+	return file_engine_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ValidateRequest) GetAdepJson() []byte {
@@ -387,7 +387,7 @@ type ValidationResult struct {
 
 func (x *ValidationResult) Reset() {
 	*x = ValidationResult{}
-	mi := &file_proto_engine_proto_msgTypes[7]
+	mi := &file_engine_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -399,7 +399,7 @@ func (x *ValidationResult) String() string {
 func (*ValidationResult) ProtoMessage() {}
 
 func (x *ValidationResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_proto_msgTypes[7]
+	mi := &file_engine_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -412,7 +412,7 @@ func (x *ValidationResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidationResult.ProtoReflect.Descriptor instead.
 func (*ValidationResult) Descriptor() ([]byte, []int) {
-	return file_proto_engine_proto_rawDescGZIP(), []int{7}
+	return file_engine_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ValidationResult) GetValid() bool {
@@ -429,11 +429,11 @@ func (x *ValidationResult) GetErrorMessage() string {
 	return ""
 }
 
-var File_proto_engine_proto protoreflect.FileDescriptor
+var File_engine_proto protoreflect.FileDescriptor
 
-const file_proto_engine_proto_rawDesc = "" +
+const file_engine_proto_rawDesc = "" +
 	"\n" +
-	"\x12proto/engine.proto\x12\x15onescluster.engine.v1\"\x15\n" +
+	"\fengine.proto\x12\x15onescluster.engine.v1\"\x15\n" +
 	"\x13GetResourcesRequest\"\x80\x01\n" +
 	"\rDeployRequest\x12\x1d\n" +
 	"\n" +
@@ -469,19 +469,19 @@ const file_proto_engine_proto_rawDesc = "" +
 	"\x10ValidateManifest\x12&.onescluster.engine.v1.ValidateRequest\x1a'.onescluster.engine.v1.ValidationResultB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
 
 var (
-	file_proto_engine_proto_rawDescOnce sync.Once
-	file_proto_engine_proto_rawDescData []byte
+	file_engine_proto_rawDescOnce sync.Once
+	file_engine_proto_rawDescData []byte
 )
 
-func file_proto_engine_proto_rawDescGZIP() []byte {
-	file_proto_engine_proto_rawDescOnce.Do(func() {
-		file_proto_engine_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_engine_proto_rawDesc), len(file_proto_engine_proto_rawDesc)))
+func file_engine_proto_rawDescGZIP() []byte {
+	file_engine_proto_rawDescOnce.Do(func() {
+		file_engine_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_engine_proto_rawDesc), len(file_engine_proto_rawDesc)))
 	})
-	return file_proto_engine_proto_rawDescData
+	return file_engine_proto_rawDescData
 }
 
-var file_proto_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_proto_engine_proto_goTypes = []any{
+var file_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_engine_proto_goTypes = []any{
 	(*GetResourcesRequest)(nil), // 0: onescluster.engine.v1.GetResourcesRequest
 	(*DeployRequest)(nil),       // 1: onescluster.engine.v1.DeployRequest
 	(*DeployResponse)(nil),      // 2: onescluster.engine.v1.DeployResponse
@@ -491,7 +491,7 @@ var file_proto_engine_proto_goTypes = []any{
 	(*ValidateRequest)(nil),     // 6: onescluster.engine.v1.ValidateRequest
 	(*ValidationResult)(nil),    // 7: onescluster.engine.v1.ValidationResult
 }
-var file_proto_engine_proto_depIdxs = []int32{
+var file_engine_proto_depIdxs = []int32{
 	1, // 0: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
 	3, // 1: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
 	0, // 2: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
@@ -507,26 +507,26 @@ var file_proto_engine_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_proto_engine_proto_init() }
-func file_proto_engine_proto_init() {
-	if File_proto_engine_proto != nil {
+func init() { file_engine_proto_init() }
+func file_engine_proto_init() {
+	if File_engine_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_engine_proto_rawDesc), len(file_proto_engine_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_engine_proto_rawDesc), len(file_engine_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_engine_proto_goTypes,
-		DependencyIndexes: file_proto_engine_proto_depIdxs,
-		MessageInfos:      file_proto_engine_proto_msgTypes,
+		GoTypes:           file_engine_proto_goTypes,
+		DependencyIndexes: file_engine_proto_depIdxs,
+		MessageInfos:      file_engine_proto_msgTypes,
 	}.Build()
-	File_proto_engine_proto = out.File
-	file_proto_engine_proto_goTypes = nil
-	file_proto_engine_proto_depIdxs = nil
+	File_engine_proto = out.File
+	file_engine_proto_goTypes = nil
+	file_engine_proto_depIdxs = nil
 }

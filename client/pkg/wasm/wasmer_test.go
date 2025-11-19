@@ -8,7 +8,7 @@ import (
 )
 
 func TestWasmerHost_ValidateManifest_Valid(t *testing.T) {
-	host, err := NewWasmerHost()
+	host, err := NewWasmerHost("adep_logic.wasm")
 	if err != nil {
 		t.Fatalf("Failed to create WasmerHost: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestWasmerHost_ValidateManifest_Valid(t *testing.T) {
 }
 
 func TestWasmerHost_ValidateManifest_MissingName(t *testing.T) {
-	host, err := NewWasmerHost()
+	host, err := NewWasmerHost("adep_logic.wasm")
 	if err != nil {
 		t.Fatalf("Failed to create WasmerHost: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestWasmerHost_ValidateManifest_MissingName(t *testing.T) {
 }
 
 func TestWasmerHost_ValidateManifest_MissingVersion(t *testing.T) {
-	host, err := NewWasmerHost()
+	host, err := NewWasmerHost("adep_logic.wasm")
 	if err != nil {
 		t.Fatalf("Failed to create WasmerHost: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestWasmerHost_ValidateManifest_MissingVersion(t *testing.T) {
 }
 
 func TestWasmerHost_ValidateManifest_InvalidJSON(t *testing.T) {
-	host, err := NewWasmerHost()
+	host, err := NewWasmerHost("adep_logic.wasm")
 	if err != nil {
 		t.Fatalf("Failed to create WasmerHost: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestWasmerHost_ValidateManifest_InvalidJSON(t *testing.T) {
 }
 
 func TestWasmerHost_MultipleValidations(t *testing.T) {
-	host, err := NewWasmerHost()
+	host, err := NewWasmerHost("adep_logic.wasm")
 	if err != nil {
 		t.Fatalf("Failed to create WasmerHost: %v", err)
 	}

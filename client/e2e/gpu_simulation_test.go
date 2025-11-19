@@ -49,7 +49,7 @@ const (
 
 // mockAgentServer simulates an Agent's gRPC server for Week 4 E2E test
 type mockAgentServer struct {
-	pb.UnimplementedCoordinatorServer
+	pb.UnimplementedAgentServiceServer
 	deployRequests []*pb.DeployWorkloadRequest // Track all deploy requests received
 }
 
@@ -68,6 +68,13 @@ func (m *mockAgentServer) DeployWorkload(ctx context.Context, req *pb.DeployWork
 	return &pb.DeployWorkloadResponse{
 		Success: true,
 		Message: "Workload deployed successfully (mock)",
+	}, nil
+}
+
+func (m *mockAgentServer) StopWorkload(ctx context.Context, req *pb.StopWorkloadRequest) (*pb.StopWorkloadResponse, error) {
+	return &pb.StopWorkloadResponse{
+		Success: true,
+		Message: "Workload stopped successfully (mock)",
 	}, nil
 }
 
@@ -136,7 +143,7 @@ func TestGpuSimulationE2E(t *testing.T) {
 	// Use bufconn for in-memory gRPC connection
 	listener := bufconn.Listen(1024 * 1024)
 	grpcServer := grpc.NewServer()
-	pb.RegisterCoordinatorServer(grpcServer, mockAgent)
+	pb.RegisterAgentServiceServer(grpcServer, mockAgent)
 
 	go func() {
 		if err := grpcServer.Serve(listener); err != nil {
@@ -153,7 +160,7 @@ func TestGpuSimulationE2E(t *testing.T) {
 	deployHandler := api.NewDeployHandler(nodeStore, scheduler)
 
 	// Inject mock Agent client factory
-	deployHandler.AgentClientFactory = func(ctx context.Context, rigID string) (pb.CoordinatorClient, func() error, error) {
+	deployHandler.AgentClientFactory = func(ctx context.Context, rigID string) (pb.AgentServiceClient, func() error, error) {
 		conn, err := grpc.DialContext(ctx, "",
 			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 				return listener.Dial()
@@ -162,7 +169,7 @@ func TestGpuSimulationE2E(t *testing.T) {
 		if err != nil {
 			return nil, nil, err
 		}
-		client := pb.NewCoordinatorClient(conn)
+		client := pb.NewAgentServiceClient(conn)
 		return client, conn.Close, nil
 	}
 
