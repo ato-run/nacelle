@@ -42,12 +42,12 @@ func TestAgentCoordinatorVRAME2E(t *testing.T) {
 
     lis, err := net.Listen("tcp", testLocalAddr+":0")
     if err != nil {
-        t.Fatalf("failed to listen: %v", err)
-    }
-    grpcServer := grpc.NewServer()
-    pb.RegisterCoordinatorServer(grpcServer, server.NewServer(nodeStore))
+		t.Fatalf("failed to listen: %v", err)
+	}
+	grpcServer := grpc.NewServer()
+	pb.RegisterCoordinatorServiceServer(grpcServer, server.NewServer(nodeStore))
 
-    done := make(chan struct{})
+	done := make(chan struct{})
     go func() {
         defer close(done)
         if err := grpcServer.Serve(lis); err != nil {

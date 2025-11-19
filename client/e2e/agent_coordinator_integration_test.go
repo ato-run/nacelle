@@ -45,7 +45,7 @@ func TestAgentCoordinatorVRAME2E(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	grpcServer := grpc.NewServer()
-	pb.RegisterCoordinatorServer(grpcServer, server.NewServer(nodeStore))
+	pb.RegisterCoordinatorServiceServer(grpcServer, server.NewServer(nodeStore))
 
 	done := make(chan struct{})
 	go func() {
