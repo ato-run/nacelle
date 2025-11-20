@@ -210,10 +210,11 @@ pub async fn start_grpc_server(
     capsule_manager: Arc<CapsuleManager>,
     wasm_host: Arc<AdepLogicHost>,
     runtime: Arc<ContainerRuntime>,
+    allowed_host_paths: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = addr.parse()?;
     let engine_service = EngineService::new(Arc::clone(&capsule_manager), Arc::clone(&wasm_host));
-    let agent_service = AgentService::new(capsule_manager, runtime);
+    let agent_service = AgentService::new(capsule_manager, runtime, allowed_host_paths);
 
     info!("Engine gRPC server listening on {}", addr);
 

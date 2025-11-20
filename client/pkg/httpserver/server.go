@@ -52,6 +52,9 @@ func NewServer(cfg Config) *Server {
 	mux.HandleFunc("/ready", healthHandler.HandleReadiness)
 	mux.HandleFunc("/live", healthHandler.HandleLiveness)
 
+	// API endpoints
+	mux.HandleFunc("/api/v1/models/fetch", api.HandleFetchModel)
+
 	s.server = &http.Server{
 		Addr:         cfg.Addr,
 		Handler:      mux,

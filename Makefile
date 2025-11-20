@@ -1,11 +1,11 @@
-.PHONY: all proto wasm client engine test clean \
+.PHONY: all proto wasm client cli engine test clean \
 	test-go test-go-unit test-go-integration test-go-e2e test-go-coverage \
 	test-rust test-rust-unit test-rust-integration test-rust-coverage \
 	test-all test-unit test-integration test-e2e test-coverage \
 	lint lint-go lint-rust \
 	run-engine run-client
 
-all: proto wasm engine client
+all: proto wasm engine client cli
 
 # gRPC コード生成
 proto:
@@ -23,11 +23,17 @@ wasm:
 	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm client/pkg/wasm/
 	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/
 
-# Client ビルド
+# Client ビルド (Coordinator server)
 client: proto wasm
-	@echo "Building Client..."
+	@echo "Building Client (Coordinator)..."
 	@mkdir -p bin
 	cd client && CGO_ENABLED=0 go build -o ../bin/capsuled-client ./cmd/client
+
+# CLI ビルド (rig-client CLI tool)
+cli: proto
+	@echo "Building CLI tool (rig-client)..."
+	@mkdir -p bin
+	cd client && CGO_ENABLED=0 go build -o ../bin/rig-client ./cmd/rig-client
 
 # Engine ビルド
 engine: proto wasm

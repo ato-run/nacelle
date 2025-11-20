@@ -4,9 +4,18 @@ use cudarc::driver::{CudaContext, DriverError};
 use tracing::warn;
 use tracing::info;
 
-pub struct GpuScrubber;
+use std::sync::Arc;
+use crate::security::audit::AuditLogger;
+
+pub struct GpuScrubber {
+    audit_logger: Arc<AuditLogger>,
+}
 
 impl GpuScrubber {
+    pub fn new(audit_logger: Arc<AuditLogger>) -> Self {
+        Self { audit_logger }
+    }
+
     /// 指定されたGPUインデックスのVRAMを物理洗浄する
     /// 
     /// # Arguments
@@ -15,7 +24,7 @@ impl GpuScrubber {
     /// # Returns
     /// * `Result<(), anyhow::Error>` - 成功時はOk
     #[cfg(feature = "real-gpu")]
-    pub fn scrub_device(gpu_index: usize) -> anyhow::Result<()> {
+    pub fn scrub_device(&self, gpu_index: usize) -> anyhow::Result<()> {
         info!("Starting VRAM scrub for GPU: {}", gpu_index);
         
         // 1. CUDAコンテキストの初期化
@@ -45,6 +54,12 @@ impl GpuScrubber {
         
         if alloc_size == 0 {
             warn!("GPU {}: No memory to scrub.", gpu_index);
+            self.audit_logger.log_event(
+                "VRAM_SCRUB",
+                Some(&format!("GPU-{}", gpu_index)),
+                "SKIPPED",
+                Some("No memory to scrub".to_string())
+            )?;
             return Ok(());
         }
 
@@ -61,12 +76,28 @@ impl GpuScrubber {
         }
         
         info!("VRAM scrub completed successfully for GPU: {}", gpu_index);
+        
+        self.audit_logger.log_event(
+            "VRAM_SCRUB",
+            Some(&format!("GPU-{}", gpu_index)),
+            "SUCCESS",
+            Some(format!("Scrubbed {} bytes", alloc_size))
+        )?;
+
         Ok(())
     }
 
     #[cfg(not(feature = "real-gpu"))]
-    pub fn scrub_device(gpu_index: usize) -> anyhow::Result<()> {
+    pub fn scrub_device(&self, gpu_index: usize) -> anyhow::Result<()> {
         info!("(MOCK) VRAM scrub skipped for GPU: {} (real-gpu feature disabled)", gpu_index);
+        
+        self.audit_logger.log_event(
+            "VRAM_SCRUB",
+            Some(&format!("GPU-{}", gpu_index)),
+            "SUCCESS",
+            Some("Mock scrub completed".to_string())
+        )?;
+        
         Ok(())
     }
 }

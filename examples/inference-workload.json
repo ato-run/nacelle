@@ -1,0 +1,31 @@
+{
+  "name": "llama3-inference",
+  "scheduling": {
+    "gpu": {
+      "vram_min_gb": 10,
+      "cuda_version_min": "12.0"
+    }
+  },
+  "compute": {
+    "image": "vllm/vllm-openai:latest",
+    "args": [
+      "--model", "/model",
+      "--served-model-name", "llama3-8b",
+      "--port", "8000"
+    ],
+    "env": {
+      "HUGGING_FACE_HUB_TOKEN": "your_token_here"
+    }
+  },
+  "volumes": [
+    {
+      "type": "bind",
+      "source": "/tmp/models/test-model",
+      "destination": "/model",
+      "readonly": true
+    }
+  ],
+  "metadata": {
+    "description": "Llama 3 8B Inference with vLLM"
+  }
+}

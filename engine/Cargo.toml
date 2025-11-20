@@ -34,7 +34,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 num_cpus = "1.16"
 which = "5.0"
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 
 # Hardware detection
 hostname = "0.4"
@@ -49,6 +49,11 @@ uuid = { version = "1.10", features = ["v4"] }
 
 # Log monitoring
 notify = "6"
+
+# Cryptography & Audit
+ed25519-dalek = { version = "2.1", features = ["rand_core", "pkcs8"] }
+rand = "0.8"
+hex = "0.4"
 
 # Metrics
 prometheus = "0.13"

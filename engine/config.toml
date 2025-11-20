@@ -1,0 +1,27 @@
+[server]
+listen_addr = "0.0.0.0:50051"
+
+[wasm]
+module_path = "../adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm"
+
+[coordinator]
+grpc_endpoint = "http://127.0.0.1:50052"
+
+[status]
+report_interval_secs = 5
+
+[[status.taints]]
+key = "gpu"
+value = "present"
+effect = "NoSchedule"
+
+[runtime]
+preferred = "youki"
+binary_path = "/Users/egamikohsuke/Ekoh/projects/ato/onescluster/capsuled/mock_runtime.sh"
+bundle_root = "/tmp/capsuled/bundles"
+state_root = "/tmp/capsuled/state"
+log_dir = "/tmp/capsuled/logs"
+hook_retry_attempts = 3
+
+[security]
+allowed_host_paths = ["/opt/models", "/mnt/cache", "/tmp"]

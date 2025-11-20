@@ -129,6 +129,7 @@ var CoordinatorService_ServiceDesc = grpc.ServiceDesc{
 const (
 	AgentService_DeployWorkload_FullMethodName = "/onescluster.coordinator.v1.AgentService/DeployWorkload"
 	AgentService_StopWorkload_FullMethodName   = "/onescluster.coordinator.v1.AgentService/StopWorkload"
+	AgentService_FetchModel_FullMethodName     = "/onescluster.coordinator.v1.AgentService/FetchModel"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -141,6 +142,8 @@ type AgentServiceClient interface {
 	DeployWorkload(ctx context.Context, in *DeployWorkloadRequest, opts ...grpc.CallOption) (*DeployWorkloadResponse, error)
 	// Coordinator instructs Agent to stop a workload
 	StopWorkload(ctx context.Context, in *StopWorkloadRequest, opts ...grpc.CallOption) (*StopWorkloadResponse, error)
+	// Coordinator instructs Agent to fetch a model file
+	FetchModel(ctx context.Context, in *FetchModelRequest, opts ...grpc.CallOption) (*FetchModelResponse, error)
 }
 
 type agentServiceClient struct {
@@ -171,6 +174,16 @@ func (c *agentServiceClient) StopWorkload(ctx context.Context, in *StopWorkloadR
 	return out, nil
 }
 
+func (c *agentServiceClient) FetchModel(ctx context.Context, in *FetchModelRequest, opts ...grpc.CallOption) (*FetchModelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FetchModelResponse)
+	err := c.cc.Invoke(ctx, AgentService_FetchModel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -181,6 +194,8 @@ type AgentServiceServer interface {
 	DeployWorkload(context.Context, *DeployWorkloadRequest) (*DeployWorkloadResponse, error)
 	// Coordinator instructs Agent to stop a workload
 	StopWorkload(context.Context, *StopWorkloadRequest) (*StopWorkloadResponse, error)
+	// Coordinator instructs Agent to fetch a model file
+	FetchModel(context.Context, *FetchModelRequest) (*FetchModelResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -196,6 +211,9 @@ func (UnimplementedAgentServiceServer) DeployWorkload(context.Context, *DeployWo
 }
 func (UnimplementedAgentServiceServer) StopWorkload(context.Context, *StopWorkloadRequest) (*StopWorkloadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopWorkload not implemented")
+}
+func (UnimplementedAgentServiceServer) FetchModel(context.Context, *FetchModelRequest) (*FetchModelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FetchModel not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -254,6 +272,24 @@ func _AgentService_StopWorkload_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_FetchModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FetchModelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).FetchModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_FetchModel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).FetchModel(ctx, req.(*FetchModelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -268,6 +304,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopWorkload",
 			Handler:    _AgentService_StopWorkload_Handler,
+		},
+		{
+			MethodName: "FetchModel",
+			Handler:    _AgentService_FetchModel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

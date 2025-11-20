@@ -12,7 +12,8 @@ use crate::oci::spec_builder::build_oci_spec;
 use crate::proto::onescluster::coordinator::v1::{
     agent_service_server::{AgentService as AgentServiceTrait},
     AdePManifest as ProtoAdePManifest, DeployWorkloadRequest, DeployWorkloadResponse,
-    SchedulingConfig as ProtoSchedulingConfig, StopWorkloadRequest, StopWorkloadResponse,
+    FetchModelRequest, FetchModelResponse, SchedulingConfig as ProtoSchedulingConfig,
+    StopWorkloadRequest, StopWorkloadResponse,
 };
 use crate::runtime::{ContainerRuntime, LaunchRequest, RuntimeError};
 
@@ -24,13 +25,19 @@ use crate::runtime::{ContainerRuntime, LaunchRequest, RuntimeError};
 pub struct AgentService {
     runtime: Arc<ContainerRuntime>,
     capsule_manager: Arc<CapsuleManager>,
+    allowed_host_paths: Vec<String>,
 }
 
 impl AgentService {
-    pub fn new(capsule_manager: Arc<CapsuleManager>, runtime: Arc<ContainerRuntime>) -> Self {
+    pub fn new(
+        capsule_manager: Arc<CapsuleManager>,
+        runtime: Arc<ContainerRuntime>,
+        allowed_host_paths: Vec<String>,
+    ) -> Self {
         Self {
             runtime,
             capsule_manager,
+            allowed_host_paths,
         }
     }
 }
@@ -184,6 +191,7 @@ impl AgentServiceTrait for AgentService {
             } else {
                 None
             },
+            &self.allowed_host_paths,
         )
         .map_err(|e| Status::internal(format!("Failed to build OCI spec: {}", e)))?;
 
@@ -276,6 +284,51 @@ impl AgentServiceTrait for AgentService {
                 Ok(Response::new(StopWorkloadResponse {
                     success: false,
                     message: format!("Failed to stop: {}", e),
+                }))
+            }
+        }
+    }
+
+    /// Coordinator instructs Agent to fetch a model file
+    async fn fetch_model(
+        &self,
+        request: Request<FetchModelRequest>,
+    ) -> Result<Response<FetchModelResponse>, Status> {
+        let req = request.into_inner();
+        info!(
+            "FetchModel request: url={}, dest={}",
+            req.url, req.destination
+        );
+
+        // Validate URL (basic check)
+        if req.url.trim().is_empty() {
+            return Err(Status::invalid_argument("URL is required"));
+        }
+
+        // Validate destination path (security check is done inside downloader, but we can do it early too)
+        // We'll let the downloader handle the strict validation and file operations.
+        
+        // Spawn the download task asynchronously so we don't block the gRPC thread
+        // In a real system, we might want to track this task or return a job ID.
+        // For MVP, we'll wait for it (since the prompt says "Simple RPC for MVP").
+        // "非同期タスクとして実行し...今回はMVPとして、完了まで待つSimple RPCで構いません"
+        // So we will await it here.
+
+        match crate::downloader::download_file(&req.url, &req.destination, &self.allowed_host_paths).await {
+            Ok(bytes_downloaded) => {
+                info!("Model fetched successfully: {}", req.destination);
+                Ok(Response::new(FetchModelResponse {
+                    success: true,
+                    message: "Download completed successfully".to_string(),
+                    bytes_downloaded,
+                }))
+            }
+            Err(e) => {
+                error!("Failed to fetch model: {}", e);
+                Ok(Response::new(FetchModelResponse {
+                    success: false,
+                    message: format!("Download failed: {}", e),
+                    bytes_downloaded: 0,
                 }))
             }
         }

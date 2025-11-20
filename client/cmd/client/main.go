@@ -13,6 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/onescluster/coordinator/pkg/config"
 	"github.com/onescluster/coordinator/pkg/db"
+
 	"github.com/onescluster/coordinator/pkg/gossip"
 	"github.com/onescluster/coordinator/pkg/headscale"
 	"github.com/onescluster/coordinator/pkg/httpserver"
@@ -48,7 +49,7 @@ func main() {
 	}
 
 	// Initialize rqlite client
-	log.Println("Connecting to rqlite cluster...")
+	log.Println("Connecting to rqlite cluster... (SKIPPED FOR TESTING)")
 	rqliteClient, err := db.NewClient(&db.Config{
 		Addresses:  cfg.RQLite.Addresses,
 		MaxRetries: cfg.RQLite.MaxRetries,

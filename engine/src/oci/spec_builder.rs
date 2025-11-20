@@ -4,6 +4,15 @@ use oci_spec::runtime::{
     Mount, MountBuilder, ProcessBuilder, RootBuilder, Spec, SpecBuilder,
 };
 use std::path::{Path, PathBuf};
+use crate::security;
+
+/// Validate volume mounts for security
+fn validate_mounts(volumes: &[AdepVolume], allowed_paths: &[String]) -> Result<(), String> {
+    for vol in volumes {
+        security::validate_path(&vol.source, allowed_paths).map_err(|e| format!("Volume source error: {}", e))?;
+    }
+    Ok(())
+}
 
 /// Build a complete OCI runtime specification from adep.json configuration
 ///
@@ -39,6 +48,7 @@ pub fn build_oci_spec(
     compute: &ComputeConfig,
     volumes: &[AdepVolume],
     gpu_uuids: Option<&[String]>,
+    allowed_host_paths: &[String],
 ) -> Result<Spec, String> {
     // --- 1. Build Process Configuration ---
     let mut process_envs = compute.env.clone();
@@ -91,14 +101,28 @@ pub fn build_oci_spec(
     let mut mounts = build_default_mounts();
 
     // Add user-specified volume mounts (e.g., GGUF model files)
+    // SECURITY: Validate mounts to prevent path traversal and restrict to allowed paths
+    validate_mounts(volumes, allowed_host_paths)?;
+
     for vol in volumes {
         if vol.r#type == "bind" {
             let mut mount_options = vec!["rbind".to_string()];
-            if vol.readonly {
-                mount_options.push("ro".to_string());
-            } else {
-                mount_options.push("rw".to_string());
-            }
+            
+            // SECURITY: Strictly enforce read-only for model volumes
+            // The user requirement is "read-only" volume mounting for models.
+            // We enforce this regardless of what the manifest says if it's a model volume,
+            // but to be safe and consistent with the manifest, we'll enforce it here.
+            // Actually, the requirement says "Enforce strict ro option".
+            // We will respect the manifest but ensure that for our specific use case (models),
+            // the user *should* have set it to readonly.
+            // However, to meet the "Strict ReadOnly" requirement from the prompt:
+            // "OciSpecBuilder の実装時に、マウントオプションとして必ず ro (または rprivate) を注入することを要件に含めてください。"
+            // This implies we should force `ro` for these volumes.
+            
+            // Let's force `ro` if it's in the allowed model paths, or just respect the flag but ensure `ro` is present if requested.
+            // The prompt says: "Ensure ro is always applied for these volumes."
+            // Given the context of "Model Volume Mounting", we should probably force `ro` for safety.
+            mount_options.push("ro".to_string());
 
             let mount = MountBuilder::default()
                 .source(PathBuf::from(&vol.source))
@@ -329,64 +353,67 @@ mod tests {
 
     #[test]
     fn test_spec_builder_with_volumes() {
+        let rootfs = PathBuf::from("/tmp/rootfs");
         let compute = ComputeConfig {
-            image: "vllm/vllm-openai".to_string(),
-            args: vec!["--model".to_string(), "/models/model.gguf".to_string()],
+            image: "ubuntu".into(),
+            args: vec![],
             env: vec![],
         };
-        let volumes = vec![
-            AdepVolume {
-                r#type: "bind".to_string(),
-                source: "/mnt/models/llama-3.gguf".to_string(),
-                destination: "/models/model.gguf".to_string(),
-                readonly: true,
-            },
-            AdepVolume {
-                r#type: "bind".to_string(),
-                source: "/mnt/output".to_string(),
-                destination: "/output".to_string(),
-                readonly: false,
-            },
-        ];
+        let volumes = vec![AdepVolume {
+            volume_type: "bind".into(),
+            source: "/opt/models/llama3".into(),
+            destination: "/model".into(),
+            readonly: false, // Should be overridden to true
+        }];
+        let allowed_paths = vec!["/opt/models".to_string()];
 
-        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, Some(&vec!["GPU-1".to_string()])).unwrap();
-
-        // Verify volume mounts are injected
+        let spec = build_oci_spec(&rootfs, &compute, &volumes, None, &allowed_paths).unwrap();
         let mounts = spec.mounts().as_ref().unwrap();
 
-        // Find GGUF model mount (readonly)
-        let gguf_mount = mounts
+        // Check if our volume is present
+        let model_mount = mounts
             .iter()
-            .find(|m| m.destination() == Path::new("/models/model.gguf"))
-            .expect("GGUF mount should be present");
-        assert_eq!(
-            gguf_mount.source(),
-            &Some(PathBuf::from("/mnt/models/llama-3.gguf"))
-        );
-        assert_eq!(gguf_mount.typ(), &Some("bind".to_string()));
-        assert!(
-            gguf_mount
-                .options()
-                .as_ref()
-                .unwrap()
-                .contains(&"ro".to_string()),
-            "GGUF mount should be readonly"
-        );
+            .find(|m| m.destination().to_string_lossy() == "/model")
+            .expect("Volume mount not found");
 
-        // Find output mount (writable)
-        let output_mount = mounts
-            .iter()
-            .find(|m| m.destination() == Path::new("/output"))
-            .expect("Output mount should be present");
-        assert_eq!(output_mount.source(), &Some(PathBuf::from("/mnt/output")));
-        assert!(
-            output_mount
-                .options()
-                .as_ref()
-                .unwrap()
-                .contains(&"rw".to_string()),
-            "Output mount should be writable"
-        );
+        assert_eq!(model_mount.source().as_ref().unwrap().to_string_lossy(), "/opt/models/llama3");
+        assert_eq!(model_mount.typ().as_ref().unwrap(), "bind");
+        
+        // Verify strict read-only enforcement
+        let options = model_mount.options().as_ref().unwrap();
+        assert!(options.contains(&"ro".to_string()), "Bind mount must be read-only");
+    }
+
+    #[test]
+    fn test_validate_mounts_security() {
+        let allowed_paths = vec!["/opt/models".to_string()];
+
+        // 1. Path Traversal
+        let vol_traversal = AdepVolume {
+            volume_type: "bind".into(),
+            source: "/opt/models/../etc/passwd".into(),
+            destination: "/model".into(),
+            readonly: true,
+        };
+        assert!(validate_mounts(&[vol_traversal], &allowed_paths).is_err());
+
+        // 2. Allowlist Violation
+        let vol_violation = AdepVolume {
+            volume_type: "bind".into(),
+            source: "/etc/shadow".into(),
+            destination: "/model".into(),
+            readonly: true,
+        };
+        assert!(validate_mounts(&[vol_violation], &allowed_paths).is_err());
+
+        // 3. Relative Path
+        let vol_relative = AdepVolume {
+            volume_type: "bind".into(),
+            source: "relative/path".into(),
+            destination: "/model".into(),
+            readonly: true,
+        };
+        assert!(validate_mounts(&[vol_relative], &allowed_paths).is_err());
     }
 
     #[test]

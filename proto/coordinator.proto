@@ -16,6 +16,9 @@ service AgentService {
 
   // Coordinator instructs Agent to stop a workload
   rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
+
+  // Coordinator instructs Agent to fetch a model file
+  rpc FetchModel(FetchModelRequest) returns (FetchModelResponse);
 }
 
 // Report submitted by Agent containing current hardware + workload state
@@ -143,4 +146,17 @@ message Volume {
   string source = 2;                    // Host path
   string destination = 3;               // Container path
   bool readonly = 4;                    // Read-only flag
+}
+
+// Request to fetch a model file from a URL
+message FetchModelRequest {
+  string url = 1;                       // Source URL to download from
+  string destination = 2;               // Destination file path on host
+}
+
+// Response to fetch model request
+message FetchModelResponse {
+  bool success = 1;
+  string message = 2;                   // Success message or error details
+  uint64 bytes_downloaded = 3;          // Total bytes downloaded
 }

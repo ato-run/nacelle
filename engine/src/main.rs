@@ -7,9 +7,10 @@ use tracing_subscriber::prelude::*;
 use capsuled_engine::capsule_manager::CapsuleManager;
 use capsuled_engine::config::{self, StatusTaint};
 use capsuled_engine::grpc_server;
-use capsuled_engine::hardware;
+use capsuled_engine::hardware::{self, scrubber::GpuScrubber};
 use capsuled_engine::proto::onescluster::coordinator::v1::{Taint, TaintEffect};
 use capsuled_engine::runtime::{ContainerRuntime, RuntimeConfig as EngineRuntimeConfig};
+use capsuled_engine::security::audit::AuditLogger;
 use capsuled_engine::status_reporter::StatusReporter;
 use capsuled_engine::wasm_host::AdepLogicHost;
 
@@ -19,6 +20,8 @@ const DEFAULT_WASM_PATH: &str =
 const DEFAULT_COORDINATOR_ADDR: &str = "http://127.0.0.1:50052";
 const DEFAULT_STATUS_INTERVAL_SECS: u64 = 30;
 const DEFAULT_CONFIG_PATH: &str = "config.toml";
+const DEFAULT_AUDIT_LOG_PATH: &str = "/tmp/capsuled/logs/audit.jsonl";
+const DEFAULT_AUDIT_KEY_PATH: &str = "/tmp/capsuled/keys/node_key.pem";
 
 /// Capsuled Engine - Agent for running capsules
 #[derive(Parser, Debug)]
@@ -129,6 +132,11 @@ async fn main() -> anyhow::Result<()> {
         .map(|cfg| build_taints(cfg.status_taints()))
         .unwrap_or_default();
 
+    let allowed_host_paths = file_config
+        .as_ref()
+        .map(|cfg| cfg.security_allowed_paths().to_vec())
+        .unwrap_or_default();
+
     let runtime_config =
         EngineRuntimeConfig::from_section(file_config.as_ref().and_then(|cfg| cfg.runtime()))
             .map_err(|err| anyhow::anyhow!("runtime configuration error: {err}"))?;
@@ -192,9 +200,42 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // Initialize AuditLogger
+    let audit_log_path = file_config
+        .as_ref()
+        .and_then(|cfg| cfg.security_audit_log_path())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(DEFAULT_AUDIT_LOG_PATH));
+
+    let audit_key_path = file_config
+        .as_ref()
+        .and_then(|cfg| cfg.security_audit_key_path())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(DEFAULT_AUDIT_KEY_PATH));
+
+    info!("Initializing AuditLogger...");
+    info!("  Log Path: {:?}", audit_log_path);
+    info!("  Key Path: {:?}", audit_key_path);
+
+    // TODO: Get real Node ID. For now using hostname or random UUID.
+    let node_id = hostname::get()
+        .map(|h| h.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "unknown-node".to_string());
+
+    let audit_logger = Arc::new(
+        AuditLogger::new(audit_log_path, audit_key_path, node_id)
+            .map_err(|e| anyhow::anyhow!("Failed to initialize AuditLogger: {}", e))?,
+    );
+
+    // Initialize GPU Scrubber
+    let gpu_scrubber = Arc::new(GpuScrubber::new(Arc::clone(&audit_logger)));
+
     // Initialize capsule manager
     info!("Initializing capsule manager...");
-    let capsule_manager = Arc::new(CapsuleManager::new());
+    let capsule_manager = Arc::new(CapsuleManager::new(
+        Arc::clone(&audit_logger),
+        Arc::clone(&gpu_scrubber),
+    ));
 
     // Start status reporter to periodically send heartbeat reports to Coordinator
     let status_reporter = StatusReporter::new(
@@ -214,6 +255,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::clone(&capsule_manager),
         Arc::clone(&wasm_host),
         container_runtime,
+        allowed_host_paths,
     )
     .await;
     status_task.abort();

@@ -17,6 +17,7 @@ const DEFAULT_HOOK_RETRY_ATTEMPTS: u32 = 1;
 pub enum RuntimeKind {
     Youki,
     Runc,
+    Mock,
 }
 
 impl RuntimeKind {
@@ -24,6 +25,7 @@ impl RuntimeKind {
         match input.to_ascii_lowercase().as_str() {
             "youki" => Some(RuntimeKind::Youki),
             "runc" => Some(RuntimeKind::Runc),
+            "mock" => Some(RuntimeKind::Mock),
             _ => None,
         }
     }
@@ -32,6 +34,7 @@ impl RuntimeKind {
         match self {
             RuntimeKind::Youki => &["youki"],
             RuntimeKind::Runc => &["runc"],
+            RuntimeKind::Mock => &["mock_runtime"],
         }
     }
 }
@@ -49,6 +52,12 @@ pub struct RuntimeConfig {
 
 impl RuntimeConfig {
     pub fn from_section(section: Option<&RuntimeSection>) -> Result<Self, RuntimeError> {
+        if let Some(s) = section {
+            info!("Runtime config section: preferred={:?}, binary_path={:?}", s.preferred, s.binary_path);
+        } else {
+            info!("Runtime config section is None");
+        }
+
         let preferred_kind = section
             .and_then(|s| s.preferred.as_deref())
             .and_then(RuntimeKind::from_str);
@@ -59,6 +68,8 @@ impl RuntimeConfig {
 
         let (kind, binary_path) = match (preferred_kind, explicit_binary) {
             (Some(kind), Some(path)) => {
+                // If both are specified, trust the user's preference for kind
+                // but still verify the binary exists
                 if path.exists() {
                     (kind, path)
                 } else {
@@ -77,7 +88,14 @@ impl RuntimeConfig {
                         tried: vec![path.to_string_lossy().into_owned()],
                     });
                 }
-                let inferred_kind = infer_kind_from_path(&path).ok_or_else(|| {
+                // Try to infer, but if it fails and the binary is mock_runtime, default to Mock
+                let inferred_kind = infer_kind_from_path(&path).or_else(|| {
+                    if path.to_string_lossy().contains("mock_runtime") {
+                        Some(RuntimeKind::Mock)
+                    } else {
+                        None
+                    }
+                }).ok_or_else(|| {
                     RuntimeError::InvalidConfig(format!(
                         "Failed to infer runtime kind from binary path {:?}. Specify runtime.preferred",
                         path
@@ -86,7 +104,7 @@ impl RuntimeConfig {
                 (inferred_kind, path)
             }
             (None, None) => {
-                let order = [RuntimeKind::Youki, RuntimeKind::Runc];
+                let order = [RuntimeKind::Youki, RuntimeKind::Runc, RuntimeKind::Mock];
                 let mut attempts = Vec::new();
                 let mut found = None;
                 for kind in order {
@@ -163,9 +181,14 @@ fn find_binary(candidates: &[&str]) -> Result<PathBuf, RuntimeError> {
 }
 
 fn infer_kind_from_path(path: &Path) -> Option<RuntimeKind> {
-    path.file_stem()
-        .and_then(OsStr::to_str)
-        .and_then(RuntimeKind::from_str)
+    let file_name = path.file_stem()
+        .and_then(OsStr::to_str)?;
+    
+    if file_name == "mock_runtime" {
+        return Some(RuntimeKind::Mock);
+    }
+
+    RuntimeKind::from_str(file_name)
 }
 
 /// High level request for launching a workload via OCI runtime.

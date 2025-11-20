@@ -16,6 +16,8 @@ pub struct FileConfig {
     pub status: Option<StatusConfig>,
     #[serde(default)]
     pub runtime: Option<RuntimeSection>,
+    #[serde(default)]
+    pub security: Option<SecurityConfig>,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -48,6 +50,14 @@ pub struct RuntimeSection {
     pub state_root: Option<String>,
     pub log_dir: Option<String>,
     pub hook_retry_attempts: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct SecurityConfig {
+    #[serde(default)]
+    pub allowed_host_paths: Vec<String>,
+    pub audit_log_path: Option<String>,
+    pub audit_key_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -93,6 +103,25 @@ impl FileConfig {
 
     pub fn runtime(&self) -> Option<&RuntimeSection> {
         self.runtime.as_ref()
+    }
+
+    pub fn security_allowed_paths(&self) -> &[String] {
+        self.security
+            .as_ref()
+            .map(|cfg| cfg.allowed_host_paths.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn security_audit_log_path(&self) -> Option<&str> {
+        self.security
+            .as_ref()
+            .and_then(|cfg| cfg.audit_log_path.as_deref())
+    }
+
+    pub fn security_audit_key_path(&self) -> Option<&str> {
+        self.security
+            .as_ref()
+            .and_then(|cfg| cfg.audit_key_path.as_deref())
     }
 }
 

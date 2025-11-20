@@ -1144,6 +1144,120 @@ func (x *Volume) GetReadonly() bool {
 	return false
 }
 
+// Request to fetch a model file from a URL
+type FetchModelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`                 // Source URL to download from
+	Destination   string                 `protobuf:"bytes,2,opt,name=destination,proto3" json:"destination,omitempty"` // Destination file path on host
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchModelRequest) Reset() {
+	*x = FetchModelRequest{}
+	mi := &file_coordinator_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchModelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchModelRequest) ProtoMessage() {}
+
+func (x *FetchModelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_coordinator_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchModelRequest.ProtoReflect.Descriptor instead.
+func (*FetchModelRequest) Descriptor() ([]byte, []int) {
+	return file_coordinator_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *FetchModelRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *FetchModelRequest) GetDestination() string {
+	if x != nil {
+		return x.Destination
+	}
+	return ""
+}
+
+// Response to fetch model request
+type FetchModelResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Success         bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message         string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`                                         // Success message or error details
+	BytesDownloaded uint64                 `protobuf:"varint,3,opt,name=bytes_downloaded,json=bytesDownloaded,proto3" json:"bytes_downloaded,omitempty"` // Total bytes downloaded
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FetchModelResponse) Reset() {
+	*x = FetchModelResponse{}
+	mi := &file_coordinator_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchModelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchModelResponse) ProtoMessage() {}
+
+func (x *FetchModelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_coordinator_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchModelResponse.ProtoReflect.Descriptor instead.
+func (*FetchModelResponse) Descriptor() ([]byte, []int) {
+	return file_coordinator_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *FetchModelResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *FetchModelResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *FetchModelResponse) GetBytesDownloaded() uint64 {
+	if x != nil {
+		return x.BytesDownloaded
+	}
+	return 0
+}
+
 var File_coordinator_proto protoreflect.FileDescriptor
 
 const file_coordinator_proto_rawDesc = "" +
@@ -1230,7 +1344,14 @@ const file_coordinator_proto_rawDesc = "" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12 \n" +
 	"\vdestination\x18\x03 \x01(\tR\vdestination\x12\x1a\n" +
-	"\breadonly\x18\x04 \x01(\bR\breadonly*\xa0\x01\n" +
+	"\breadonly\x18\x04 \x01(\bR\breadonly\"G\n" +
+	"\x11FetchModelRequest\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12 \n" +
+	"\vdestination\x18\x02 \x01(\tR\vdestination\"s\n" +
+	"\x12FetchModelResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12)\n" +
+	"\x10bytes_downloaded\x18\x03 \x01(\x04R\x0fbytesDownloaded*\xa0\x01\n" +
 	"\rWorkloadPhase\x12\x1e\n" +
 	"\x1aWORKLOAD_PHASE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16WORKLOAD_PHASE_PENDING\x10\x01\x12\x1a\n" +
@@ -1242,10 +1363,12 @@ const file_coordinator_proto_rawDesc = "" +
 	"\x18TAINT_EFFECT_NO_SCHEDULE\x10\x01\x12#\n" +
 	"\x1fTAINT_EFFECT_PREFER_NO_SCHEDULE\x10\x022\x87\x01\n" +
 	"\x12CoordinatorService\x12q\n" +
-	"\fReportStatus\x12/.onescluster.coordinator.v1.StatusReportRequest\x1a0.onescluster.coordinator.v1.StatusReportResponse2\xfa\x01\n" +
+	"\fReportStatus\x12/.onescluster.coordinator.v1.StatusReportRequest\x1a0.onescluster.coordinator.v1.StatusReportResponse2\xe7\x02\n" +
 	"\fAgentService\x12w\n" +
 	"\x0eDeployWorkload\x121.onescluster.coordinator.v1.DeployWorkloadRequest\x1a2.onescluster.coordinator.v1.DeployWorkloadResponse\x12q\n" +
-	"\fStopWorkload\x12/.onescluster.coordinator.v1.StopWorkloadRequest\x1a0.onescluster.coordinator.v1.StopWorkloadResponseB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
+	"\fStopWorkload\x12/.onescluster.coordinator.v1.StopWorkloadRequest\x1a0.onescluster.coordinator.v1.StopWorkloadResponse\x12k\n" +
+	"\n" +
+	"FetchModel\x12-.onescluster.coordinator.v1.FetchModelRequest\x1a..onescluster.coordinator.v1.FetchModelResponseB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
 
 var (
 	file_coordinator_proto_rawDescOnce sync.Once
@@ -1260,7 +1383,7 @@ func file_coordinator_proto_rawDescGZIP() []byte {
 }
 
 var file_coordinator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_coordinator_proto_goTypes = []any{
 	(WorkloadPhase)(0),             // 0: onescluster.coordinator.v1.WorkloadPhase
 	(TaintEffect)(0),               // 1: onescluster.coordinator.v1.TaintEffect
@@ -1280,8 +1403,10 @@ var file_coordinator_proto_goTypes = []any{
 	(*GpuConstraints)(nil),         // 15: onescluster.coordinator.v1.GpuConstraints
 	(*ComputeConfig)(nil),          // 16: onescluster.coordinator.v1.ComputeConfig
 	(*Volume)(nil),                 // 17: onescluster.coordinator.v1.Volume
-	nil,                            // 18: onescluster.coordinator.v1.AdePManifest.MetadataEntry
-	nil,                            // 19: onescluster.coordinator.v1.ComputeConfig.EnvEntry
+	(*FetchModelRequest)(nil),      // 18: onescluster.coordinator.v1.FetchModelRequest
+	(*FetchModelResponse)(nil),     // 19: onescluster.coordinator.v1.FetchModelResponse
+	nil,                            // 20: onescluster.coordinator.v1.AdePManifest.MetadataEntry
+	nil,                            // 21: onescluster.coordinator.v1.ComputeConfig.EnvEntry
 }
 var file_coordinator_proto_depIdxs = []int32{
 	4,  // 0: onescluster.coordinator.v1.StatusReportRequest.status:type_name -> onescluster.coordinator.v1.RigStatus
@@ -1295,17 +1420,19 @@ var file_coordinator_proto_depIdxs = []int32{
 	14, // 8: onescluster.coordinator.v1.AdePManifest.scheduling:type_name -> onescluster.coordinator.v1.SchedulingConfig
 	16, // 9: onescluster.coordinator.v1.AdePManifest.compute:type_name -> onescluster.coordinator.v1.ComputeConfig
 	17, // 10: onescluster.coordinator.v1.AdePManifest.volumes:type_name -> onescluster.coordinator.v1.Volume
-	18, // 11: onescluster.coordinator.v1.AdePManifest.metadata:type_name -> onescluster.coordinator.v1.AdePManifest.MetadataEntry
+	20, // 11: onescluster.coordinator.v1.AdePManifest.metadata:type_name -> onescluster.coordinator.v1.AdePManifest.MetadataEntry
 	15, // 12: onescluster.coordinator.v1.SchedulingConfig.gpu:type_name -> onescluster.coordinator.v1.GpuConstraints
-	19, // 13: onescluster.coordinator.v1.ComputeConfig.env:type_name -> onescluster.coordinator.v1.ComputeConfig.EnvEntry
+	21, // 13: onescluster.coordinator.v1.ComputeConfig.env:type_name -> onescluster.coordinator.v1.ComputeConfig.EnvEntry
 	2,  // 14: onescluster.coordinator.v1.CoordinatorService.ReportStatus:input_type -> onescluster.coordinator.v1.StatusReportRequest
 	9,  // 15: onescluster.coordinator.v1.AgentService.DeployWorkload:input_type -> onescluster.coordinator.v1.DeployWorkloadRequest
 	11, // 16: onescluster.coordinator.v1.AgentService.StopWorkload:input_type -> onescluster.coordinator.v1.StopWorkloadRequest
-	3,  // 17: onescluster.coordinator.v1.CoordinatorService.ReportStatus:output_type -> onescluster.coordinator.v1.StatusReportResponse
-	10, // 18: onescluster.coordinator.v1.AgentService.DeployWorkload:output_type -> onescluster.coordinator.v1.DeployWorkloadResponse
-	12, // 19: onescluster.coordinator.v1.AgentService.StopWorkload:output_type -> onescluster.coordinator.v1.StopWorkloadResponse
-	17, // [17:20] is the sub-list for method output_type
-	14, // [14:17] is the sub-list for method input_type
+	18, // 17: onescluster.coordinator.v1.AgentService.FetchModel:input_type -> onescluster.coordinator.v1.FetchModelRequest
+	3,  // 18: onescluster.coordinator.v1.CoordinatorService.ReportStatus:output_type -> onescluster.coordinator.v1.StatusReportResponse
+	10, // 19: onescluster.coordinator.v1.AgentService.DeployWorkload:output_type -> onescluster.coordinator.v1.DeployWorkloadResponse
+	12, // 20: onescluster.coordinator.v1.AgentService.StopWorkload:output_type -> onescluster.coordinator.v1.StopWorkloadResponse
+	19, // 21: onescluster.coordinator.v1.AgentService.FetchModel:output_type -> onescluster.coordinator.v1.FetchModelResponse
+	18, // [18:22] is the sub-list for method output_type
+	14, // [14:18] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
 	14, // [14:14] is the sub-list for extension extendee
 	0,  // [0:14] is the sub-list for field type_name
@@ -1322,7 +1449,7 @@ func file_coordinator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coordinator_proto_rawDesc), len(file_coordinator_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

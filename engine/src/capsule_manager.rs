@@ -6,6 +6,7 @@ use tracing::{debug, info, warn};
 use crate::adep::AdepManifest;
 use crate::hardware::scrubber::GpuScrubber;
 use crate::runtime::{LaunchResult, RuntimeError};
+use crate::security::audit::AuditLogger;
 
 /// Capsule represents a running capsule instance
 #[derive(Clone, Debug)]
@@ -47,12 +48,16 @@ impl ToString for CapsuleStatus {
 /// CapsuleManager manages the lifecycle of capsules
 pub struct CapsuleManager {
     capsules: Arc<RwLock<HashMap<String, Capsule>>>,
+    audit_logger: Arc<AuditLogger>,
+    gpu_scrubber: Arc<GpuScrubber>,
 }
 
 impl CapsuleManager {
-    pub fn new() -> Self {
+    pub fn new(audit_logger: Arc<AuditLogger>, gpu_scrubber: Arc<GpuScrubber>) -> Self {
         Self {
             capsules: Arc::new(RwLock::new(HashMap::new())),
+            audit_logger,
+            gpu_scrubber,
         }
     }
 
@@ -118,6 +123,14 @@ impl CapsuleManager {
         }
 
         info!("Capsule {} deployed successfully", capsule_id);
+        
+        self.audit_logger.log_event(
+            "CAPSULE_DEPLOY",
+            None,
+            "SUCCESS",
+            Some(format!("Deployed capsule {}", capsule_id))
+        )?;
+
         Ok(CapsuleStatus::Running.to_string())
     }
 
@@ -172,6 +185,32 @@ impl CapsuleManager {
             "Recorded capsule runtime launch"
         );
 
+        // Audit Log: CAPSULE_DEPLOY
+        self.audit_logger.log_event(
+            "CAPSULE_DEPLOY",
+            None, // GPU UUID not yet fully resolved here, or passed in?
+            "SUCCESS",
+            Some(format!("Deployed workload {} (image={})", capsule_id, manifest.compute.image))
+        )?;
+
+        // Audit Log: CAPSULE_START
+        self.audit_logger.log_event(
+            "CAPSULE_START",
+            None, // TODO: Add GPU UUID if available
+            "SUCCESS",
+            Some(format!("Started workload {} (pid={})", capsule_id, runtime.pid))
+        )?;
+
+        Ok(())
+    }
+
+    pub fn record_runtime_start(&self, capsule_id: &str) -> Result<()> {
+        self.audit_logger.log_event(
+            "CAPSULE_START",
+            None, // TODO: Get GPU UUID if assigned
+            "SUCCESS",
+            Some(format!("Started capsule {}", capsule_id))
+        )?;
         Ok(())
     }
 
@@ -248,7 +287,7 @@ impl CapsuleManager {
         let assigned_gpu_index = 0; // Mock: Always scrub GPU 0
 
         info!("Executing VRAM Scrubbing for GPU {}...", assigned_gpu_index);
-        match GpuScrubber::scrub_device(assigned_gpu_index) {
+        match self.gpu_scrubber.scrub_device(assigned_gpu_index) {
             Ok(_) => info!("VRAM Scrubbing successful for capsule {}", capsule_id),
             Err(e) => {
                 // In production, this should be a critical alert
@@ -267,6 +306,14 @@ impl CapsuleManager {
         }
 
         info!("Capsule {} stopped and removed", capsule_id);
+        
+        self.audit_logger.log_event(
+            "CAPSULE_STOP",
+            None,
+            "SUCCESS",
+            Some(format!("Stopped and removed capsule {}", capsule_id))
+        )?;
+
         Ok(())
     }
 
@@ -321,19 +368,28 @@ impl CapsuleManager {
     }
 }
 
-impl Default for CapsuleManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Removed Default impl as it requires dependencies
+// impl Default for CapsuleManager { ... }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn create_test_manager() -> CapsuleManager {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let log_path = temp_dir.path().join("audit.log");
+        let key_path = temp_dir.path().join("node_key.pem");
+        
+        let logger = Arc::new(AuditLogger::new(log_path, key_path, "test-node".to_string()).unwrap());
+        let scrubber = Arc::new(GpuScrubber::new(logger.clone()));
+        
+        CapsuleManager::new(logger, scrubber)
+    }
 
     #[tokio::test]
     async fn test_deploy_capsule() {
-        let manager = CapsuleManager::new();
+        let manager = create_test_manager();
         let result = manager
             .deploy_capsule(
                 "test-capsule".to_string(),
@@ -357,7 +413,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stop_capsule() {
-        let manager = CapsuleManager::new();
+        let manager = create_test_manager();
 
         // Deploy first
         manager
@@ -381,7 +437,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_capsule_not_found() {
-        let manager = CapsuleManager::new();
+        let manager = create_test_manager();
         let result = manager.stop_capsule("non-existent").await;
         assert!(result.is_err());
     }

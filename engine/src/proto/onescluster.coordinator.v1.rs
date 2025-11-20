@@ -232,6 +232,30 @@ pub struct Volume {
     #[prost(bool, tag = "4")]
     pub readonly: bool,
 }
+/// Request to fetch a model file from a URL
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FetchModelRequest {
+    /// Source URL to download from
+    #[prost(string, tag = "1")]
+    pub url: ::prost::alloc::string::String,
+    /// Destination file path on host
+    #[prost(string, tag = "2")]
+    pub destination: ::prost::alloc::string::String,
+}
+/// Response to fetch model request
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FetchModelResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// Success message or error details
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+    /// Total bytes downloaded
+    #[prost(uint64, tag = "3")]
+    pub bytes_downloaded: u64,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum WorkloadPhase {
@@ -563,6 +587,37 @@ pub mod agent_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Coordinator instructs Agent to fetch a model file
+        pub async fn fetch_model(
+            &mut self,
+            request: impl tonic::IntoRequest<super::FetchModelRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::FetchModelResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/onescluster.coordinator.v1.AgentService/FetchModel",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "onescluster.coordinator.v1.AgentService",
+                        "FetchModel",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -773,6 +828,14 @@ pub mod agent_service_server {
             tonic::Response<super::StopWorkloadResponse>,
             tonic::Status,
         >;
+        /// Coordinator instructs Agent to fetch a model file
+        async fn fetch_model(
+            &self,
+            request: tonic::Request<super::FetchModelRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::FetchModelResponse>,
+            tonic::Status,
+        >;
     }
     /// Agent service - handles communication FROM Coordinator TO Agents
     #[derive(Debug)]
@@ -931,6 +994,52 @@ pub mod agent_service_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = StopWorkloadSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/onescluster.coordinator.v1.AgentService/FetchModel" => {
+                    #[allow(non_camel_case_types)]
+                    struct FetchModelSvc<T: AgentService>(pub Arc<T>);
+                    impl<
+                        T: AgentService,
+                    > tonic::server::UnaryService<super::FetchModelRequest>
+                    for FetchModelSvc<T> {
+                        type Response = super::FetchModelResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::FetchModelRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AgentService>::fetch_model(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = FetchModelSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
