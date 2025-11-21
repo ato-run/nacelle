@@ -118,21 +118,29 @@ impl LuksManager {
             }
             KeyStorage::Memory(key_data) => {
                 // Write key to a temporary file
-                let temp_key_file = self.key_directory.join(format!(".tmp_key_{}", uuid::Uuid::new_v4()));
+                let temp_key_file = self
+                    .key_directory
+                    .join(format!(".tmp_key_{}", uuid::Uuid::new_v4()));
                 fs::write(&temp_key_file, key_data).map_err(|e| {
-                    StorageError::KeyManagementError(format!("Failed to write temporary key: {}", e))
+                    StorageError::KeyManagementError(format!(
+                        "Failed to write temporary key: {}",
+                        e
+                    ))
                 })?;
-                
+
                 // Set restrictive permissions (600)
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
                     let perms = std::fs::Permissions::from_mode(0o600);
                     fs::set_permissions(&temp_key_file, perms).map_err(|e| {
-                        StorageError::KeyManagementError(format!("Failed to set key permissions: {}", e))
+                        StorageError::KeyManagementError(format!(
+                            "Failed to set key permissions: {}",
+                            e
+                        ))
                     })?;
                 }
-                
+
                 temp_key_file
             }
         };
@@ -159,13 +167,13 @@ impl LuksManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("cryptsetup luksFormat failed: {}", stderr);
-            
+
             if stderr.contains("Permission denied") {
                 return Err(StorageError::PermissionDenied(
                     "cryptsetup requires root privileges".to_string(),
                 ));
             }
-            
+
             return Err(StorageError::EncryptionError(format!(
                 "luksFormat command failed: {}",
                 stderr
@@ -253,20 +261,28 @@ impl LuksManager {
         let key_file = match &key_storage {
             KeyStorage::File(path) => path.clone(),
             KeyStorage::Memory(key_data) => {
-                let temp_key_file = self.key_directory.join(format!(".tmp_key_{}", uuid::Uuid::new_v4()));
+                let temp_key_file = self
+                    .key_directory
+                    .join(format!(".tmp_key_{}", uuid::Uuid::new_v4()));
                 fs::write(&temp_key_file, key_data).map_err(|e| {
-                    StorageError::KeyManagementError(format!("Failed to write temporary key: {}", e))
+                    StorageError::KeyManagementError(format!(
+                        "Failed to write temporary key: {}",
+                        e
+                    ))
                 })?;
-                
+
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
                     let perms = std::fs::Permissions::from_mode(0o600);
                     fs::set_permissions(&temp_key_file, perms).map_err(|e| {
-                        StorageError::KeyManagementError(format!("Failed to set key permissions: {}", e))
+                        StorageError::KeyManagementError(format!(
+                            "Failed to set key permissions: {}",
+                            e
+                        ))
                     })?;
                 }
-                
+
                 temp_key_file
             }
         };
@@ -291,19 +307,19 @@ impl LuksManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("cryptsetup luksOpen failed: {}", stderr);
-            
+
             if stderr.contains("No key available") || stderr.contains("incorrect passphrase") {
                 return Err(StorageError::KeyManagementError(
                     "Incorrect key or passphrase".to_string(),
                 ));
             }
-            
+
             if stderr.contains("Permission denied") {
                 return Err(StorageError::PermissionDenied(
                     "cryptsetup requires root privileges".to_string(),
                 ));
             }
-            
+
             return Err(StorageError::EncryptionError(format!(
                 "luksOpen command failed: {}",
                 stderr
@@ -357,17 +373,17 @@ impl LuksManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("cryptsetup luksClose failed: {}", stderr);
-            
+
             if stderr.contains("busy") || stderr.contains("in use") {
                 return Err(StorageError::VolumeBusy(mapper_name.to_string()));
             }
-            
+
             if stderr.contains("Permission denied") {
                 return Err(StorageError::PermissionDenied(
                     "cryptsetup requires root privileges".to_string(),
                 ));
             }
-            
+
             return Err(StorageError::EncryptionError(format!(
                 "luksClose command failed: {}",
                 stderr
@@ -467,7 +483,7 @@ impl LuksManager {
     pub fn generate_key(&self, size_bytes: usize) -> Vec<u8> {
         use std::fs::File;
         use std::io::Read;
-        
+
         // Read from /dev/urandom for cryptographically secure random data
         let mut key = vec![0u8; size_bytes];
         if let Ok(mut urandom) = File::open("/dev/urandom") {
@@ -496,7 +512,7 @@ impl LuksManager {
         }
 
         let key_path = self.key_directory.join(format!("{}.key", key_name));
-        
+
         // Write key file
         fs::write(&key_path, key_data).map_err(|e| {
             StorageError::KeyManagementError(format!("Failed to write key file: {}", e))
@@ -531,13 +547,13 @@ mod tests {
     #[test]
     fn test_generate_key() {
         let manager = LuksManager::new(PathBuf::from("/tmp/test_keys"));
-        
+
         let key_32 = manager.generate_key(32);
         assert_eq!(key_32.len(), 32);
-        
+
         let key_64 = manager.generate_key(64);
         assert_eq!(key_64.len(), 64);
-        
+
         // Verify keys are different (not all zeros)
         assert!(key_32.iter().any(|&b| b != 0));
         assert!(key_64.iter().any(|&b| b != 0));

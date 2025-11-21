@@ -10,12 +10,12 @@ use crate::adep::{
 use crate::capsule_manager::CapsuleManager;
 use crate::oci::spec_builder::build_oci_spec;
 use crate::proto::onescluster::coordinator::v1::{
-    agent_service_server::{AgentService as AgentServiceTrait},
-    AdePManifest as ProtoAdePManifest, DeployWorkloadRequest, DeployWorkloadResponse,
-    FetchModelRequest, FetchModelResponse, SchedulingConfig as ProtoSchedulingConfig,
-    StopWorkloadRequest, StopWorkloadResponse,
+    agent_service_server::AgentService as AgentServiceTrait, AdePManifest as ProtoAdePManifest,
+    DeployWorkloadRequest, DeployWorkloadResponse, FetchModelRequest, FetchModelResponse,
+    SchedulingConfig as ProtoSchedulingConfig, StopWorkloadRequest, StopWorkloadResponse,
 };
 use crate::runtime::{ContainerRuntime, LaunchRequest, RuntimeError};
+use crate::workload::manifest_loader::{load_manifest_str, ResourceRequirements};
 
 /// AgentService implements the Agent gRPC service
 ///
@@ -113,11 +113,16 @@ fn convert_scheduling(proto: Option<&ProtoSchedulingConfig>) -> AdepSchedulingCo
                 Some(config.strategy.clone())
             };
 
-            AdepSchedulingConfig { gpu, strategy }
+            AdepSchedulingConfig {
+                gpu,
+                strategy,
+                cloud: None,
+            }
         }
         None => AdepSchedulingConfig {
             gpu: None,
             strategy: None,
+            cloud: None,
         },
     }
 }
@@ -146,28 +151,28 @@ impl AgentServiceTrait for AgentService {
             req.workload_id
         );
 
-        let manifest = match req.manifest.as_ref() {
-            Some(proto_manifest) => convert_manifest(proto_manifest).or_else(|err| {
-                if req.manifest_json.is_empty() {
-                    Err(err)
-                } else {
-                    serde_json::from_str::<AdepManifest>(&req.manifest_json).map_err(|json_err| {
-                        Status::invalid_argument(format!(
-                            "Invalid adep manifest (typed error: {err}; json error: {json_err})"
-                        ))
-                    })
-                }
-            })?,
-            None => {
+        // Prefer typed Proto manifest, otherwise parse manifest_json which may be JSON or TOML
+        let (manifest, resource_hints): (AdepManifest, Option<ResourceRequirements>) =
+            if let Some(proto_manifest) = req.manifest.as_ref() {
+                // Typed proto -> convert to AdepManifest
+                let m = convert_manifest(proto_manifest)?;
+                (m, None)
+            } else {
                 if req.manifest_json.is_empty() {
                     return Err(Status::invalid_argument(
                         "DeployWorkloadRequest.manifest or manifest_json must be provided",
                     ));
                 }
-                serde_json::from_str::<AdepManifest>(&req.manifest_json)
-                    .map_err(|err| Status::invalid_argument(format!("Invalid adep.json: {err}")))?
-            }
-        };
+                match load_manifest_str(None, &req.manifest_json) {
+                    Ok((m, r)) => (m, r),
+                    Err(e) => {
+                        return Err(Status::invalid_argument(format!(
+                            "Invalid adep manifest: {}",
+                            e
+                        )))
+                    }
+                }
+            };
 
         info!("  Workload: {}", manifest.name);
         info!("  Image: {}", manifest.compute.image);
@@ -192,6 +197,7 @@ impl AgentServiceTrait for AgentService {
                 None
             },
             &self.allowed_host_paths,
+            resource_hints.as_ref(),
         )
         .map_err(|e| Status::internal(format!("Failed to build OCI spec: {}", e)))?;
 
@@ -307,14 +313,16 @@ impl AgentServiceTrait for AgentService {
 
         // Validate destination path (security check is done inside downloader, but we can do it early too)
         // We'll let the downloader handle the strict validation and file operations.
-        
+
         // Spawn the download task asynchronously so we don't block the gRPC thread
         // In a real system, we might want to track this task or return a job ID.
         // For MVP, we'll wait for it (since the prompt says "Simple RPC for MVP").
         // "非同期タスクとして実行し...今回はMVPとして、完了まで待つSimple RPCで構いません"
         // So we will await it here.
 
-        match crate::downloader::download_file(&req.url, &req.destination, &self.allowed_host_paths).await {
+        match crate::downloader::download_file(&req.url, &req.destination, &self.allowed_host_paths)
+            .await
+        {
             Ok(bytes_downloaded) => {
                 info!("Model fetched successfully: {}", req.destination);
                 Ok(Response::new(FetchModelResponse {

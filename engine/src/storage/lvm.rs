@@ -84,7 +84,7 @@ impl LvmManager {
         }
 
         let vg = vg_name.unwrap_or(&self.default_vg);
-        
+
         // Check if volume already exists
         if self.volume_exists(vg, name)? {
             return Err(StorageError::VolumeAlreadyExists(format!(
@@ -109,12 +109,14 @@ impl LvmManager {
             .arg(format!("{}M", size_mb))
             .arg(vg)
             .output()
-            .map_err(|e| StorageError::CommandFailed(format!("Failed to execute lvcreate: {}", e)))?;
+            .map_err(|e| {
+                StorageError::CommandFailed(format!("Failed to execute lvcreate: {}", e))
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("lvcreate failed: {}", stderr);
-            
+
             // Check for common errors
             if stderr.contains("not found") || stderr.contains("No such") {
                 return Err(StorageError::VolumeNotFound(format!(
@@ -128,7 +130,7 @@ impl LvmManager {
                     available: 0, // Would need to query VG for actual available space
                 });
             }
-            
+
             return Err(StorageError::CommandFailed(format!(
                 "lvcreate command failed: {}",
                 stderr
@@ -184,16 +186,18 @@ impl LvmManager {
             .arg("-f")
             .arg(format!("/dev/{}", lv_path))
             .output()
-            .map_err(|e| StorageError::CommandFailed(format!("Failed to execute lvremove: {}", e)))?;
+            .map_err(|e| {
+                StorageError::CommandFailed(format!("Failed to execute lvremove: {}", e))
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("lvremove failed: {}", stderr);
-            
+
             if stderr.contains("busy") || stderr.contains("in use") {
                 return Err(StorageError::VolumeBusy(lv_path));
             }
-            
+
             return Err(StorageError::CommandFailed(format!(
                 "lvremove command failed: {}",
                 stderr
@@ -291,14 +295,14 @@ impl LvmManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("lvcreate snapshot failed: {}", stderr);
-            
+
             if stderr.contains("insufficient") || stderr.contains("not enough") {
                 return Err(StorageError::InsufficientSpace {
                     required: size_bytes,
                     available: 0,
                 });
             }
-            
+
             return Err(StorageError::SnapshotError(format!(
                 "Snapshot creation failed: {}",
                 stderr
@@ -356,15 +360,18 @@ impl LvmManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!("lvs failed: {}", stderr);
-            
+
             if stderr.contains("not found") {
                 return Err(StorageError::VolumeNotFound(format!(
                     "Volume group '{}' not found",
                     vg
                 )));
             }
-            
-            return Err(StorageError::CommandFailed(format!("lvs command failed: {}", stderr)));
+
+            return Err(StorageError::CommandFailed(format!(
+                "lvs command failed: {}",
+                stderr
+            )));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -374,10 +381,9 @@ impl LvmManager {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 3 {
                 let lv_name = parts[0].trim();
-                let size_bytes = parts[1]
-                    .trim()
-                    .parse::<u64>()
-                    .map_err(|e| StorageError::ParseError(format!("Failed to parse size: {}", e)))?;
+                let size_bytes = parts[1].trim().parse::<u64>().map_err(|e| {
+                    StorageError::ParseError(format!("Failed to parse size: {}", e))
+                })?;
                 let active = parts[2].trim() == "active";
 
                 volumes.push(VolumeInfo {
@@ -439,7 +445,7 @@ mod tests {
         assert!(LvmManager::is_valid_volume_name("my-volume"));
         assert!(LvmManager::is_valid_volume_name("my_volume_123"));
         assert!(LvmManager::is_valid_volume_name("MyVolume123"));
-        
+
         assert!(!LvmManager::is_valid_volume_name(""));
         assert!(!LvmManager::is_valid_volume_name("my volume")); // space
         assert!(!LvmManager::is_valid_volume_name("my.volume")); // dot

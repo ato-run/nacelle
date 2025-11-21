@@ -82,7 +82,7 @@ impl AdepLogic {
         // inside the Wasm instance if the instance is long-lived.
         // For now, since we might be creating a new store/instance or the logic is simple, we skip it,
         // but it is recommended to add it.
-        
+
         if result == 1 {
             info!("Manifest validation succeeded");
             Ok(())
@@ -141,7 +141,8 @@ mod tests {
         }
 
         let logic = AdepLogic::from_file(TEST_WASM_PATH).unwrap();
-        let valid_json = r#"{"name":"test-capsule","version":"1.0.0","compute":{"image":"alpine:latest"}}"#;
+        let valid_json =
+            r#"{"name":"test-capsule","version":"1.0.0","compute":{"image":"alpine:latest"}}"#;
 
         let result = logic.validate_manifest(valid_json);
         assert!(result.is_ok());

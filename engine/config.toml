@@ -2,10 +2,15 @@
 listen_addr = "0.0.0.0:50051"
 
 [wasm]
-module_path = "../adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm"
+module_path = "../wasm/adep_logic.wasm"
 
 [coordinator]
 grpc_endpoint = "http://127.0.0.1:50052"
+
+[cloud]
+enabled = true
+api_endpoint = "http://localhost:8000"
+api_key = "sk_test_key"
 
 [status]
 report_interval_secs = 5
@@ -25,3 +30,7 @@ hook_retry_attempts = 3
 
 [security]
 allowed_host_paths = ["/opt/models", "/mnt/cache", "/tmp"]
+
+[network]
+local_domain = "local"
+state_dir = "/tmp/capsuled/state"

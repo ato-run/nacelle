@@ -2,8 +2,8 @@ use clap::Parser;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -65,8 +65,11 @@ fn main() -> anyhow::Result<()> {
         .map_err(|_| anyhow::anyhow!("Invalid key length (expected 32 bytes)"))?;
     let signing_key = ed25519_dalek::SigningKey::from_bytes(&key_array);
     let verifying_key = signing_key.verifying_key();
-    
-    println!("Loaded key. Public Key: {}", hex::encode(verifying_key.as_bytes()));
+
+    println!(
+        "Loaded key. Public Key: {}",
+        hex::encode(verifying_key.as_bytes())
+    );
 
     let file = fs::File::open(&args.log_path)?;
     let reader = BufReader::new(file);
@@ -76,14 +79,16 @@ fn main() -> anyhow::Result<()> {
 
     for (i, line) in reader.lines().enumerate() {
         let line = line?;
-        if line.trim().is_empty() { continue; }
-        
+        if line.trim().is_empty() {
+            continue;
+        }
+
         let record: AuditRecord = serde_json::from_str(&line)
             .map_err(|e| anyhow::anyhow!("Failed to parse line {}: {}", i + 1, e))?;
-            
+
         let signable = record.signable_string();
         println!("Debug: Signable string: '{}'", signable);
-        
+
         // Debug: Generate signature with loaded key
         use ed25519_dalek::Signer;
         let expected_sig = signing_key.sign(signable.as_bytes());
@@ -98,17 +103,31 @@ fn main() -> anyhow::Result<()> {
 
         match verifying_key.verify(signable.as_bytes(), &signature) {
             Ok(_) => {
-                println!("✅ Record {}: {} - {} (Verified)", i + 1, record.action, record.status);
+                println!(
+                    "✅ Record {}: {} - {} (Verified)",
+                    i + 1,
+                    record.action,
+                    record.status
+                );
                 valid_count += 1;
             }
             Err(e) => {
-                println!("❌ Record {}: {} - {} (Verification Failed: {})", i + 1, record.action, record.status, e);
+                println!(
+                    "❌ Record {}: {} - {} (Verification Failed: {})",
+                    i + 1,
+                    record.action,
+                    record.status,
+                    e
+                );
                 error_count += 1;
             }
         }
     }
 
-    println!("Verification complete. {} valid, {} failed.", valid_count, error_count);
+    println!(
+        "Verification complete. {} valid, {} failed.",
+        valid_count, error_count
+    );
     if error_count > 0 {
         anyhow::bail!("Found {} invalid signatures", error_count);
     }

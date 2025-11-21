@@ -4,15 +4,19 @@ use std::time::Duration;
 use tracing::{error, info, warn};
 use tracing_subscriber::prelude::*;
 
+use capsuled_engine::api_server;
 use capsuled_engine::capsule_manager::CapsuleManager;
 use capsuled_engine::config::{self, StatusTaint};
 use capsuled_engine::grpc_server;
 use capsuled_engine::hardware::{self, scrubber::GpuScrubber};
+use capsuled_engine::network;
+use capsuled_engine::oci;
 use capsuled_engine::proto::onescluster::coordinator::v1::{Taint, TaintEffect};
 use capsuled_engine::runtime::{ContainerRuntime, RuntimeConfig as EngineRuntimeConfig};
 use capsuled_engine::security::audit::AuditLogger;
 use capsuled_engine::status_reporter::StatusReporter;
 use capsuled_engine::wasm_host::AdepLogicHost;
+use capsuled_engine::workload;
 
 const DEFAULT_SERVER_ADDR: &str = "0.0.0.0:50051";
 const DEFAULT_WASM_PATH: &str =
@@ -50,6 +54,10 @@ struct Args {
     /// Path to configuration file
     #[arg(long, default_value = DEFAULT_CONFIG_PATH)]
     config: String,
+
+    /// Path to a manifest file (TOML or JSON) to verify and exit
+    #[arg(long)]
+    manifest: Option<String>,
 }
 
 #[tokio::main]
@@ -68,6 +76,42 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Capsuled Engine starting...");
     info!("Version: {}", env!("CARGO_PKG_VERSION"));
+
+    // Handle manifest verification mode
+    if let Some(manifest_path) = &args.manifest {
+        info!("Verifying manifest: {}", manifest_path);
+        let content = std::fs::read_to_string(manifest_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read manifest: {}", e))?;
+
+        let path = std::path::Path::new(manifest_path);
+        let (manifest, resource_hints) =
+            workload::manifest_loader::load_manifest_str(Some(path), &content)
+                .map_err(|e| anyhow::anyhow!("Failed to parse manifest: {}", e))?;
+
+        info!("Manifest parsed successfully");
+        info!("  Name: {}", manifest.name);
+        info!("  Image: {}", manifest.compute.image);
+
+        // Mock rootfs for verification
+        let rootfs = std::path::PathBuf::from("/tmp/mock-rootfs");
+
+        let allowed_paths = vec![];
+
+        let oci_spec = oci::spec_builder::build_oci_spec(
+            &rootfs,
+            &manifest.compute,
+            &manifest.volumes,
+            None, // No GPU assignment for this test
+            &allowed_paths,
+            resource_hints.as_ref(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to build OCI spec: {}", e))?;
+
+        let json = serde_json::to_string_pretty(&oci_spec)?;
+        println!("{}", json);
+
+        return Ok(());
+    }
 
     let file_config = match config::load_config(&args.config) {
         Ok(Some(cfg)) => {
@@ -161,7 +205,10 @@ async fn main() -> anyhow::Result<()> {
             info!("  GPU Count: {}", report.gpu_count());
             info!("  Total VRAM: {:.2} GB", report.total_vram_gb());
             if report.is_mock {
-                info!("  Mode: Mock (set MOCK_GPU_COUNT, MOCK_VRAM_GB to configure)");
+                info!("  Mode: Mock (Fake GPUs for testing)");
+            } else if report.gpu_count() == 0 {
+                warn!("  Mode: CPU-only (No GPUs detected)");
+                warn!("  Universal Agent Runtime is active in fallback mode.");
             } else {
                 info!("  Mode: Real (NVML)");
             }
@@ -230,11 +277,90 @@ async fn main() -> anyhow::Result<()> {
     // Initialize GPU Scrubber
     let gpu_scrubber = Arc::new(GpuScrubber::new(Arc::clone(&audit_logger)));
 
+    // Initialize Network Layer
+    info!("Initializing Network Layer...");
+    let network_config = file_config.as_ref().and_then(|cfg| cfg.network());
+
+    let tailscale_manager = Arc::new(network::tailscale::TailscaleManager::start(
+        network_config.and_then(|c| c.headscale_url.clone()),
+        network_config.and_then(|c| c.auth_key.clone()),
+        network_config.and_then(|c| c.state_dir.clone()),
+    ));
+
+    let service_registry = Arc::new(network::service_registry::ServiceRegistry::new(
+        network_config.and_then(|c| c.local_domain.clone()),
+    ));
+
+    // Wait briefly for VPN IP (optional, just for logging)
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    if let Some(ip) = tailscale_manager.get_vpn_ip() {
+        info!("Network Layer Initialized. VPN IP: {}", ip);
+    } else {
+        info!("Network Layer Initialized. Waiting for VPN IP...");
+    }
+
+    // Initialize mDNS Announcer
+    let mdns_announcer = match network::mdns::MdnsAnnouncer::new() {
+        Ok(mdns) => {
+            info!("mDNS Announcer initialized");
+            Some(Arc::new(mdns))
+        }
+        Err(e) => {
+            warn!("Failed to initialize mDNS Announcer: {}", e);
+            None
+        }
+    };
+
+    // Initialize Traefik Manager
+    let traefik_manager = if let Some(config) = &network_config {
+        let state_dir = config
+            .state_dir
+            .clone()
+            .unwrap_or_else(|| "/var/lib/capsuled".to_string());
+        let traefik_dir = std::path::Path::new(&state_dir).join("traefik");
+
+        match network::traefik::TraefikManager::new(&traefik_dir) {
+            Ok(tm) => {
+                info!("Traefik Manager initialized at {:?}", traefik_dir);
+                Some(Arc::new(tm))
+            }
+            Err(e) => {
+                warn!("Failed to initialize Traefik Manager: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Initialize Cloud Client if enabled
+    let cloud_client = if let Some(cloud_config) = file_config.as_ref().and_then(|cfg| cfg.cloud()) {
+        if cloud_config.enabled {
+            info!("Initializing SkyPilot cloud client...");
+            match capsuled_engine::cloud::skypilot::SkyPilotClient::new(cloud_config) {
+                Ok(client) => Some(Arc::new(client)),
+                Err(e) => {
+                    warn!("Failed to initialize cloud client: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Initialize capsule manager
     info!("Initializing capsule manager...");
     let capsule_manager = Arc::new(CapsuleManager::new(
-        Arc::clone(&audit_logger),
-        Arc::clone(&gpu_scrubber),
+        audit_logger.clone(),
+        gpu_scrubber.clone(),
+        gpu_detector.clone(),
+        Some(service_registry.clone()),
+        mdns_announcer.clone(),
+        traefik_manager.clone(),
+        cloud_client,
     ));
 
     // Start status reporter to periodically send heartbeat reports to Coordinator
@@ -248,14 +374,50 @@ async fn main() -> anyhow::Result<()> {
     );
     let status_task = status_reporter.start();
 
+    // Determine backend mode string
+    let backend_mode = if match gpu_detector.detect_gpus() {
+        Ok(r) => r.is_mock,
+        Err(_) => false,
+    } {
+        "mock".to_string()
+    } else if match gpu_detector.detect_gpus() {
+        Ok(r) => r.gpu_count() == 0,
+        Err(_) => true, // Error usually implies fallback to CPU or failure, but here we assume CPU if we survived
+    } {
+        "cpu".to_string()
+    } else {
+        "gpu".to_string()
+    };
+
+    // Start REST API Server
+    info!("Starting REST API server on port 4500");
+    let api_capsule_manager = Arc::clone(&capsule_manager);
+    let api_service_registry = Arc::clone(&service_registry);
+    let api_gpu_detector = Arc::clone(&gpu_detector);
+    
+    tokio::spawn(async move {
+        if let Err(e) = api_server::start_api_server(
+            4500,
+            api_capsule_manager,
+            api_service_registry,
+            api_gpu_detector,
+        ).await {
+            error!("REST API server failed: {}", e);
+        }
+    });
+
     // Start gRPC server
     info!("Starting gRPC server on {}", listen_addr);
     let server_result = grpc_server::start_grpc_server(
         &listen_addr,
         Arc::clone(&capsule_manager),
         Arc::clone(&wasm_host),
-        container_runtime,
+        Arc::clone(&container_runtime),
         allowed_host_paths,
+        backend_mode,
+        tailscale_manager,
+        service_registry,
+        Arc::clone(&gpu_detector),
     )
     .await;
     status_task.abort();

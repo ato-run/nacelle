@@ -18,6 +18,10 @@ pub struct FileConfig {
     pub runtime: Option<RuntimeSection>,
     #[serde(default)]
     pub security: Option<SecurityConfig>,
+    #[serde(default)]
+    pub network: Option<NetworkConfig>,
+    #[serde(default)]
+    pub cloud: Option<CloudConfig>,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -58,6 +62,21 @@ pub struct SecurityConfig {
     pub allowed_host_paths: Vec<String>,
     pub audit_log_path: Option<String>,
     pub audit_key_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct NetworkConfig {
+    pub headscale_url: Option<String>,
+    pub auth_key: Option<String>,
+    pub state_dir: Option<String>,
+    pub local_domain: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct CloudConfig {
+    pub enabled: bool,
+    pub api_endpoint: Option<String>,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -122,6 +141,14 @@ impl FileConfig {
         self.security
             .as_ref()
             .and_then(|cfg| cfg.audit_key_path.as_deref())
+    }
+
+    pub fn network(&self) -> Option<&NetworkConfig> {
+        self.network.as_ref()
+    }
+
+    pub fn cloud(&self) -> Option<&CloudConfig> {
+        self.cloud.as_ref()
     }
 }
 

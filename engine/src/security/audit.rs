@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use chrono::Utc;
+use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use tracing::{info, warn};
+use std::sync::Mutex;
+use tracing::info;
 
 /// AuditRecord represents a single signed audit log entry
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -34,6 +34,38 @@ impl AuditRecord {
             self.status,
             self.details.as_deref().unwrap_or("")
         )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AuditOperation {
+    DeployCapsule,
+    StartCapsule,
+    StopCapsule,
+}
+
+impl ToString for AuditOperation {
+    fn to_string(&self) -> String {
+        match self {
+            AuditOperation::DeployCapsule => "CAPSULE_DEPLOY".to_string(),
+            AuditOperation::StartCapsule => "CAPSULE_START".to_string(),
+            AuditOperation::StopCapsule => "CAPSULE_STOP".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AuditStatus {
+    Success,
+    Failure,
+}
+
+impl ToString for AuditStatus {
+    fn to_string(&self) -> String {
+        match self {
+            AuditStatus::Success => "SUCCESS".to_string(),
+            AuditStatus::Failure => "FAILURE".to_string(),
+        }
     }
 }
 
@@ -81,9 +113,12 @@ impl AuditLogger {
             node_id,
             file_lock: Mutex::new(()),
         };
-        
-        info!("AuditLogger initialized. Public Key: {}", logger.public_key_hex());
-        
+
+        info!(
+            "AuditLogger initialized. Public Key: {}",
+            logger.public_key_hex()
+        );
+
         Ok(logger)
     }
 

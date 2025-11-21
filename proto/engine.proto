@@ -8,22 +8,31 @@ service Engine {
   rpc StopCapsule(StopRequest) returns (StopResponse);
   rpc GetResources(GetResourcesRequest) returns (ResourceInfo);
   rpc ValidateManifest(ValidateRequest) returns (ValidationResult);
+  rpc GetSystemStatus(GetSystemStatusRequest) returns (SystemStatus);
 }
 
 message GetResourcesRequest {
   // 空のリクエストメッセージ
 }
 
+message GetSystemStatusRequest {
+  // 空のリクエストメッセージ
+}
+
 message DeployRequest {
   string capsule_id = 1;
-  bytes adep_json = 2;
-  string oci_image = 3;
-  string digest = 4;
+  oneof manifest {
+    bytes adep_json = 2;      // Legacy JSON support
+    string toml_content = 5;  // TOML manifest content
+  }
+  string oci_image = 3;  // Optional, can be derived from manifest
+  string digest = 4;     // Optional
 }
 
 message DeployResponse {
   string capsule_id = 1;
   string status = 2;
+  string local_url = 3;  // e.g., "http://verification-capsule.local"
 }
 
 message StopRequest {
@@ -39,6 +48,9 @@ message ResourceInfo {
   uint64 cpu_cores = 1;
   uint64 memory_bytes = 2;
   uint64 disk_bytes = 3;
+  string backend_mode = 4; // "cpu", "gpu", or "mock"
+  string vpn_ip = 5;
+  map<string, uint32> local_services = 6; // name -> port
 }
 
 message ValidateRequest {
@@ -48,4 +60,28 @@ message ValidateRequest {
 message ValidationResult {
   bool valid = 1;
   string error_message = 2;
+}
+
+message SystemStatus {
+  string backend_mode = 1;        // "cpu", "gpu", "mock"
+  string vpn_ip = 2;              // Headscale IP
+  repeated CapsuleInfo capsules = 3;
+  ResourceUsage resources = 4;
+}
+
+message CapsuleInfo {
+  string id = 1;
+  string name = 2;
+  string status = 3;             // "running", "stopped", "failed"
+  string local_url = 4;          // e.g., "http://app.local"
+  uint64 reserved_vram_bytes = 5;
+}
+
+message ResourceUsage {
+  uint64 cpu_cores_total = 1;
+  uint64 cpu_cores_used = 2;
+  uint64 memory_bytes_total = 3;
+  uint64 memory_bytes_used = 4;
+  uint64 vram_bytes_total = 5;
+  uint64 vram_bytes_used = 6;
 }

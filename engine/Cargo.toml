@@ -22,6 +22,8 @@ prost = "0.12"
 prost-types = "0.12"
 wasmtime = "16.0"
 toml = "0.8"
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
 
 # 既存の依存関係
 serde = { version = "1.0", features = ["derive"] }
@@ -38,6 +40,8 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Hardware detection
 hostname = "0.4"
+mdns-sd = "0.10"
+serde_yaml = "0.9"
 nvml-wrapper = { version = "0.9", optional = true }
 cudarc = { version = "0.17", features = ["driver", "cuda-version-from-build-system"], optional = true } # VRAM Scrubbing用
 
@@ -60,12 +64,14 @@ prometheus = "0.13"
 
 # Storage and container management (optional, for future implementation)
 # libadep-core = { path = "../../libadep/core" }
+libadep-core = { path = "../../libadep/core", features = ["toml-support"] }
 # lvm-sys2 = "0.2"
 # libcryptsetup-rs = "0.9"
 
 [features]
 default = []
 real-gpu = ["nvml-wrapper", "cudarc"]
+toml-support = ["libadep-core/toml-support"]
 
 [dev-dependencies]
 tempfile = "3.8"

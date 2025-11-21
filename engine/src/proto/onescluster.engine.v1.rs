@@ -3,17 +3,36 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetResourcesRequest {}
+/// 空のリクエストメッセージ
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSystemStatusRequest {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeployRequest {
     #[prost(string, tag = "1")]
     pub capsule_id: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "2")]
-    pub adep_json: ::prost::alloc::vec::Vec<u8>,
+    /// Optional, can be derived from manifest
     #[prost(string, tag = "3")]
     pub oci_image: ::prost::alloc::string::String,
+    /// Optional
     #[prost(string, tag = "4")]
     pub digest: ::prost::alloc::string::String,
+    #[prost(oneof = "deploy_request::Manifest", tags = "2, 5")]
+    pub manifest: ::core::option::Option<deploy_request::Manifest>,
+}
+/// Nested message and enum types in `DeployRequest`.
+pub mod deploy_request {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Manifest {
+        /// Legacy JSON support
+        #[prost(bytes, tag = "2")]
+        AdepJson(::prost::alloc::vec::Vec<u8>),
+        /// TOML manifest content
+        #[prost(string, tag = "5")]
+        TomlContent(::prost::alloc::string::String),
+    }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -22,6 +41,9 @@ pub struct DeployResponse {
     pub capsule_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub status: ::prost::alloc::string::String,
+    /// e.g., "<http://verification-capsule.local">
+    #[prost(string, tag = "3")]
+    pub local_url: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -46,6 +68,14 @@ pub struct ResourceInfo {
     pub memory_bytes: u64,
     #[prost(uint64, tag = "3")]
     pub disk_bytes: u64,
+    /// "cpu", "gpu", or "mock"
+    #[prost(string, tag = "4")]
+    pub backend_mode: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub vpn_ip: ::prost::alloc::string::String,
+    /// name -> port
+    #[prost(map = "string, uint32", tag = "6")]
+    pub local_services: ::std::collections::HashMap<::prost::alloc::string::String, u32>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -60,6 +90,52 @@ pub struct ValidationResult {
     pub valid: bool,
     #[prost(string, tag = "2")]
     pub error_message: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SystemStatus {
+    /// "cpu", "gpu", "mock"
+    #[prost(string, tag = "1")]
+    pub backend_mode: ::prost::alloc::string::String,
+    /// Headscale IP
+    #[prost(string, tag = "2")]
+    pub vpn_ip: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub capsules: ::prost::alloc::vec::Vec<CapsuleInfo>,
+    #[prost(message, optional, tag = "4")]
+    pub resources: ::core::option::Option<ResourceUsage>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CapsuleInfo {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// "running", "stopped", "failed"
+    #[prost(string, tag = "3")]
+    pub status: ::prost::alloc::string::String,
+    /// e.g., "<http://app.local">
+    #[prost(string, tag = "4")]
+    pub local_url: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub reserved_vram_bytes: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResourceUsage {
+    #[prost(uint64, tag = "1")]
+    pub cpu_cores_total: u64,
+    #[prost(uint64, tag = "2")]
+    pub cpu_cores_used: u64,
+    #[prost(uint64, tag = "3")]
+    pub memory_bytes_total: u64,
+    #[prost(uint64, tag = "4")]
+    pub memory_bytes_used: u64,
+    #[prost(uint64, tag = "5")]
+    pub vram_bytes_total: u64,
+    #[prost(uint64, tag = "6")]
+    pub vram_bytes_used: u64,
 }
 /// Generated client implementations.
 pub mod engine_client {
@@ -241,6 +317,30 @@ pub mod engine_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_system_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetSystemStatusRequest>,
+        ) -> std::result::Result<tonic::Response<super::SystemStatus>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/onescluster.engine.v1.Engine/GetSystemStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("onescluster.engine.v1.Engine", "GetSystemStatus"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -269,6 +369,10 @@ pub mod engine_server {
             tonic::Response<super::ValidationResult>,
             tonic::Status,
         >;
+        async fn get_system_status(
+            &self,
+            request: tonic::Request<super::GetSystemStatusRequest>,
+        ) -> std::result::Result<tonic::Response<super::SystemStatus>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct EngineServer<T: Engine> {
@@ -512,6 +616,52 @@ pub mod engine_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ValidateManifestSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/onescluster.engine.v1.Engine/GetSystemStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetSystemStatusSvc<T: Engine>(pub Arc<T>);
+                    impl<
+                        T: Engine,
+                    > tonic::server::UnaryService<super::GetSystemStatusRequest>
+                    for GetSystemStatusSvc<T> {
+                        type Response = super::SystemStatus;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetSystemStatusRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Engine>::get_system_status(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetSystemStatusSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

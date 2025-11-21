@@ -27,16 +27,14 @@
 /// Note: These tests are ignored by default to prevent accidental execution
 /// without proper setup. Use `cargo test --test storage_integration -- --ignored`
 /// to run them explicitly.
-
-use capsuled_engine::storage::{LuksManager, LvmManager, KeyStorage, StorageResult};
+use capsuled_engine::storage::{KeyStorage, LuksManager, LvmManager, StorageResult};
 use tempfile::TempDir;
 
 const TEST_VG: &str = "test_vg";
 
 /// Helper to check if we have root privileges
 fn is_root() -> bool {
-    std::env::var("USER").unwrap_or_default() == "root"
-        || std::env::var("SUDO_USER").is_ok()
+    std::env::var("USER").unwrap_or_default() == "root" || std::env::var("SUDO_USER").is_ok()
 }
 
 /// Helper to check if LVM tools are available
@@ -166,19 +164,14 @@ fn test_luks_create_and_unlock_volume() -> StorageResult<()> {
     let key_path = luks.store_key(volume_name, &key)?;
 
     // Create encrypted volume
-    let encrypted = luks.create_encrypted_volume(
-        &volume.device_path,
-        KeyStorage::File(key_path.clone()),
-    )?;
+    let encrypted =
+        luks.create_encrypted_volume(&volume.device_path, KeyStorage::File(key_path.clone()))?;
     assert_eq!(encrypted.device_path, volume.device_path);
     assert!(!encrypted.is_unlocked);
 
     // Unlock volume
-    let unlocked = luks.unlock_volume(
-        &volume.device_path,
-        mapper_name,
-        KeyStorage::File(key_path),
-    )?;
+    let unlocked =
+        luks.unlock_volume(&volume.device_path, mapper_name, KeyStorage::File(key_path))?;
     assert!(unlocked.is_unlocked);
     assert_eq!(unlocked.mapper_path, format!("/dev/mapper/{}", mapper_name));
 
@@ -215,17 +208,11 @@ fn test_luks_with_memory_key() -> StorageResult<()> {
     let key = luks.generate_key(32);
 
     // Create encrypted volume with in-memory key
-    let _encrypted = luks.create_encrypted_volume(
-        &volume.device_path,
-        KeyStorage::Memory(key.clone()),
-    )?;
+    let _encrypted =
+        luks.create_encrypted_volume(&volume.device_path, KeyStorage::Memory(key.clone()))?;
 
     // Unlock with same in-memory key
-    let unlocked = luks.unlock_volume(
-        &volume.device_path,
-        mapper_name,
-        KeyStorage::Memory(key),
-    )?;
+    let unlocked = luks.unlock_volume(&volume.device_path, mapper_name, KeyStorage::Memory(key))?;
     assert!(unlocked.is_unlocked);
 
     // Lock and cleanup
@@ -257,18 +244,12 @@ fn test_full_encrypted_volume_lifecycle() -> StorageResult<()> {
 
     // 2. Encrypt with LUKS
     let key = luks.generate_key(32);
-    let _encrypted = luks.create_encrypted_volume(
-        &volume.device_path,
-        KeyStorage::Memory(key.clone()),
-    )?;
+    let _encrypted =
+        luks.create_encrypted_volume(&volume.device_path, KeyStorage::Memory(key.clone()))?;
     println!("Encrypted volume with LUKS2");
 
     // 3. Unlock
-    let unlocked = luks.unlock_volume(
-        &volume.device_path,
-        mapper_name,
-        KeyStorage::Memory(key),
-    )?;
+    let unlocked = luks.unlock_volume(&volume.device_path, mapper_name, KeyStorage::Memory(key))?;
     println!("Unlocked at: {}", unlocked.mapper_path);
 
     // At this point, you could:
@@ -296,10 +277,12 @@ fn test_prerequisites_check() {
     println!("cryptsetup available: {}", has_cryptsetup());
     println!("Test VG '{}' exists: {}", TEST_VG, has_test_vg());
     println!("==============================================");
-    
+
     if is_root() && has_lvm_tools() && has_cryptsetup() && has_test_vg() {
         println!("✅ All prerequisites met! You can run integration tests.");
     } else {
-        println!("❌ Some prerequisites not met. See comments in test file for setup instructions.");
+        println!(
+            "❌ Some prerequisites not met. See comments in test file for setup instructions."
+        );
     }
 }

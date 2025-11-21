@@ -32,14 +32,21 @@ pub async fn download_file(url: &str, destination: &str, allowed_paths: &[String
 
     // 3. Perform Download
     let response = reqwest::get(url).await.context("Failed to send request")?;
-    let content = response.bytes().await.context("Failed to read response body")?;
+    let content = response
+        .bytes()
+        .await
+        .context("Failed to read response body")?;
     let bytes_downloaded = content.len() as u64;
 
     // 4. Write to file
     let mut file = File::create(dest_path).context("Failed to create file")?;
-    file.write_all(&content).context("Failed to write to file")?;
+    file.write_all(&content)
+        .context("Failed to write to file")?;
 
-    info!("Download completed successfully: {} ({} bytes)", destination, bytes_downloaded);
+    info!(
+        "Download completed successfully: {} ({} bytes)",
+        destination, bytes_downloaded
+    );
     Ok(bytes_downloaded)
 }
 

@@ -73,11 +73,7 @@ impl LogCollector {
 
     /// Start collecting logs for a capsule
     /// Returns a LogStream that can be used to receive log entries
-    pub fn start_collecting(
-        &self,
-        capsule_id: String,
-        log_path: PathBuf,
-    ) -> Result<LogStream> {
+    pub fn start_collecting(&self, capsule_id: String, log_path: PathBuf) -> Result<LogStream> {
         let (tx, rx) = mpsc::channel(1000);
 
         // Register log file for stdout (main log file)
@@ -135,8 +131,7 @@ impl LogCollector {
                 .rev()
                 .take(tail)
                 .rev()
-                .enumerate()
-                .map(|(_i, line)| LogEntry {
+                .map(|line| LogEntry {
                     timestamp: current_timestamp(),
                     stream: LogStreamType::Stdout,
                     line: line.clone(),
@@ -156,16 +151,10 @@ impl LogCollector {
         Ok(entries)
     }
 
-    fn read_existing_logs(
-        &self,
-        file_key: &str,
-        tx: &mpsc::Sender<LogEntry>,
-    ) -> Result<()> {
+    fn read_existing_logs(&self, file_key: &str, tx: &mpsc::Sender<LogEntry>) -> Result<()> {
         let (path, stream_type) = {
             let files = self.log_files.lock().unwrap();
-            let state = files
-                .get(file_key)
-                .context("Log file state not found")?;
+            let state = files.get(file_key).context("Log file state not found")?;
             (state.path.clone(), state.stream_type.clone())
         };
 
@@ -174,8 +163,8 @@ impl LogCollector {
             return Ok(());
         }
 
-        let file = File::open(&path)
-            .context(format!("Failed to open log file: {}", path.display()))?;
+        let file =
+            File::open(&path).context(format!("Failed to open log file: {}", path.display()))?;
 
         let reader = BufReader::new(file);
         let mut position = 0u64;
@@ -219,10 +208,7 @@ impl LogCollector {
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
             match res {
                 Ok(event) => {
-                    if matches!(
-                        event.kind,
-                        EventKind::Modify(_) | EventKind::Create(_)
-                    ) {
+                    if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                         // Read new log lines
                         if let Err(e) = Self::read_new_lines(&log_files, &file_key, &tx) {
                             error!("Failed to read new log lines: {}", e);

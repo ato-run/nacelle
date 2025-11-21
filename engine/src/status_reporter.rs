@@ -15,8 +15,8 @@ use crate::{
     capsule_manager::{Capsule, CapsuleManager, CapsuleStatus},
     hardware::{GpuDetectionError, GpuDetector, GpuProcessMonitor, RigHardwareReport},
     proto::onescluster::coordinator::v1::{
-        coordinator_service_client::CoordinatorServiceClient, GpuInfo as ProtoGpuInfo, HardwareState, RigStatus,
-        StatusReportRequest, Taint, WorkloadPhase, WorkloadStatus,
+        coordinator_service_client::CoordinatorServiceClient, GpuInfo as ProtoGpuInfo,
+        HardwareState, RigStatus, StatusReportRequest, Taint, WorkloadPhase, WorkloadStatus,
     },
 };
 
@@ -408,8 +408,24 @@ pub enum StatusReporterError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hardware::scrubber::GpuScrubber;
     use crate::hardware::{GpuInfo, RigHardwareReport};
+    use crate::security::audit::AuditLogger;
+    use std::path::PathBuf;
     use std::time::Duration as StdDuration;
+
+    fn create_test_manager() -> CapsuleManager {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let log_path = temp_dir.path().join("audit.log");
+        let key_path = temp_dir.path().join("node_key.pem");
+
+        let logger =
+            Arc::new(AuditLogger::new(log_path, key_path, "test-node".to_string()).unwrap());
+        let scrubber = Arc::new(GpuScrubber::new(logger.clone()));
+
+        let gpu_detector = crate::hardware::create_gpu_detector();
+        CapsuleManager::new(logger, scrubber, gpu_detector, None, None, None, None)
+    }
 
     fn sample_capsule(status: CapsuleStatus) -> Capsule {
         Capsule {
@@ -465,7 +481,7 @@ mod tests {
         let reporter = StatusReporter::new(
             "http://localhost:50052",
             Duration::from_secs(30),
-            Arc::new(CapsuleManager::new()),
+            Arc::new(create_test_manager()),
             crate::hardware::create_gpu_detector(),
             crate::hardware::create_gpu_process_monitor(),
             Vec::new(),
@@ -486,7 +502,7 @@ mod tests {
         let reporter = StatusReporter::new(
             "http://localhost:50052",
             Duration::from_secs(30),
-            Arc::new(CapsuleManager::new()),
+            Arc::new(create_test_manager()),
             crate::hardware::create_gpu_detector(),
             crate::hardware::create_gpu_process_monitor(),
             Vec::new(),

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tracing::{debug, error, info};
 
 use crate::metrics::MetricsCollector;
@@ -73,7 +73,7 @@ fn handle_request(request: &str, metrics_collector: Option<&MetricsCollector>) -
 
     let first_line = lines[0];
     let parts: Vec<&str> = first_line.split_whitespace().collect();
-    
+
     if parts.len() < 2 {
         return http_response(400, "text/plain", "Bad Request");
     }
@@ -110,15 +110,13 @@ fn handle_liveness() -> String {
 
 fn handle_metrics(metrics_collector: Option<&MetricsCollector>) -> String {
     match metrics_collector {
-        Some(collector) => {
-            match collector.gather() {
-                Ok(metrics) => http_response(200, "text/plain; version=0.0.4", &metrics),
-                Err(e) => {
-                    error!("Failed to gather metrics: {}", e);
-                    http_response(500, "text/plain", "Internal Server Error")
-                }
+        Some(collector) => match collector.gather() {
+            Ok(metrics) => http_response(200, "text/plain; version=0.0.4", &metrics),
+            Err(e) => {
+                error!("Failed to gather metrics: {}", e);
+                http_response(500, "text/plain", "Internal Server Error")
             }
-        }
+        },
         None => {
             // Return empty metrics if no collector is configured
             http_response(200, "text/plain; version=0.0.4", "# No metrics available\n")

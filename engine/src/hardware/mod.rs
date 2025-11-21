@@ -12,8 +12,8 @@
 /// - `MOCK_CUDA_VERSION`: Mock CUDA version (default: "12.0")
 pub mod gpu_detector;
 pub mod gpu_process_monitor;
-pub mod scrubber; // VRAM Scrubbing
-pub mod hardware_report; // Add this line
+pub mod hardware_report;
+pub mod scrubber; // VRAM Scrubbing // Add this line
 
 pub use gpu_detector::{create_gpu_detector, GpuDetectionError, GpuDetector};
 pub use gpu_process_monitor::{create_gpu_process_monitor, GpuProcessMonitor};

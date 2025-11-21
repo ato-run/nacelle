@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -10,9 +10,11 @@ use capsuled_engine::adep::{
 };
 use capsuled_engine::capsule_manager::CapsuleManager;
 use capsuled_engine::hardware::gpu_process_monitor::GpuProcessMonitorError;
+use capsuled_engine::hardware::scrubber::GpuScrubber;
 use capsuled_engine::hardware::{GpuDetector, GpuInfo, GpuProcessMonitor, RigHardwareReport};
 use capsuled_engine::proto::onescluster::coordinator::v1::Taint;
 use capsuled_engine::runtime::LaunchResult;
+use capsuled_engine::security::audit::AuditLogger;
 use capsuled_engine::status_reporter::StatusReporter;
 
 #[derive(Parser, Debug)]
@@ -66,7 +68,33 @@ struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let capsule_manager = Arc::new(CapsuleManager::new());
+    // Create dummy AuditLogger
+    let audit_logger = Arc::new(AuditLogger::new(
+        PathBuf::from("dummy_audit.log"),
+        PathBuf::from("dummy_audit.key"),
+        "dummy-node".to_string(),
+    )?);
+
+    // Create GpuScrubber
+    let gpu_scrubber = Arc::new(GpuScrubber::new(audit_logger.clone()));
+
+    // Create GpuDetector (Mock)
+    let gpu_detector = Arc::new(FixedGpuDetector {
+        rig_id: args.rig_id.clone(),
+        total_vram_bytes: args.total_vram_bytes,
+        observed_used_vram: args.observed_vram_bytes,
+        cuda_driver_version: args.cuda_driver_version.clone(),
+    });
+
+    let capsule_manager = Arc::new(CapsuleManager::new(
+        audit_logger,
+        gpu_scrubber,
+        gpu_detector.clone(),
+        None,
+        None,
+        None,
+        None,
+    ));
 
     seed_capsule(
         &capsule_manager,
@@ -74,13 +102,6 @@ async fn main() -> Result<()> {
         args.pid,
         args.reserved_vram_bytes,
     )?;
-
-    let gpu_detector = Arc::new(FixedGpuDetector {
-        rig_id: args.rig_id.clone(),
-        total_vram_bytes: args.total_vram_bytes,
-        observed_used_vram: args.observed_vram_bytes,
-        cuda_driver_version: args.cuda_driver_version.clone(),
-    });
 
     let monitor = Arc::new(FixedProcessMonitor {
         usages: HashMap::from([(args.pid, args.observed_vram_bytes)]),
@@ -121,6 +142,7 @@ fn seed_capsule(
                 cuda_version_min: None,
             }),
             strategy: None,
+            cloud: None,
         },
         compute: AdepComputeConfig {
             image: "test/image:latest".to_string(),
@@ -176,7 +198,8 @@ impl GpuDetector for FixedGpuDetector {
             device_name: "Test GPU".into(),
             vram_total_bytes: self.total_vram_bytes,
             cuda_compute_capability: Some("8.0".into()),
-            uuid: "GPU-TEST-UUID".into(),            vram_used_bytes: Some(self.observed_used_vram),
+            uuid: "GPU-TEST-UUID".into(),
+            vram_used_bytes: Some(self.observed_used_vram),
         });
         Ok(report)
     }
@@ -187,6 +210,10 @@ impl GpuDetector for FixedGpuDetector {
 
     fn name(&self) -> &str {
         "FixedGpuDetector"
+    }
+
+    fn get_available_vram_bytes(&self, _index: usize) -> Result<u64, capsuled_engine::hardware::GpuDetectionError> {
+         Ok(self.total_vram_bytes - self.observed_used_vram)
     }
 }
 

@@ -23,6 +23,7 @@ const (
 	Engine_StopCapsule_FullMethodName      = "/onescluster.engine.v1.Engine/StopCapsule"
 	Engine_GetResources_FullMethodName     = "/onescluster.engine.v1.Engine/GetResources"
 	Engine_ValidateManifest_FullMethodName = "/onescluster.engine.v1.Engine/ValidateManifest"
+	Engine_GetSystemStatus_FullMethodName  = "/onescluster.engine.v1.Engine/GetSystemStatus"
 )
 
 // EngineClient is the client API for Engine service.
@@ -33,6 +34,7 @@ type EngineClient interface {
 	StopCapsule(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error)
 	GetResources(ctx context.Context, in *GetResourcesRequest, opts ...grpc.CallOption) (*ResourceInfo, error)
 	ValidateManifest(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidationResult, error)
+	GetSystemStatus(ctx context.Context, in *GetSystemStatusRequest, opts ...grpc.CallOption) (*SystemStatus, error)
 }
 
 type engineClient struct {
@@ -83,6 +85,16 @@ func (c *engineClient) ValidateManifest(ctx context.Context, in *ValidateRequest
 	return out, nil
 }
 
+func (c *engineClient) GetSystemStatus(ctx context.Context, in *GetSystemStatusRequest, opts ...grpc.CallOption) (*SystemStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SystemStatus)
+	err := c.cc.Invoke(ctx, Engine_GetSystemStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EngineServer is the server API for Engine service.
 // All implementations must embed UnimplementedEngineServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type EngineServer interface {
 	StopCapsule(context.Context, *StopRequest) (*StopResponse, error)
 	GetResources(context.Context, *GetResourcesRequest) (*ResourceInfo, error)
 	ValidateManifest(context.Context, *ValidateRequest) (*ValidationResult, error)
+	GetSystemStatus(context.Context, *GetSystemStatusRequest) (*SystemStatus, error)
 	mustEmbedUnimplementedEngineServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedEngineServer) GetResources(context.Context, *GetResourcesRequ
 }
 func (UnimplementedEngineServer) ValidateManifest(context.Context, *ValidateRequest) (*ValidationResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateManifest not implemented")
+}
+func (UnimplementedEngineServer) GetSystemStatus(context.Context, *GetSystemStatusRequest) (*SystemStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSystemStatus not implemented")
 }
 func (UnimplementedEngineServer) mustEmbedUnimplementedEngineServer() {}
 func (UnimplementedEngineServer) testEmbeddedByValue()                {}
@@ -206,6 +222,24 @@ func _Engine_ValidateManifest_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Engine_GetSystemStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSystemStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).GetSystemStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_GetSystemStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).GetSystemStatus(ctx, req.(*GetSystemStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Engine_ServiceDesc is the grpc.ServiceDesc for Engine service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateManifest",
 			Handler:    _Engine_ValidateManifest_Handler,
+		},
+		{
+			MethodName: "GetSystemStatus",
+			Handler:    _Engine_GetSystemStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

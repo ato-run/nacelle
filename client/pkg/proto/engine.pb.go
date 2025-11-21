@@ -57,19 +57,59 @@ func (*GetResourcesRequest) Descriptor() ([]byte, []int) {
 	return file_engine_proto_rawDescGZIP(), []int{0}
 }
 
-type DeployRequest struct {
+type GetSystemStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	CapsuleId     string                 `protobuf:"bytes,1,opt,name=capsule_id,json=capsuleId,proto3" json:"capsule_id,omitempty"`
-	AdepJson      []byte                 `protobuf:"bytes,2,opt,name=adep_json,json=adepJson,proto3" json:"adep_json,omitempty"`
-	OciImage      string                 `protobuf:"bytes,3,opt,name=oci_image,json=ociImage,proto3" json:"oci_image,omitempty"`
-	Digest        string                 `protobuf:"bytes,4,opt,name=digest,proto3" json:"digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSystemStatusRequest) Reset() {
+	*x = GetSystemStatusRequest{}
+	mi := &file_engine_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSystemStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSystemStatusRequest) ProtoMessage() {}
+
+func (x *GetSystemStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSystemStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetSystemStatusRequest) Descriptor() ([]byte, []int) {
+	return file_engine_proto_rawDescGZIP(), []int{1}
+}
+
+type DeployRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	CapsuleId string                 `protobuf:"bytes,1,opt,name=capsule_id,json=capsuleId,proto3" json:"capsule_id,omitempty"`
+	// Types that are valid to be assigned to Manifest:
+	//
+	//	*DeployRequest_AdepJson
+	//	*DeployRequest_TomlContent
+	Manifest      isDeployRequest_Manifest `protobuf_oneof:"manifest"`
+	OciImage      string                   `protobuf:"bytes,3,opt,name=oci_image,json=ociImage,proto3" json:"oci_image,omitempty"` // Optional, can be derived from manifest
+	Digest        string                   `protobuf:"bytes,4,opt,name=digest,proto3" json:"digest,omitempty"`                     // Optional
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeployRequest) Reset() {
 	*x = DeployRequest{}
-	mi := &file_engine_proto_msgTypes[1]
+	mi := &file_engine_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -81,7 +121,7 @@ func (x *DeployRequest) String() string {
 func (*DeployRequest) ProtoMessage() {}
 
 func (x *DeployRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[1]
+	mi := &file_engine_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -94,7 +134,7 @@ func (x *DeployRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployRequest.ProtoReflect.Descriptor instead.
 func (*DeployRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{1}
+	return file_engine_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *DeployRequest) GetCapsuleId() string {
@@ -104,11 +144,29 @@ func (x *DeployRequest) GetCapsuleId() string {
 	return ""
 }
 
-func (x *DeployRequest) GetAdepJson() []byte {
+func (x *DeployRequest) GetManifest() isDeployRequest_Manifest {
 	if x != nil {
-		return x.AdepJson
+		return x.Manifest
 	}
 	return nil
+}
+
+func (x *DeployRequest) GetAdepJson() []byte {
+	if x != nil {
+		if x, ok := x.Manifest.(*DeployRequest_AdepJson); ok {
+			return x.AdepJson
+		}
+	}
+	return nil
+}
+
+func (x *DeployRequest) GetTomlContent() string {
+	if x != nil {
+		if x, ok := x.Manifest.(*DeployRequest_TomlContent); ok {
+			return x.TomlContent
+		}
+	}
+	return ""
 }
 
 func (x *DeployRequest) GetOciImage() string {
@@ -125,17 +183,34 @@ func (x *DeployRequest) GetDigest() string {
 	return ""
 }
 
+type isDeployRequest_Manifest interface {
+	isDeployRequest_Manifest()
+}
+
+type DeployRequest_AdepJson struct {
+	AdepJson []byte `protobuf:"bytes,2,opt,name=adep_json,json=adepJson,proto3,oneof"` // Legacy JSON support
+}
+
+type DeployRequest_TomlContent struct {
+	TomlContent string `protobuf:"bytes,5,opt,name=toml_content,json=tomlContent,proto3,oneof"` // TOML manifest content
+}
+
+func (*DeployRequest_AdepJson) isDeployRequest_Manifest() {}
+
+func (*DeployRequest_TomlContent) isDeployRequest_Manifest() {}
+
 type DeployResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CapsuleId     string                 `protobuf:"bytes,1,opt,name=capsule_id,json=capsuleId,proto3" json:"capsule_id,omitempty"`
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	LocalUrl      string                 `protobuf:"bytes,3,opt,name=local_url,json=localUrl,proto3" json:"local_url,omitempty"` // e.g., "http://verification-capsule.local"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeployResponse) Reset() {
 	*x = DeployResponse{}
-	mi := &file_engine_proto_msgTypes[2]
+	mi := &file_engine_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -147,7 +222,7 @@ func (x *DeployResponse) String() string {
 func (*DeployResponse) ProtoMessage() {}
 
 func (x *DeployResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[2]
+	mi := &file_engine_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -160,7 +235,7 @@ func (x *DeployResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployResponse.ProtoReflect.Descriptor instead.
 func (*DeployResponse) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{2}
+	return file_engine_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DeployResponse) GetCapsuleId() string {
@@ -177,6 +252,13 @@ func (x *DeployResponse) GetStatus() string {
 	return ""
 }
 
+func (x *DeployResponse) GetLocalUrl() string {
+	if x != nil {
+		return x.LocalUrl
+	}
+	return ""
+}
+
 type StopRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CapsuleId     string                 `protobuf:"bytes,1,opt,name=capsule_id,json=capsuleId,proto3" json:"capsule_id,omitempty"`
@@ -186,7 +268,7 @@ type StopRequest struct {
 
 func (x *StopRequest) Reset() {
 	*x = StopRequest{}
-	mi := &file_engine_proto_msgTypes[3]
+	mi := &file_engine_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -198,7 +280,7 @@ func (x *StopRequest) String() string {
 func (*StopRequest) ProtoMessage() {}
 
 func (x *StopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[3]
+	mi := &file_engine_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,7 +293,7 @@ func (x *StopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRequest.ProtoReflect.Descriptor instead.
 func (*StopRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{3}
+	return file_engine_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *StopRequest) GetCapsuleId() string {
@@ -231,7 +313,7 @@ type StopResponse struct {
 
 func (x *StopResponse) Reset() {
 	*x = StopResponse{}
-	mi := &file_engine_proto_msgTypes[4]
+	mi := &file_engine_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -243,7 +325,7 @@ func (x *StopResponse) String() string {
 func (*StopResponse) ProtoMessage() {}
 
 func (x *StopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[4]
+	mi := &file_engine_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -256,7 +338,7 @@ func (x *StopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopResponse.ProtoReflect.Descriptor instead.
 func (*StopResponse) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{4}
+	return file_engine_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StopResponse) GetCapsuleId() string {
@@ -278,13 +360,16 @@ type ResourceInfo struct {
 	CpuCores      uint64                 `protobuf:"varint,1,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
 	MemoryBytes   uint64                 `protobuf:"varint,2,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
 	DiskBytes     uint64                 `protobuf:"varint,3,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
+	BackendMode   string                 `protobuf:"bytes,4,opt,name=backend_mode,json=backendMode,proto3" json:"backend_mode,omitempty"` // "cpu", "gpu", or "mock"
+	VpnIp         string                 `protobuf:"bytes,5,opt,name=vpn_ip,json=vpnIp,proto3" json:"vpn_ip,omitempty"`
+	LocalServices map[string]uint32      `protobuf:"bytes,6,rep,name=local_services,json=localServices,proto3" json:"local_services,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // name -> port
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResourceInfo) Reset() {
 	*x = ResourceInfo{}
-	mi := &file_engine_proto_msgTypes[5]
+	mi := &file_engine_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -296,7 +381,7 @@ func (x *ResourceInfo) String() string {
 func (*ResourceInfo) ProtoMessage() {}
 
 func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[5]
+	mi := &file_engine_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +394,7 @@ func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceInfo.ProtoReflect.Descriptor instead.
 func (*ResourceInfo) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{5}
+	return file_engine_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ResourceInfo) GetCpuCores() uint64 {
@@ -333,6 +418,27 @@ func (x *ResourceInfo) GetDiskBytes() uint64 {
 	return 0
 }
 
+func (x *ResourceInfo) GetBackendMode() string {
+	if x != nil {
+		return x.BackendMode
+	}
+	return ""
+}
+
+func (x *ResourceInfo) GetVpnIp() string {
+	if x != nil {
+		return x.VpnIp
+	}
+	return ""
+}
+
+func (x *ResourceInfo) GetLocalServices() map[string]uint32 {
+	if x != nil {
+		return x.LocalServices
+	}
+	return nil
+}
+
 type ValidateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AdepJson      []byte                 `protobuf:"bytes,1,opt,name=adep_json,json=adepJson,proto3" json:"adep_json,omitempty"`
@@ -342,7 +448,7 @@ type ValidateRequest struct {
 
 func (x *ValidateRequest) Reset() {
 	*x = ValidateRequest{}
-	mi := &file_engine_proto_msgTypes[6]
+	mi := &file_engine_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -354,7 +460,7 @@ func (x *ValidateRequest) String() string {
 func (*ValidateRequest) ProtoMessage() {}
 
 func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[6]
+	mi := &file_engine_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -367,7 +473,7 @@ func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{6}
+	return file_engine_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ValidateRequest) GetAdepJson() []byte {
@@ -387,7 +493,7 @@ type ValidationResult struct {
 
 func (x *ValidationResult) Reset() {
 	*x = ValidationResult{}
-	mi := &file_engine_proto_msgTypes[7]
+	mi := &file_engine_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -399,7 +505,7 @@ func (x *ValidationResult) String() string {
 func (*ValidationResult) ProtoMessage() {}
 
 func (x *ValidationResult) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[7]
+	mi := &file_engine_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -412,7 +518,7 @@ func (x *ValidationResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidationResult.ProtoReflect.Descriptor instead.
 func (*ValidationResult) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{7}
+	return file_engine_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ValidationResult) GetValid() bool {
@@ -429,44 +535,302 @@ func (x *ValidationResult) GetErrorMessage() string {
 	return ""
 }
 
+type SystemStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BackendMode   string                 `protobuf:"bytes,1,opt,name=backend_mode,json=backendMode,proto3" json:"backend_mode,omitempty"` // "cpu", "gpu", "mock"
+	VpnIp         string                 `protobuf:"bytes,2,opt,name=vpn_ip,json=vpnIp,proto3" json:"vpn_ip,omitempty"`                   // Headscale IP
+	Capsules      []*CapsuleInfo         `protobuf:"bytes,3,rep,name=capsules,proto3" json:"capsules,omitempty"`
+	Resources     *ResourceUsage         `protobuf:"bytes,4,opt,name=resources,proto3" json:"resources,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemStatus) Reset() {
+	*x = SystemStatus{}
+	mi := &file_engine_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemStatus) ProtoMessage() {}
+
+func (x *SystemStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemStatus.ProtoReflect.Descriptor instead.
+func (*SystemStatus) Descriptor() ([]byte, []int) {
+	return file_engine_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SystemStatus) GetBackendMode() string {
+	if x != nil {
+		return x.BackendMode
+	}
+	return ""
+}
+
+func (x *SystemStatus) GetVpnIp() string {
+	if x != nil {
+		return x.VpnIp
+	}
+	return ""
+}
+
+func (x *SystemStatus) GetCapsules() []*CapsuleInfo {
+	if x != nil {
+		return x.Capsules
+	}
+	return nil
+}
+
+func (x *SystemStatus) GetResources() *ResourceUsage {
+	if x != nil {
+		return x.Resources
+	}
+	return nil
+}
+
+type CapsuleInfo struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Status            string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`                     // "running", "stopped", "failed"
+	LocalUrl          string                 `protobuf:"bytes,4,opt,name=local_url,json=localUrl,proto3" json:"local_url,omitempty"` // e.g., "http://app.local"
+	ReservedVramBytes uint64                 `protobuf:"varint,5,opt,name=reserved_vram_bytes,json=reservedVramBytes,proto3" json:"reserved_vram_bytes,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *CapsuleInfo) Reset() {
+	*x = CapsuleInfo{}
+	mi := &file_engine_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapsuleInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapsuleInfo) ProtoMessage() {}
+
+func (x *CapsuleInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapsuleInfo.ProtoReflect.Descriptor instead.
+func (*CapsuleInfo) Descriptor() ([]byte, []int) {
+	return file_engine_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CapsuleInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *CapsuleInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CapsuleInfo) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *CapsuleInfo) GetLocalUrl() string {
+	if x != nil {
+		return x.LocalUrl
+	}
+	return ""
+}
+
+func (x *CapsuleInfo) GetReservedVramBytes() uint64 {
+	if x != nil {
+		return x.ReservedVramBytes
+	}
+	return 0
+}
+
+type ResourceUsage struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	CpuCoresTotal    uint64                 `protobuf:"varint,1,opt,name=cpu_cores_total,json=cpuCoresTotal,proto3" json:"cpu_cores_total,omitempty"`
+	CpuCoresUsed     uint64                 `protobuf:"varint,2,opt,name=cpu_cores_used,json=cpuCoresUsed,proto3" json:"cpu_cores_used,omitempty"`
+	MemoryBytesTotal uint64                 `protobuf:"varint,3,opt,name=memory_bytes_total,json=memoryBytesTotal,proto3" json:"memory_bytes_total,omitempty"`
+	MemoryBytesUsed  uint64                 `protobuf:"varint,4,opt,name=memory_bytes_used,json=memoryBytesUsed,proto3" json:"memory_bytes_used,omitempty"`
+	VramBytesTotal   uint64                 `protobuf:"varint,5,opt,name=vram_bytes_total,json=vramBytesTotal,proto3" json:"vram_bytes_total,omitempty"`
+	VramBytesUsed    uint64                 `protobuf:"varint,6,opt,name=vram_bytes_used,json=vramBytesUsed,proto3" json:"vram_bytes_used,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ResourceUsage) Reset() {
+	*x = ResourceUsage{}
+	mi := &file_engine_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourceUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourceUsage) ProtoMessage() {}
+
+func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourceUsage.ProtoReflect.Descriptor instead.
+func (*ResourceUsage) Descriptor() ([]byte, []int) {
+	return file_engine_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ResourceUsage) GetCpuCoresTotal() uint64 {
+	if x != nil {
+		return x.CpuCoresTotal
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetCpuCoresUsed() uint64 {
+	if x != nil {
+		return x.CpuCoresUsed
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetMemoryBytesTotal() uint64 {
+	if x != nil {
+		return x.MemoryBytesTotal
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetMemoryBytesUsed() uint64 {
+	if x != nil {
+		return x.MemoryBytesUsed
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetVramBytesTotal() uint64 {
+	if x != nil {
+		return x.VramBytesTotal
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetVramBytesUsed() uint64 {
+	if x != nil {
+		return x.VramBytesUsed
+	}
+	return 0
+}
+
 var File_engine_proto protoreflect.FileDescriptor
 
 const file_engine_proto_rawDesc = "" +
 	"\n" +
 	"\fengine.proto\x12\x15onescluster.engine.v1\"\x15\n" +
-	"\x13GetResourcesRequest\"\x80\x01\n" +
+	"\x13GetResourcesRequest\"\x18\n" +
+	"\x16GetSystemStatusRequest\"\xb3\x01\n" +
 	"\rDeployRequest\x12\x1d\n" +
 	"\n" +
-	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12\x1b\n" +
-	"\tadep_json\x18\x02 \x01(\fR\badepJson\x12\x1b\n" +
+	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12\x1d\n" +
+	"\tadep_json\x18\x02 \x01(\fH\x00R\badepJson\x12#\n" +
+	"\ftoml_content\x18\x05 \x01(\tH\x00R\vtomlContent\x12\x1b\n" +
 	"\toci_image\x18\x03 \x01(\tR\bociImage\x12\x16\n" +
-	"\x06digest\x18\x04 \x01(\tR\x06digest\"G\n" +
+	"\x06digest\x18\x04 \x01(\tR\x06digestB\n" +
+	"\n" +
+	"\bmanifest\"d\n" +
 	"\x0eDeployResponse\x12\x1d\n" +
 	"\n" +
 	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\",\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
+	"\tlocal_url\x18\x03 \x01(\tR\blocalUrl\",\n" +
 	"\vStopRequest\x12\x1d\n" +
 	"\n" +
 	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\"E\n" +
 	"\fStopResponse\x12\x1d\n" +
 	"\n" +
 	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\"m\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xc8\x02\n" +
 	"\fResourceInfo\x12\x1b\n" +
 	"\tcpu_cores\x18\x01 \x01(\x04R\bcpuCores\x12!\n" +
 	"\fmemory_bytes\x18\x02 \x01(\x04R\vmemoryBytes\x12\x1d\n" +
 	"\n" +
-	"disk_bytes\x18\x03 \x01(\x04R\tdiskBytes\".\n" +
+	"disk_bytes\x18\x03 \x01(\x04R\tdiskBytes\x12!\n" +
+	"\fbackend_mode\x18\x04 \x01(\tR\vbackendMode\x12\x15\n" +
+	"\x06vpn_ip\x18\x05 \x01(\tR\x05vpnIp\x12]\n" +
+	"\x0elocal_services\x18\x06 \x03(\v26.onescluster.engine.v1.ResourceInfo.LocalServicesEntryR\rlocalServices\x1a@\n" +
+	"\x12LocalServicesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\".\n" +
 	"\x0fValidateRequest\x12\x1b\n" +
 	"\tadep_json\x18\x01 \x01(\fR\badepJson\"M\n" +
 	"\x10ValidationResult\x12\x14\n" +
 	"\x05valid\x18\x01 \x01(\bR\x05valid\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage2\x84\x03\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"\xcc\x01\n" +
+	"\fSystemStatus\x12!\n" +
+	"\fbackend_mode\x18\x01 \x01(\tR\vbackendMode\x12\x15\n" +
+	"\x06vpn_ip\x18\x02 \x01(\tR\x05vpnIp\x12>\n" +
+	"\bcapsules\x18\x03 \x03(\v2\".onescluster.engine.v1.CapsuleInfoR\bcapsules\x12B\n" +
+	"\tresources\x18\x04 \x01(\v2$.onescluster.engine.v1.ResourceUsageR\tresources\"\x96\x01\n" +
+	"\vCapsuleInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1b\n" +
+	"\tlocal_url\x18\x04 \x01(\tR\blocalUrl\x12.\n" +
+	"\x13reserved_vram_bytes\x18\x05 \x01(\x04R\x11reservedVramBytes\"\x89\x02\n" +
+	"\rResourceUsage\x12&\n" +
+	"\x0fcpu_cores_total\x18\x01 \x01(\x04R\rcpuCoresTotal\x12$\n" +
+	"\x0ecpu_cores_used\x18\x02 \x01(\x04R\fcpuCoresUsed\x12,\n" +
+	"\x12memory_bytes_total\x18\x03 \x01(\x04R\x10memoryBytesTotal\x12*\n" +
+	"\x11memory_bytes_used\x18\x04 \x01(\x04R\x0fmemoryBytesUsed\x12(\n" +
+	"\x10vram_bytes_total\x18\x05 \x01(\x04R\x0evramBytesTotal\x12&\n" +
+	"\x0fvram_bytes_used\x18\x06 \x01(\x04R\rvramBytesUsed2\xeb\x03\n" +
 	"\x06Engine\x12\\\n" +
 	"\rDeployCapsule\x12$.onescluster.engine.v1.DeployRequest\x1a%.onescluster.engine.v1.DeployResponse\x12V\n" +
 	"\vStopCapsule\x12\".onescluster.engine.v1.StopRequest\x1a#.onescluster.engine.v1.StopResponse\x12_\n" +
 	"\fGetResources\x12*.onescluster.engine.v1.GetResourcesRequest\x1a#.onescluster.engine.v1.ResourceInfo\x12c\n" +
-	"\x10ValidateManifest\x12&.onescluster.engine.v1.ValidateRequest\x1a'.onescluster.engine.v1.ValidationResultB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
+	"\x10ValidateManifest\x12&.onescluster.engine.v1.ValidateRequest\x1a'.onescluster.engine.v1.ValidationResult\x12e\n" +
+	"\x0fGetSystemStatus\x12-.onescluster.engine.v1.GetSystemStatusRequest\x1a#.onescluster.engine.v1.SystemStatusB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
 
 var (
 	file_engine_proto_rawDescOnce sync.Once
@@ -480,31 +844,41 @@ func file_engine_proto_rawDescGZIP() []byte {
 	return file_engine_proto_rawDescData
 }
 
-var file_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_engine_proto_goTypes = []any{
-	(*GetResourcesRequest)(nil), // 0: onescluster.engine.v1.GetResourcesRequest
-	(*DeployRequest)(nil),       // 1: onescluster.engine.v1.DeployRequest
-	(*DeployResponse)(nil),      // 2: onescluster.engine.v1.DeployResponse
-	(*StopRequest)(nil),         // 3: onescluster.engine.v1.StopRequest
-	(*StopResponse)(nil),        // 4: onescluster.engine.v1.StopResponse
-	(*ResourceInfo)(nil),        // 5: onescluster.engine.v1.ResourceInfo
-	(*ValidateRequest)(nil),     // 6: onescluster.engine.v1.ValidateRequest
-	(*ValidationResult)(nil),    // 7: onescluster.engine.v1.ValidationResult
+	(*GetResourcesRequest)(nil),    // 0: onescluster.engine.v1.GetResourcesRequest
+	(*GetSystemStatusRequest)(nil), // 1: onescluster.engine.v1.GetSystemStatusRequest
+	(*DeployRequest)(nil),          // 2: onescluster.engine.v1.DeployRequest
+	(*DeployResponse)(nil),         // 3: onescluster.engine.v1.DeployResponse
+	(*StopRequest)(nil),            // 4: onescluster.engine.v1.StopRequest
+	(*StopResponse)(nil),           // 5: onescluster.engine.v1.StopResponse
+	(*ResourceInfo)(nil),           // 6: onescluster.engine.v1.ResourceInfo
+	(*ValidateRequest)(nil),        // 7: onescluster.engine.v1.ValidateRequest
+	(*ValidationResult)(nil),       // 8: onescluster.engine.v1.ValidationResult
+	(*SystemStatus)(nil),           // 9: onescluster.engine.v1.SystemStatus
+	(*CapsuleInfo)(nil),            // 10: onescluster.engine.v1.CapsuleInfo
+	(*ResourceUsage)(nil),          // 11: onescluster.engine.v1.ResourceUsage
+	nil,                            // 12: onescluster.engine.v1.ResourceInfo.LocalServicesEntry
 }
 var file_engine_proto_depIdxs = []int32{
-	1, // 0: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
-	3, // 1: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
-	0, // 2: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
-	6, // 3: onescluster.engine.v1.Engine.ValidateManifest:input_type -> onescluster.engine.v1.ValidateRequest
-	2, // 4: onescluster.engine.v1.Engine.DeployCapsule:output_type -> onescluster.engine.v1.DeployResponse
-	4, // 5: onescluster.engine.v1.Engine.StopCapsule:output_type -> onescluster.engine.v1.StopResponse
-	5, // 6: onescluster.engine.v1.Engine.GetResources:output_type -> onescluster.engine.v1.ResourceInfo
-	7, // 7: onescluster.engine.v1.Engine.ValidateManifest:output_type -> onescluster.engine.v1.ValidationResult
-	4, // [4:8] is the sub-list for method output_type
-	0, // [0:4] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	12, // 0: onescluster.engine.v1.ResourceInfo.local_services:type_name -> onescluster.engine.v1.ResourceInfo.LocalServicesEntry
+	10, // 1: onescluster.engine.v1.SystemStatus.capsules:type_name -> onescluster.engine.v1.CapsuleInfo
+	11, // 2: onescluster.engine.v1.SystemStatus.resources:type_name -> onescluster.engine.v1.ResourceUsage
+	2,  // 3: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
+	4,  // 4: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
+	0,  // 5: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
+	7,  // 6: onescluster.engine.v1.Engine.ValidateManifest:input_type -> onescluster.engine.v1.ValidateRequest
+	1,  // 7: onescluster.engine.v1.Engine.GetSystemStatus:input_type -> onescluster.engine.v1.GetSystemStatusRequest
+	3,  // 8: onescluster.engine.v1.Engine.DeployCapsule:output_type -> onescluster.engine.v1.DeployResponse
+	5,  // 9: onescluster.engine.v1.Engine.StopCapsule:output_type -> onescluster.engine.v1.StopResponse
+	6,  // 10: onescluster.engine.v1.Engine.GetResources:output_type -> onescluster.engine.v1.ResourceInfo
+	8,  // 11: onescluster.engine.v1.Engine.ValidateManifest:output_type -> onescluster.engine.v1.ValidationResult
+	9,  // 12: onescluster.engine.v1.Engine.GetSystemStatus:output_type -> onescluster.engine.v1.SystemStatus
+	8,  // [8:13] is the sub-list for method output_type
+	3,  // [3:8] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_engine_proto_init() }
@@ -512,13 +886,17 @@ func file_engine_proto_init() {
 	if File_engine_proto != nil {
 		return
 	}
+	file_engine_proto_msgTypes[2].OneofWrappers = []any{
+		(*DeployRequest_AdepJson)(nil),
+		(*DeployRequest_TomlContent)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_engine_proto_rawDesc), len(file_engine_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

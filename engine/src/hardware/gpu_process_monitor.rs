@@ -110,5 +110,5 @@ pub fn create_gpu_process_monitor() -> Arc<dyn GpuProcessMonitor> {
     }
 
     tracing::info!("Using mock GPU process monitor");
-    Arc::new(MockGpuProcessMonitor::default())
+    Arc::new(MockGpuProcessMonitor)
 }

@@ -1,15 +1,16 @@
 use crate::adep::{AdepVolume, ComputeConfig};
+use crate::security;
 use oci_spec::runtime::{
     HookBuilder, HooksBuilder, Linux, LinuxBuilder, LinuxNamespaceBuilder, LinuxNamespaceType,
     Mount, MountBuilder, ProcessBuilder, RootBuilder, Spec, SpecBuilder,
 };
 use std::path::{Path, PathBuf};
-use crate::security;
 
 /// Validate volume mounts for security
 fn validate_mounts(volumes: &[AdepVolume], allowed_paths: &[String]) -> Result<(), String> {
     for vol in volumes {
-        security::validate_path(&vol.source, allowed_paths).map_err(|e| format!("Volume source error: {}", e))?;
+        security::validate_path(&vol.source, allowed_paths)
+            .map_err(|e| format!("Volume source error: {}", e))?;
     }
     Ok(())
 }
@@ -43,12 +44,15 @@ fn validate_mounts(volumes: &[AdepVolume], allowed_paths: &[String]) -> Result<(
 /// [11] OCI Runtime Specification: https://github.com/opencontainers/runtime-spec
 /// [22] NVIDIA Container Toolkit: https://github.com/NVIDIA/nvidia-container-toolkit
 /// [23] OCI Hooks: https://github.com/opencontainers/runtime-spec/blob/main/config.md#posix-platform-hooks
+use crate::workload::manifest_loader::ResourceRequirements;
+
 pub fn build_oci_spec(
     rootfs_path: &Path,
     compute: &ComputeConfig,
     volumes: &[AdepVolume],
     gpu_uuids: Option<&[String]>,
     allowed_host_paths: &[String],
+    resources: Option<&ResourceRequirements>,
 ) -> Result<Spec, String> {
     // --- 1. Build Process Configuration ---
     let mut process_envs = compute.env.clone();
@@ -107,7 +111,7 @@ pub fn build_oci_spec(
     for vol in volumes {
         if vol.r#type == "bind" {
             let mut mount_options = vec!["rbind".to_string()];
-            
+
             // SECURITY: Strictly enforce read-only for model volumes
             // The user requirement is "read-only" volume mounting for models.
             // We enforce this regardless of what the manifest says if it's a model volume,
@@ -118,7 +122,7 @@ pub fn build_oci_spec(
             // However, to meet the "Strict ReadOnly" requirement from the prompt:
             // "OciSpecBuilder の実装時に、マウントオプションとして必ず ro (または rprivate) を注入することを要件に含めてください。"
             // This implies we should force `ro` for these volumes.
-            
+
             // Let's force `ro` if it's in the allowed model paths, or just respect the flag but ensure `ro` is present if requested.
             // The prompt says: "Ensure ro is always applied for these volumes."
             // Given the context of "Model Volume Mounting", we should probably force `ro` for safety.
@@ -144,7 +148,72 @@ pub fn build_oci_spec(
         .map_err(|e| format!("Failed to build root config: {}", e))?;
 
     // --- 5. Build Linux-specific Configuration ---
-    let linux = build_default_linux();
+    let mut linux = build_default_linux();
+
+    // Apply resource constraints where present
+    if let Some(res) = resources {
+        // Memory limit
+        if let Some(memory_bytes) = res.memory_bytes {
+            // Set memory limit on Linux resources cgroups
+            // Attempt to use oci-spec Linux resource helpers
+            use oci_spec::runtime::LinuxResources;
+            use serde_json::json;
+
+            // Build a minimal LinuxResources object with memory limit via serde
+            // because LinuxMemory builder isn't exported consistently across
+            // oci-spec versions. This serializes to an intermediate JSON value
+            // and then deserializes into the strongly-typed struct.
+            let lr_value = json!({ "memory": { "limit": memory_bytes as i64 } });
+            let lr: LinuxResources = serde_json::from_value(lr_value)
+                .map_err(|e| format!("Failed to build LinuxResources: {}", e))?;
+            linux = LinuxBuilder::default()
+                .resources(lr)
+                .build()
+                .map_err(|e| format!("Failed to set Linux resources: {}", e))?;
+        }
+
+        // CPU: translate cpu_cores -> cpu_quota (approximate, CFS period = 100_000)
+        if let Some(cpu) = res.cpu_cores {
+            // Use 100_000 microsecond period as standard
+            let period: u64 = 100_000;
+            let quota = (cpu as i64) * (period as i64);
+            use oci_spec::runtime::{LinuxCpuBuilder, LinuxResources, LinuxResourcesBuilder};
+            use serde_json::json;
+            let cpu_cfg = LinuxCpuBuilder::default()
+                .period(period)
+                .quota(quota)
+                .build()
+                .map_err(|e| format!("Failed to build Linux CPU config: {}", e))?;
+
+            // Reuse or create resources builder to set CPU
+            // Chain the builder to construct resource constraints
+            let lr = if let Some(memory_bytes) = res.memory_bytes {
+                let lr_value = json!({ "memory": { "limit": memory_bytes as i64 } });
+                let mem_lr: LinuxResources = serde_json::from_value(lr_value)
+                    .map_err(|e| format!("Failed to build LinuxResources: {}", e))?;
+                let mem_cfg = mem_lr.memory().map(|m| m);
+
+                let rb = LinuxResourcesBuilder::default().cpu(cpu_cfg);
+                let rb = if let Some(mem_cfg) = mem_cfg {
+                    rb.memory(mem_cfg)
+                } else {
+                    rb
+                };
+                rb.build()
+                    .map_err(|e| format!("Failed to build LinuxResources: {}", e))?
+            } else {
+                LinuxResourcesBuilder::default()
+                    .cpu(cpu_cfg)
+                    .build()
+                    .map_err(|e| format!("Failed to build LinuxResources: {}", e))?
+            };
+
+            linux = LinuxBuilder::default()
+                .resources(lr)
+                .build()
+                .map_err(|e| format!("Failed to set Linux resources: {}", e))?;
+        }
+    }
 
     // --- 6. Assemble Final Spec ---
     let mut spec_builder = SpecBuilder::default()
@@ -281,7 +350,16 @@ mod tests {
         };
         let volumes = vec![];
 
-        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, None).unwrap();
+        let allowed_paths = vec![];
+        let spec = build_oci_spec(
+            Path::new("/tmp/rootfs"),
+            &compute,
+            &volumes,
+            None,
+            &allowed_paths,
+            None,
+        )
+        .unwrap();
 
         // 1. Verify hooks are NOT injected for CPU-only workload
         assert!(
@@ -304,6 +382,43 @@ mod tests {
         assert!(spec.process().is_some());
         assert!(spec.mounts().is_some());
         assert!(spec.linux().is_some());
+        assert!(spec.linux().is_some());
+    }
+
+    #[test]
+    fn test_spec_builder_explicit_empty_gpu_list() {
+        let compute = ComputeConfig {
+            image: "hello-world".to_string(),
+            args: vec!["/hello".to_string()],
+            env: vec!["MY_VAR=test".to_string()],
+        };
+        let volumes = vec![];
+        let empty_gpus: Vec<String> = vec![];
+
+        let allowed_paths = vec![];
+        // Pass Some(&[]) instead of None
+        let spec = build_oci_spec(
+            Path::new("/tmp/rootfs"),
+            &compute,
+            &volumes,
+            Some(&empty_gpus),
+            &allowed_paths,
+            None,
+        )
+        .unwrap();
+
+        // Verify hooks are NOT injected
+        assert!(
+            spec.hooks().is_none() || spec.hooks().as_ref().unwrap().prestart().is_none(),
+            "Workload with empty GPU list should not have prestart hooks"
+        );
+
+        // Verify NVIDIA env vars are NOT injected
+        let envs = spec.process().as_ref().unwrap().env().as_ref().unwrap();
+        assert!(
+            !envs.iter().any(|e| e.starts_with("NVIDIA_")),
+            "Workload with empty GPU list should not have NVIDIA env vars"
+        );
     }
 
     #[test]
@@ -315,8 +430,17 @@ mod tests {
         };
         let volumes = vec![];
 
+        let allowed_paths = vec![];
         let gpu_uuids = vec!["GPU-1234".to_string(), "GPU-5678".to_string()];
-        let spec = build_oci_spec(Path::new("/tmp/rootfs"), &compute, &volumes, Some(&gpu_uuids)).unwrap();
+        let spec = build_oci_spec(
+            Path::new("/tmp/rootfs"),
+            &compute,
+            &volumes,
+            Some(&gpu_uuids),
+            &allowed_paths,
+            None,
+        )
+        .unwrap();
 
         // 1. Verify NVIDIA prestart hook is injected
         let hooks = spec
@@ -337,7 +461,8 @@ mod tests {
         // 2. Verify NVIDIA environment variables are injected
         let envs = spec.process().as_ref().unwrap().env().as_ref().unwrap();
         assert!(
-            envs.iter().any(|e| e == "NVIDIA_VISIBLE_DEVICES=GPU-1234,GPU-5678"),
+            envs.iter()
+                .any(|e| e == "NVIDIA_VISIBLE_DEVICES=GPU-1234,GPU-5678"),
             "GPU workload should have NVIDIA_VISIBLE_DEVICES with UUIDs"
         );
         assert!(
@@ -360,14 +485,14 @@ mod tests {
             env: vec![],
         };
         let volumes = vec![AdepVolume {
-            volume_type: "bind".into(),
+            r#type: "bind".into(),
             source: "/opt/models/llama3".into(),
             destination: "/model".into(),
             readonly: false, // Should be overridden to true
         }];
         let allowed_paths = vec!["/opt/models".to_string()];
 
-        let spec = build_oci_spec(&rootfs, &compute, &volumes, None, &allowed_paths).unwrap();
+        let spec = build_oci_spec(&rootfs, &compute, &volumes, None, &allowed_paths, None).unwrap();
         let mounts = spec.mounts().as_ref().unwrap();
 
         // Check if our volume is present
@@ -376,12 +501,18 @@ mod tests {
             .find(|m| m.destination().to_string_lossy() == "/model")
             .expect("Volume mount not found");
 
-        assert_eq!(model_mount.source().as_ref().unwrap().to_string_lossy(), "/opt/models/llama3");
+        assert_eq!(
+            model_mount.source().as_ref().unwrap().to_string_lossy(),
+            "/opt/models/llama3"
+        );
         assert_eq!(model_mount.typ().as_ref().unwrap(), "bind");
-        
+
         // Verify strict read-only enforcement
         let options = model_mount.options().as_ref().unwrap();
-        assert!(options.contains(&"ro".to_string()), "Bind mount must be read-only");
+        assert!(
+            options.contains(&"ro".to_string()),
+            "Bind mount must be read-only"
+        );
     }
 
     #[test]
@@ -390,7 +521,7 @@ mod tests {
 
         // 1. Path Traversal
         let vol_traversal = AdepVolume {
-            volume_type: "bind".into(),
+            r#type: "bind".into(),
             source: "/opt/models/../etc/passwd".into(),
             destination: "/model".into(),
             readonly: true,
@@ -399,7 +530,7 @@ mod tests {
 
         // 2. Allowlist Violation
         let vol_violation = AdepVolume {
-            volume_type: "bind".into(),
+            r#type: "bind".into(),
             source: "/etc/shadow".into(),
             destination: "/model".into(),
             readonly: true,
@@ -408,7 +539,7 @@ mod tests {
 
         // 3. Relative Path
         let vol_relative = AdepVolume {
-            volume_type: "bind".into(),
+            r#type: "bind".into(),
             source: "relative/path".into(),
             destination: "/model".into(),
             readonly: true,

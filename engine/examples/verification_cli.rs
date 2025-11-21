@@ -13,7 +13,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let request = tonic::Request::new(FetchModelRequest {
         url: "https://raw.githubusercontent.com/google/go-cmp/master/README.md".to_string(),
         destination: "/tmp/models/llama3/README.md".to_string(),
-
     });
 
     let response = client.fetch_model(request).await?;

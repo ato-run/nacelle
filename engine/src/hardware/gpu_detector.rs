@@ -25,10 +25,14 @@ pub trait GpuDetector: Send + Sync {
     fn detect_gpus(&self) -> Result<RigHardwareReport, GpuDetectionError>;
 
     /// Check if detector is available (e.g., NVML library loaded)
+    /// Check if detector is available (e.g., NVML library loaded)
     fn is_available(&self) -> bool;
 
     /// Get detector name (for logging/debugging)
     fn name(&self) -> &str;
+
+    /// Get available VRAM in bytes for a specific GPU index
+    fn get_available_vram_bytes(&self, index: usize) -> Result<u64, GpuDetectionError>;
 }
 
 /// Mock GPU detector for development without actual GPU hardware
@@ -51,7 +55,8 @@ impl MockGpuDetector {
             .and_then(|s| s.parse().ok())
             .unwrap_or(1);
 
-        let vram_gb = std::env::var("MOCK_VRAM_GB")
+        let vram_gb = std::env::var("CAPSULED_MOCK_VRAM_GB")
+            .or_else(|_| std::env::var("MOCK_VRAM_GB"))
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(8);
@@ -114,6 +119,19 @@ impl GpuDetector for MockGpuDetector {
 
     fn name(&self) -> &str {
         "MockGpuDetector"
+    }
+
+    fn get_available_vram_bytes(&self, index: usize) -> Result<u64, GpuDetectionError> {
+        if index as u32 >= self.gpu_count {
+            return Err(GpuDetectionError::GpuQueryFailed {
+                index: index as u32,
+                message: "GPU index out of bounds".to_string(),
+            });
+        }
+        // Return configured VRAM size (converted to bytes)
+        // In a more advanced mock, we could track usage, but for now assume full availability
+        // or use a separate env var for "available" memory if needed for testing.
+        Ok(self.vram_gb * 1_073_741_824)
     }
 }
 
@@ -221,17 +239,87 @@ impl GpuDetector for NvmlGpuDetector {
     fn name(&self) -> &str {
         "NvmlGpuDetector"
     }
+
+    fn get_available_vram_bytes(&self, index: usize) -> Result<u64, GpuDetectionError> {
+        let device = self
+            .nvml
+            .device_by_index(index as u32)
+            .map_err(|e| GpuDetectionError::GpuQueryFailed {
+                index: index as u32,
+                message: e.to_string(),
+            })?;
+
+        let memory_info = device
+            .memory_info()
+            .map_err(|e| GpuDetectionError::GpuQueryFailed {
+                index: index as u32,
+                message: e.to_string(),
+            })?;
+
+        Ok(memory_info.free)
+    }
+}
+
+/// CPU-only detector for environments without GPUs (e.g., MacBook, non-GPU servers)
+///
+/// This detector always reports 0 GPUs.
+#[derive(Debug, Default)]
+pub struct CpuGpuDetector;
+
+impl CpuGpuDetector {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl GpuDetector for CpuGpuDetector {
+    fn detect_gpus(&self) -> Result<RigHardwareReport, GpuDetectionError> {
+        let rig_id = hostname::get()
+            .ok()
+            .and_then(|h| h.into_string().ok())
+            .unwrap_or_else(|| "cpu-only-rig".to_string());
+
+        let mut report = RigHardwareReport::new(rig_id);
+        report.is_mock = false; // It's a real "no-GPU" state, not a mock with fake GPUs
+
+        // No GPUs to add
+
+        Ok(report)
+    }
+
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn name(&self) -> &str {
+        "CpuGpuDetector"
+    }
+
+    fn get_available_vram_bytes(&self, index: usize) -> Result<u64, GpuDetectionError> {
+        Err(GpuDetectionError::GpuQueryFailed {
+            index: index as u32,
+            message: "No GPUs available in CPU-only mode".to_string(),
+        })
+    }
 }
 
 /// Factory function to create the appropriate GPU detector
 ///
 /// With `real-gpu` feature:
 /// - Try NVML detector first
-/// - Fallback to mock detector if NVML init fails
+/// - Fallback to CPU detector if NVML init fails (Graceful Degradation)
+/// - Use Mock detector ONLY if explicitly requested via env var `CAPSULED_USE_MOCK_GPU=1`
 ///
 /// Without `real-gpu` feature:
-/// - Always use mock detector
+/// - Default to CPU detector (for MacBook/Dev)
+/// - Use Mock detector ONLY if explicitly requested via env var `CAPSULED_USE_MOCK_GPU=1`
 pub fn create_gpu_detector() -> Arc<dyn GpuDetector> {
+    // Check if Mock is explicitly requested or implied by VRAM config
+    if std::env::var("CAPSULED_USE_MOCK_GPU").is_ok() || std::env::var("CAPSULED_MOCK_VRAM_GB").is_ok() {
+        tracing::info!("Using mock GPU detector (requested via env var)");
+        return Arc::new(MockGpuDetector::new());
+    }
+
     #[cfg(feature = "real-gpu")]
     {
         match NvmlGpuDetector::new() {
@@ -240,16 +328,16 @@ pub fn create_gpu_detector() -> Arc<dyn GpuDetector> {
                 Arc::new(detector)
             }
             Err(e) => {
-                tracing::warn!("NVML init failed ({}), falling back to mock detector", e);
-                Arc::new(MockGpuDetector::new())
+                tracing::warn!("NVML init failed ({}), falling back to CPU-only mode", e);
+                Arc::new(CpuGpuDetector::new())
             }
         }
     }
 
     #[cfg(not(feature = "real-gpu"))]
     {
-        tracing::info!("Using mock GPU detector (real-gpu feature not enabled)");
-        Arc::new(MockGpuDetector::new())
+        tracing::info!("Using CPU-only detector (real-gpu feature not enabled)");
+        Arc::new(CpuGpuDetector::new())
     }
 }
 

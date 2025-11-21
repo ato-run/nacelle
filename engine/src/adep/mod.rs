@@ -89,12 +89,28 @@ pub struct SchedulingConfig {
 
     #[serde(default)]
     pub strategy: Option<String>,
+
+    #[serde(default)]
+    pub cloud: Option<CloudConstraints>,
+}
+
+/// Cloud bursting constraints
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
+pub struct CloudConstraints {
+    /// Cloud accelerator type (e.g., "L4:1")
+    pub accelerators: Option<String>,
+    /// Preferred cloud region (e.g., "us-east")
+    pub region: Option<String>,
+    /// List of allowed cloud providers (e.g., ["runpod", "aws"])
+    pub allowed_clouds: Option<Vec<String>>,
 }
 
 /// GPU resource constraints for scheduling
 ///
 /// These constraints map directly to the Coordinator's `GpuConstraints` type (Week 2).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub struct GpuConstraints {
     /// Minimum required VRAM in gigabytes (0 = CPU-only workload)
     #[serde(default)]
@@ -106,14 +122,6 @@ pub struct GpuConstraints {
     pub cuda_version_min: Option<String>,
 }
 
-impl Default for GpuConstraints {
-    fn default() -> Self {
-        Self {
-            vram_min_gb: 0,
-            cuda_version_min: None,
-        }
-    }
-}
 
 /// Container compute configuration
 ///

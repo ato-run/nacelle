@@ -4,26 +4,55 @@ use tracing::{error, info, warn};
 
 use crate::capsule_manager::CapsuleManager;
 use crate::coordinator_service::AgentService;
+use crate::hardware::GpuDetector;
+use crate::oci;
 use crate::proto::onescluster::coordinator::v1::agent_service_server::AgentServiceServer;
 use crate::proto::onescluster::engine::v1::{
+    deploy_request::Manifest as DeployManifest,
     engine_server::{Engine, EngineServer},
-    DeployRequest, DeployResponse, GetResourcesRequest, ResourceInfo, StopRequest, StopResponse,
-    ValidateRequest, ValidationResult,
+    CapsuleInfo, DeployRequest, DeployResponse, GetResourcesRequest, GetSystemStatusRequest,
+    ResourceInfo, ResourceUsage, StopRequest, StopResponse, SystemStatus, ValidateRequest,
+    ValidationResult,
 };
 use crate::runtime::ContainerRuntime;
 use crate::wasm_host::AdepLogicHost;
+use crate::workload;
 
 /// EngineService implements the Engine gRPC service
+use crate::network::service_registry::ServiceRegistry;
+use crate::network::tailscale::TailscaleManager;
+
 pub struct EngineService {
     capsule_manager: Arc<CapsuleManager>,
     wasm_host: Arc<AdepLogicHost>,
+    backend_mode: String,
+    tailscale_manager: Arc<TailscaleManager>,
+    service_registry: Arc<ServiceRegistry>,
+    runtime: Arc<ContainerRuntime>,
+    allowed_host_paths: Vec<String>,
+    gpu_detector: Arc<dyn GpuDetector>,
 }
 
 impl EngineService {
-    pub fn new(capsule_manager: Arc<CapsuleManager>, wasm_host: Arc<AdepLogicHost>) -> Self {
+    pub fn new(
+        capsule_manager: Arc<CapsuleManager>,
+        wasm_host: Arc<AdepLogicHost>,
+        backend_mode: String,
+        tailscale_manager: Arc<TailscaleManager>,
+        service_registry: Arc<ServiceRegistry>,
+        runtime: Arc<ContainerRuntime>,
+        allowed_host_paths: Vec<String>,
+        gpu_detector: Arc<dyn GpuDetector>,
+    ) -> Self {
         Self {
             capsule_manager,
             wasm_host,
+            backend_mode,
+            tailscale_manager,
+            service_registry,
+            runtime,
+            allowed_host_paths,
+            gpu_detector,
         }
     }
 }
@@ -36,43 +65,80 @@ impl Engine for EngineService {
         request: Request<DeployRequest>,
     ) -> Result<Response<DeployResponse>, Status> {
         let req = request.into_inner();
-        info!(
-            "DeployCapsule request: capsule_id={}, oci_image={}",
-            req.capsule_id, req.oci_image
-        );
+        info!("DeployCapsule request: capsule_id={}", req.capsule_id);
 
-        // Validate manifest first
-        let adep_json_str = String::from_utf8(req.adep_json.clone())
-            .map_err(|e| Status::invalid_argument(format!("Invalid UTF-8 in adep_json: {}", e)))?;
+        // Parse manifest (TOML or JSON)
+        let manifest_bytes = match req.manifest {
+            Some(DeployManifest::TomlContent(toml_str)) => {
+                info!("  Parsing TOML manifest");
+                // Convert TOML to JSON for CapsuleManager
+                let (manifest, _) = workload::manifest_loader::load_manifest_str(None, &toml_str)
+                    .map_err(|e| Status::invalid_argument(format!("Failed to parse TOML: {}", e)))?;
+                
+                serde_json::to_vec(&manifest)
+                    .map_err(|e| Status::internal(format!("Failed to serialize manifest: {}", e)))?
+            }
+            Some(DeployManifest::AdepJson(json_bytes)) => {
+                info!("  Using JSON manifest");
+                json_bytes
+            }
+            None => {
+                return Err(Status::invalid_argument(
+                    "manifest is required (either toml_content or adep_json)",
+                ));
+            }
+        };
 
-        if let Err(e) = self.wasm_host.validate_manifest(&adep_json_str) {
-            warn!("Manifest validation failed for {}: {}", req.capsule_id, e);
-            return Err(Status::invalid_argument(format!(
-                "Manifest validation failed: {}",
-                e
-            )));
-        }
+        info!("  Delegating to CapsuleManager (Cloud Bursting Logic)...");
 
-        // Deploy the capsule
-        match self
-            .capsule_manager
+        // Delegate to CapsuleManager - this will handle:
+        // 1. VRAM checking
+        // 2. Local vs Cloud decision
+        // 3. Cloud bursting if needed
+        match self.capsule_manager
             .deploy_capsule(
                 req.capsule_id.clone(),
-                req.adep_json,
-                req.oci_image,
-                req.digest,
+                manifest_bytes,
+                req.oci_image.clone(),
+                req.digest.clone(),
             )
             .await
         {
-            Ok(status) => {
-                info!("Capsule {} deployed successfully", req.capsule_id);
-                Ok(Response::new(DeployResponse {
-                    capsule_id: req.capsule_id,
-                    status,
-                }))
+            Ok(result) => {
+                // Result can be:
+                // - "running" (local deployment)
+                // - "cloud-job-123" or similar (cloud deployment)
+                
+                if result.starts_with("job-") || result.starts_with("cloud") || result.starts_with("sky") {
+                    // Cloud deployment
+                    info!("☁️ Cloud deployment initiated: {}", result);
+                    Ok(Response::new(DeployResponse {
+                        capsule_id: req.capsule_id,
+                        status: result.clone(),
+                        local_url: format!("cloud:{}", result),
+                    }))
+                } else {
+                    // Local deployment
+                    info!("💻 Local deployment successful");
+                    
+                    // Get local URL from ServiceRegistry
+                    let local_url = self
+                        .service_registry
+                        .get_services()
+                        .iter()
+                        .find(|s| s.name == req.capsule_id)
+                        .map(|s| format!("http://localhost:{}", s.port))
+                        .unwrap_or_else(|| format!("http://localhost", ));
+
+                    Ok(Response::new(DeployResponse {
+                        capsule_id: req.capsule_id,
+                        status: result,
+                        local_url,
+                    }))
+                }
             }
             Err(e) => {
-                error!("Failed to deploy capsule {}: {}", req.capsule_id, e);
+                error!("Deployment failed: {}", e);
                 Err(Status::internal(format!("Deployment failed: {}", e)))
             }
         }
@@ -110,11 +176,15 @@ impl Engine for EngineService {
 
         // TODO: Get actual system resources
         // For now, return mock data
-        let resources = get_system_resources();
+        let mut resources = get_system_resources();
+        resources.backend_mode = self.backend_mode.clone();
 
         info!(
-            "Resources: cpu_cores={}, memory_bytes={}, disk_bytes={}",
-            resources.cpu_cores, resources.memory_bytes, resources.disk_bytes
+            "Resources: cpu_cores={}, memory_bytes={}, disk_bytes={}, backend_mode={}",
+            resources.cpu_cores,
+            resources.memory_bytes,
+            resources.disk_bytes,
+            resources.backend_mode
         );
 
         Ok(Response::new(resources))
@@ -148,6 +218,80 @@ impl Engine for EngineService {
             }
         }
     }
+
+    /// Get system status including capsules and resources
+    async fn get_system_status(
+        &self,
+        _request: Request<GetSystemStatusRequest>,
+    ) -> Result<Response<SystemStatus>, Status> {
+        info!("GetSystemStatus request");
+
+        // Get VPN IP
+        let vpn_ip = self.tailscale_manager.get_vpn_ip().unwrap_or_default();
+
+        // Get capsule list
+        let capsules = match self.capsule_manager.list_capsules() {
+            Ok(caps) => caps
+                .into_iter()
+                .map(|c| {
+                    let local_url = self
+                        .service_registry
+                        .get_services()
+                        .iter()
+                        .find(|s| s.name == c.id)
+                        .map(|s| format!("http://{}.local:{}", c.id, s.port))
+                        .unwrap_or_default();
+
+                    CapsuleInfo {
+                        id: c.id.clone(),
+                        name: c.id,
+                        status: c.status.to_string(),
+                        local_url,
+                        reserved_vram_bytes: c.reserved_vram_bytes,
+                    }
+                })
+                .collect(),
+            Err(e) => {
+                warn!("Failed to list capsules: {}", e);
+                vec![]
+            }
+        };
+
+        // Get resource usage
+        let hardware_report = self.gpu_detector.detect_gpus().unwrap_or_else(|_| {
+            crate::hardware::RigHardwareReport {
+                rig_id: "unknown".to_string(),
+                gpus: vec![],
+                system_cuda_version: None,
+                system_driver_version: None,
+                is_mock: false,
+            }
+        });
+
+        let cpu_cores_total = num_cpus::get() as u64;
+        let system_resources = get_system_resources();
+        let memory_bytes_total = system_resources.memory_bytes;
+        let vram_bytes_total = (hardware_report.total_vram_gb() * 1024.0 * 1024.0 * 1024.0) as u64;
+
+        // Calculate used resources (simplified - just sum of reserved)
+        let vram_bytes_used: u64 = capsules.iter().map(|c| c.reserved_vram_bytes).sum();
+
+        let resources = ResourceUsage {
+            cpu_cores_total,
+            cpu_cores_used: capsules.len() as u64, // Simplified
+            memory_bytes_total,
+            memory_bytes_used: 0, // TODO: Calculate actual usage
+            vram_bytes_total,
+            vram_bytes_used,
+        };
+
+        Ok(Response::new(SystemStatus {
+            backend_mode: self.backend_mode.clone(),
+            vpn_ip,
+            capsules,
+            resources: Some(resources),
+        }))
+    }
 }
 
 /// Get system resource information
@@ -162,6 +306,9 @@ fn get_system_resources() -> ResourceInfo {
             cpu_cores: num_cpus::get() as u64,
             memory_bytes: get_total_memory(),
             disk_bytes: get_total_disk_space(),
+            backend_mode: "unknown".to_string(), // Will be overwritten
+            vpn_ip: String::new(),
+            local_services: std::collections::HashMap::new(),
         }
     }
 
@@ -172,6 +319,9 @@ fn get_system_resources() -> ResourceInfo {
             cpu_cores: 4,
             memory_bytes: 8 * 1024 * 1024 * 1024, // 8 GB
             disk_bytes: 100 * 1024 * 1024 * 1024, // 100 GB
+            backend_mode: "unknown".to_string(),  // Will be overwritten
+            vpn_ip: String::new(),
+            local_services: std::collections::HashMap::new(),
         }
     }
 }
@@ -211,9 +361,22 @@ pub async fn start_grpc_server(
     wasm_host: Arc<AdepLogicHost>,
     runtime: Arc<ContainerRuntime>,
     allowed_host_paths: Vec<String>,
+    backend_mode: String,
+    tailscale_manager: Arc<TailscaleManager>,
+    service_registry: Arc<ServiceRegistry>,
+    gpu_detector: Arc<dyn GpuDetector>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = addr.parse()?;
-    let engine_service = EngineService::new(Arc::clone(&capsule_manager), Arc::clone(&wasm_host));
+    let engine_service = EngineService::new(
+        Arc::clone(&capsule_manager),
+        Arc::clone(&wasm_host),
+        backend_mode,
+        Arc::clone(&tailscale_manager),
+        Arc::clone(&service_registry),
+        Arc::clone(&runtime),
+        allowed_host_paths.clone(),
+        gpu_detector,
+    );
     let agent_service = AgentService::new(capsule_manager, runtime, allowed_host_paths);
 
     info!("Engine gRPC server listening on {}", addr);

@@ -53,7 +53,10 @@ pub struct RuntimeConfig {
 impl RuntimeConfig {
     pub fn from_section(section: Option<&RuntimeSection>) -> Result<Self, RuntimeError> {
         if let Some(s) = section {
-            info!("Runtime config section: preferred={:?}, binary_path={:?}", s.preferred, s.binary_path);
+            info!(
+                "Runtime config section: preferred={:?}, binary_path={:?}",
+                s.preferred, s.binary_path
+            );
         } else {
             info!("Runtime config section is None");
         }
@@ -181,9 +184,8 @@ fn find_binary(candidates: &[&str]) -> Result<PathBuf, RuntimeError> {
 }
 
 fn infer_kind_from_path(path: &Path) -> Option<RuntimeKind> {
-    let file_name = path.file_stem()
-        .and_then(OsStr::to_str)?;
-    
+    let file_name = path.file_stem().and_then(OsStr::to_str)?;
+
     if file_name == "mock_runtime" {
         return Some(RuntimeKind::Mock);
     }
@@ -652,7 +654,11 @@ mod tests {
             .expect("Failed to build root");
 
         let process = ProcessBuilder::default()
-            .args(vec!["sh".to_string(), "-c".to_string(), "sleep 1".to_string()])
+            .args(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "sleep 1".to_string(),
+            ])
             .build()
             .expect("Failed to build process");
 
@@ -703,7 +709,7 @@ mod tests {
     fn test_runtime_config_defaults() {
         // Test with no configuration
         let config = RuntimeConfig::from_section(None);
-        
+
         // Should either find a runtime or return an error
         match config {
             Ok(cfg) => {
@@ -829,9 +835,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let snapshot_path = temp_dir
-            .path()
-            .join("bundles/test-workload/manifest.json");
+        let snapshot_path = temp_dir.path().join("bundles/test-workload/manifest.json");
         assert!(snapshot_path.exists());
 
         let content = tokio::fs::read_to_string(snapshot_path).await.unwrap();

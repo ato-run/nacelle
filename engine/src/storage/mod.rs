@@ -6,9 +6,9 @@
 ///
 /// All implementations are pure Rust with no CGO dependencies.
 pub mod error;
-pub mod lvm;
 pub mod luks;
+pub mod lvm;
 
 pub use error::{StorageError, StorageResult};
-pub use lvm::{LvmManager, VolumeInfo};
 pub use luks::{EncryptedVolumeInfo, KeyStorage, LuksManager};
+pub use lvm::{LvmManager, VolumeInfo};
