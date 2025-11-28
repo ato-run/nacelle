@@ -10,7 +10,6 @@ use capsuled_engine::adep::{
 };
 use capsuled_engine::capsule_manager::CapsuleManager;
 use capsuled_engine::hardware::gpu_process_monitor::GpuProcessMonitorError;
-use capsuled_engine::hardware::scrubber::GpuScrubber;
 use capsuled_engine::hardware::{GpuDetector, GpuInfo, GpuProcessMonitor, RigHardwareReport};
 use capsuled_engine::proto::onescluster::coordinator::v1::Taint;
 use capsuled_engine::runtime::LaunchResult;
@@ -75,9 +74,6 @@ async fn main() -> Result<()> {
         "dummy-node".to_string(),
     )?);
 
-    // Create GpuScrubber
-    let gpu_scrubber = Arc::new(GpuScrubber::new(audit_logger.clone()));
-
     // Create GpuDetector (Mock)
     let gpu_detector = Arc::new(FixedGpuDetector {
         rig_id: args.rig_id.clone(),
@@ -88,13 +84,16 @@ async fn main() -> Result<()> {
 
     let capsule_manager = Arc::new(CapsuleManager::new(
         audit_logger,
-        gpu_scrubber,
         gpu_detector.clone(),
         None,
         None,
         None,
         None,
-    ));
+        None,
+        None,
+        None,
+        None, // runtime_config
+    ).expect("Failed to initialize CapsuleManager"));
 
     seed_capsule(
         &capsule_manager,
@@ -148,6 +147,7 @@ fn seed_capsule(
             image: "test/image:latest".to_string(),
             args: vec!["--arg".into()],
             env: vec![],
+            native: None,
         },
         volumes: vec![],
         metadata: HashMap::new(),

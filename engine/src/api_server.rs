@@ -1,24 +1,32 @@
 use axum::{
-    extract::{State, Json},
+    extract::{State, Json, Path},
     http::{Method, HeaderValue},
-    response::IntoResponse,
-    routing::{get, post},
+    response::{IntoResponse, Sse},
+    routing::{get, post, delete},
     Router,
 };
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio_stream::wrappers::IntervalStream;
+use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
-use tracing::{info, error};
+use tracing::{info, error, warn};
 
+use crate::auth::AuthManager;
 use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
 use crate::network::service_registry::ServiceRegistry;
+use crate::manifest::{Manifest, Resource};
+use crate::adep::{AdepManifest, ComputeConfig, SchedulingConfig, GpuConstraints};
 
 #[derive(Clone)]
 pub struct AppState {
     pub capsule_manager: Arc<CapsuleManager>,
     pub service_registry: Arc<ServiceRegistry>,
     pub gpu_detector: Arc<dyn GpuDetector>,
+    pub auth_manager: Arc<AuthManager>,
 }
 
 #[derive(Serialize)]
@@ -26,6 +34,7 @@ struct StatusResponse {
     status: String,
     version: String,
     gpu_info: Option<GpuInfo>,
+    capsules: Vec<CapsuleInfo>,
 }
 
 #[derive(Serialize)]
@@ -35,18 +44,26 @@ struct GpuInfo {
     names: Vec<String>,
 }
 
+#[derive(Serialize)]
+struct CapsuleInfo {
+    id: String,
+    status: String,
+    local_url: Option<String>,
+    port: Option<u16>,
+    uptime: Option<u64>,
+}
+
 #[derive(Deserialize)]
-struct DeployRequest {
-    capsule_id: String,
-    // Optional: allow passing manifest content directly in future
-    // manifest: Option<String>, 
+struct ApplyRequest {
+    // HCL content as string
+    hcl: String,
 }
 
 #[derive(Serialize)]
-struct DeployResponse {
+struct ApplyResponse {
     capsule_id: String,
     status: String,
-    url: String,
+    local_url: String,
 }
 
 pub async fn start_api_server(
@@ -54,27 +71,37 @@ pub async fn start_api_server(
     capsule_manager: Arc<CapsuleManager>,
     service_registry: Arc<ServiceRegistry>,
     gpu_detector: Arc<dyn GpuDetector>,
+    auth_manager: Arc<AuthManager>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    
     let state = AppState {
         capsule_manager,
         service_registry,
         gpu_detector,
+        auth_manager: auth_manager.clone(),
     };
 
-    // CORS configuration
-    // allowing localhost:3000 (Next.js) and potentially others
+    // CORS configuration (Strict)
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([axum::http::header::CONTENT_TYPE]);
+        .allow_origin([
+            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+            "https://app.gumball.net".parse::<HeaderValue>().unwrap(),
+        ])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::AUTHORIZATION]);
 
     let app = Router::new()
         .route("/v1/status", get(status_handler))
-        .route("/v1/deploy", post(deploy_handler))
+        .route("/v1/apply", post(apply_handler))
+        .route("/v1/destroy/:id", delete(destroy_handler))
+        .route("/v1/logs/:id", get(logs_handler))
+        .layer(axum::middleware::from_fn(move |req, next| {
+            crate::auth::auth_middleware(auth_manager.clone(), req, next)
+        }))
         .layer(cors)
         .with_state(state);
 
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     info!("REST API server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -84,6 +111,7 @@ pub async fn start_api_server(
 }
 
 async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    info!("Handling status request - returning local_url");
     let gpu_report = state.gpu_detector.detect_gpus().ok();
     
     let gpu_info = gpu_report.map(|report| GpuInfo {
@@ -92,102 +120,231 @@ async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
         names: report.gpus.iter().map(|g| g.device_name.clone()).collect(),
     });
 
+    let capsules = state.capsule_manager.list_capsules().unwrap_or_default()
+        .into_iter()
+        .map(|c| {
+            let service = state.service_registry
+                .get_services()
+                .iter()
+                .find(|s| s.name == c.id)
+                .cloned();
+
+            let url = c.remote_url.clone().or_else(|| {
+                service.as_ref().map(|s| format!("http://localhost:{}", s.port))
+            });
+            let port = service.as_ref().map(|s| s.port);
+            
+            let uptime = c.started_at.map(|start| {
+                std::time::SystemTime::now()
+                    .duration_since(start)
+                    .unwrap_or_default()
+                    .as_secs()
+            });
+            
+            CapsuleInfo {
+                id: c.id,
+                status: c.status.to_string(),
+                local_url: url,
+                port,
+                uptime,
+            }
+        })
+        .collect();
+
     Json(StatusResponse {
         status: "ready".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         gpu_info,
+        capsules,
     })
 }
 
-async fn deploy_handler(
+async fn apply_handler(
     State(state): State<AppState>,
-    Json(payload): Json<DeployRequest>,
+    Json(payload): Json<ApplyRequest>,
 ) -> impl IntoResponse {
-    info!("REST Deploy request for capsule_id: {}", payload.capsule_id);
-
-    // For Phase 1, we assume the capsule has a preset or we load a default one.
-    // Since we don't have the TOML content in the request yet, we'll try to load it 
-    // from the examples directory or use a default.
-    // This is a simplification to match the user's "Run Flux.1" example where the frontend 
-    // just sends an ID.
-    
-    // In a real scenario, we might want to read the manifest from disk or receive it.
-    // For now, we'll construct a minimal manifest or load from file if possible.
-    
-    // HACK: We need to pass manifest bytes to deploy_capsule.
-    // We'll try to read `examples/capsule.toml` or similar if it matches the ID,
-    // or just pass empty/dummy bytes if the CapsuleManager can handle it (it likely can't).
-    
-    // Let's try to find a TOML file for this capsule in the presets directory
-    // relative to where we are running.
-    let manifest_path = std::path::Path::new("examples").join(format!("{}.toml", payload.capsule_id));
-    let manifest_bytes = if manifest_path.exists() {
-        match std::fs::read_to_string(&manifest_path) {
-            Ok(content) => {
-                // Convert TOML to JSON as CapsuleManager expects JSON bytes (mostly)
-                // But wait, deploy_capsule takes bytes.
-                // In grpc_server.rs, it converts TOML to JSON.
-                // We should probably do the same here.
-                
-                // We need the `workload` module to parse TOML.
-                // But `workload` might not be public.
-                // Let's check if we can access it.
-                // If not, we might need to duplicate the logic or make it public.
-                
-                // Assuming we can't easily access internal logic, let's try to read it as raw bytes
-                // and hope CapsuleManager can handle it? No, CapsuleManager expects JSON usually
-                // unless we change it.
-                // Actually, `grpc_server.rs` does the conversion.
-                
-                // Let's try to read it, parse with `toml`, then serialize to JSON.
-                match toml::from_str::<serde_json::Value>(&content) {
-                    Ok(json) => serde_json::to_vec(&json).unwrap_or_default(),
-                    Err(_) => Vec::new(),
-                }
-            }
-            Err(_) => Vec::new(),
-        }
-    } else {
-        // Fallback: Create a dummy manifest
-        let dummy = serde_json::json!({
-            "name": payload.capsule_id,
-            "workload": {
-                "image": "ubuntu:latest", // Default
-                "command": ["sleep", "infinity"]
-            }
-        });
-        serde_json::to_vec(&dummy).unwrap_or_default()
+    // 1. Parse HCL
+    let manifest: Manifest = match hcl::from_str(&payload.hcl) {
+        Ok(m) => m,
+        Err(e) => return Json(ApplyResponse {
+            capsule_id: "".to_string(),
+            status: format!("HCL Parse Error: {}", e),
+            local_url: "".to_string(),
+        }),
     };
 
+    // 2. Convert to AdepManifest
+    // Find the first container resource to use as the main capsule
+    let (capsule_id, container_config) = match manifest.resource.get("container") {
+        Some(containers) => {
+            if let Some((name, Resource::Container(config))) = containers.iter().next() {
+                (name.clone(), config)
+            } else {
+                return Json(ApplyResponse {
+                    capsule_id: "".to_string(),
+                    status: "No container resource found in HCL".to_string(),
+                    local_url: "".to_string(),
+                });
+            }
+        }
+        None => return Json(ApplyResponse {
+            capsule_id: "".to_string(),
+            status: "No container resource found in HCL".to_string(),
+            local_url: "".to_string(),
+        }),
+    };
+
+    // Check for compute resources
+    let compute_res = manifest.resource.get("compute")
+        .and_then(|c| c.values().next())
+        .and_then(|r| match r {
+            Resource::Compute(c) => Some(c),
+            _ => None,
+        });
+
+    let vram_min_gb = compute_res
+        .and_then(|c| c.vram_min.as_ref())
+        .and_then(|v| v.trim_end_matches("GB").parse::<u64>().ok())
+        .unwrap_or(0);
+
+    let adep = AdepManifest {
+        name: capsule_id.clone(),
+        scheduling: SchedulingConfig {
+            gpu: Some(GpuConstraints {
+                vram_min_gb,
+                cuda_version_min: None, // TODO: Parse from HCL
+            }),
+            strategy: Some("best_fit".to_string()),
+            cloud: None, // TODO: Parse cloud config
+        },
+        compute: ComputeConfig {
+            image: container_config.image.clone(),
+            args: vec![], // TODO: Add args to HCL
+            env: container_config.env.clone()
+                .map(|m| m.iter().map(|(k, v)| format!("{}={}", k, v)).collect())
+                .unwrap_or_default(),
+            native: container_config.native.clone().map(|n| crate::adep::NativeConfig {
+                runtime: n.runtime,
+                args: n.args,
+            }),
+        },
+        volumes: vec![], // TODO: Parse volumes
+        metadata: Default::default(),
+    };
+
+    let adep_json = serde_json::to_vec(&adep).unwrap_or_default();
+
+    // 3. Deploy
     match state.capsule_manager.deploy_capsule(
-        payload.capsule_id.clone(),
-        manifest_bytes,
-        String::new(), // oci_image (optional/empty for now)
-        String::new(), // digest (optional/empty for now)
+        capsule_id.clone(),
+        adep_json,
+        container_config.image.clone(),
+        "".to_string(),
     ).await {
         Ok(status) => {
-            // Get the URL
              let url = state.service_registry
                 .get_services()
                 .iter()
-                .find(|s| s.name == payload.capsule_id)
+                .find(|s| s.name == capsule_id)
                 .map(|s| format!("http://localhost:{}", s.port))
                 .unwrap_or_else(|| format!("http://localhost"));
 
-            Json(DeployResponse {
-                capsule_id: payload.capsule_id,
+            Json(ApplyResponse {
+                capsule_id,
                 status,
-                url,
+                local_url: url,
             })
         }
         Err(e) => {
-            error!("Deployment failed: {}", e);
-            // Return 500
-             Json(DeployResponse {
-                capsule_id: payload.capsule_id,
+            error!("deploy_capsule returned error: {}", e);
+            Json(ApplyResponse {
+                capsule_id,
                 status: format!("error: {}", e),
-                url: "".to_string(),
+                local_url: "".to_string(),
             })
         }
     }
+}
+
+async fn destroy_handler(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match state.capsule_manager.stop_capsule(&id).await {
+        Ok(_) => Json(serde_json::json!({ "status": "destroyed", "id": id })),
+        Err(e) => Json(serde_json::json!({ "status": "error", "message": e.to_string() })),
+    }
+}
+
+async fn logs_handler(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, axum::Error>>> {
+    let log_path = state.capsule_manager.get_capsule_log_path(&id);
+    
+    let stream = async_stream::stream! {
+        if let Some(path_str) = log_path {
+            let path = std::path::PathBuf::from(path_str);
+            
+            // Wait for file to be created (up to 10 seconds)
+            let mut file = None;
+            for _ in 0..20 {
+                match tokio::fs::File::open(&path).await {
+                    Ok(f) => {
+                        file = Some(f);
+                        break;
+                    }
+                    Err(_) => {
+                        // File not ready yet, wait
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        // Send keep-alive comment to prevent browser timeout? 
+                        // SSE comments start with colon
+                        yield Ok(axum::response::sse::Event::default().comment("waiting for log file"));
+                    }
+                }
+            }
+
+            let mut file = match file {
+                Some(f) => f,
+                None => {
+                    yield Ok(axum::response::sse::Event::default().data("Timed out waiting for log file creation"));
+                    return;
+                }
+            };
+
+            use tokio::io::{AsyncReadExt, AsyncSeekExt};
+            let mut buffer = [0; 1024];
+            let mut position = 0;
+
+            loop {
+                match file.read(&mut buffer).await {
+                    Ok(0) => {
+                        // EOF, wait a bit
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        continue;
+                    }
+                    Ok(n) => {
+                        let chunk = String::from_utf8_lossy(&buffer[..n]);
+                        for line in chunk.lines() {
+                            if !line.trim().is_empty() {
+                                // Sanitize: remove any newlines/carriage returns for SSE
+                                let sanitized = line.replace('\n', " ").replace('\r', " ");
+                                yield Ok(axum::response::sse::Event::default().data(sanitized));
+                            }
+                        }
+                        position += n as u64;
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Error reading logs: {}", e).replace('\n', " ").replace('\r', " ");
+                        yield Ok(axum::response::sse::Event::default().data(error_msg));
+                        break;
+                    }
+                }
+            }
+        } else {
+            yield Ok(axum::response::sse::Event::default().data("Log path not found for capsule"));
+        }
+    };
+
+    Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::default())
 }

@@ -1,511 +1,288 @@
 use clap::Parser;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use tracing::{error, info, warn};
 use tracing_subscriber::prelude::*;
 
 use capsuled_engine::api_server;
 use capsuled_engine::capsule_manager::CapsuleManager;
-use capsuled_engine::config::{self, StatusTaint};
-use capsuled_engine::grpc_server;
-use capsuled_engine::hardware::{self, scrubber::GpuScrubber};
-use capsuled_engine::network;
-use capsuled_engine::oci;
-use capsuled_engine::proto::onescluster::coordinator::v1::{Taint, TaintEffect};
-use capsuled_engine::runtime::{ContainerRuntime, RuntimeConfig as EngineRuntimeConfig};
+use capsuled_engine::hardware;
+use capsuled_engine::network::service_registry::ServiceRegistry;
 use capsuled_engine::security::audit::AuditLogger;
-use capsuled_engine::status_reporter::StatusReporter;
-use capsuled_engine::wasm_host::AdepLogicHost;
-use capsuled_engine::workload;
+use capsuled_engine::security::EgressProxy;
+use capsuled_engine::artifact::{ArtifactManager, manager::ArtifactConfig};
+use capsuled_engine::process_supervisor::ProcessSupervisor;
 
-const DEFAULT_SERVER_ADDR: &str = "0.0.0.0:50051";
-const DEFAULT_WASM_PATH: &str =
-    "../adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm";
-const DEFAULT_COORDINATOR_ADDR: &str = "http://127.0.0.1:50052";
-const DEFAULT_STATUS_INTERVAL_SECS: u64 = 30;
-const DEFAULT_CONFIG_PATH: &str = "config.toml";
+mod headscale;
+use headscale::{HeadscaleClient, HeadscaleConfig};
+
+const DEFAULT_HTTP_PORT: u16 = 4500;
 const DEFAULT_AUDIT_LOG_PATH: &str = "/tmp/capsuled/logs/audit.jsonl";
 const DEFAULT_AUDIT_KEY_PATH: &str = "/tmp/capsuled/keys/node_key.pem";
 
-/// Capsuled Engine - Agent for running capsules
+/// Capsuled Engine - HTTP API Server (Phase 1.5)
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// gRPC server listen address
-    #[arg(short, long, default_value = DEFAULT_SERVER_ADDR)]
-    addr: String,
+    /// HTTP API server port
+    #[arg(short, long, default_value_t = DEFAULT_HTTP_PORT)]
+    port: u16,
 
-    /// Path to adep-logic Wasm file
-    #[arg(
-        short,
-        long,
-        default_value = DEFAULT_WASM_PATH
-    )]
-    wasm_path: String,
+    /// Path to audit log file
+    #[arg(long, default_value = DEFAULT_AUDIT_LOG_PATH)]
+    audit_log: String,
 
-    /// Coordinator gRPC endpoint (host:port or URL)
-    #[arg(long, default_value = DEFAULT_COORDINATOR_ADDR)]
-    coordinator_addr: String,
-
-    /// Interval in seconds between status reports
-    #[arg(long, default_value_t = DEFAULT_STATUS_INTERVAL_SECS)]
-    status_interval_secs: u64,
-
-    /// Path to configuration file
-    #[arg(long, default_value = DEFAULT_CONFIG_PATH)]
-    config: String,
-
-    /// Path to a manifest file (TOML or JSON) to verify and exit
-    #[arg(long)]
-    manifest: Option<String>,
+    /// Path to node key for audit signatures
+    #[arg(long, default_value = DEFAULT_AUDIT_KEY_PATH)]
+    audit_key: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Parse command line arguments
-    let args = Args::parse();
-
     // Initialize tracing
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "capsuled_engine=info".into()),
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .compact(),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "capsuled_engine=info,tower_http=debug".into()),
+        )
         .init();
 
-    info!("Capsuled Engine starting...");
-    info!("Version: {}", env!("CARGO_PKG_VERSION"));
+    let args = Args::parse();
 
-    // Handle manifest verification mode
-    if let Some(manifest_path) = &args.manifest {
-        info!("Verifying manifest: {}", manifest_path);
-        let content = std::fs::read_to_string(manifest_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read manifest: {}", e))?;
+    info!("=== Capsuled Engine v{} (Phase 1.5: HTTP API Only) ===", env!("CARGO_PKG_VERSION"));
+    info!("HTTP API Port: {}", args.port);
 
-        let path = std::path::Path::new(manifest_path);
-        let (manifest, resource_hints) =
-            workload::manifest_loader::load_manifest_str(Some(path), &content)
-                .map_err(|e| anyhow::anyhow!("Failed to parse manifest: {}", e))?;
-
-        info!("Manifest parsed successfully");
-        info!("  Name: {}", manifest.name);
-        info!("  Image: {}", manifest.compute.image);
-
-        // Mock rootfs for verification
-        let rootfs = std::path::PathBuf::from("/tmp/mock-rootfs");
-
-        let allowed_paths = vec![];
-
-        let oci_spec = oci::spec_builder::build_oci_spec(
-            &rootfs,
-            &manifest.compute,
-            &manifest.volumes,
-            None, // No GPU assignment for this test
-            &allowed_paths,
-            resource_hints.as_ref(),
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to build OCI spec: {}", e))?;
-
-        let json = serde_json::to_string_pretty(&oci_spec)?;
-        println!("{}", json);
-
-        return Ok(());
+    // Ensure log directory exists
+    if let Some(parent) = PathBuf::from(&args.audit_log).parent() {
+        std::fs::create_dir_all(parent)?;
     }
 
-    let file_config = match config::load_config(&args.config) {
-        Ok(Some(cfg)) => {
-            info!("Loaded configuration from {}", args.config);
-            Some(cfg)
-        }
-        Ok(None) => {
-            info!(
-                "No configuration file found at {}; relying on CLI/default values",
-                args.config
-            );
-            None
-        }
-        Err(err) => {
-            warn!("Failed to load configuration {}: {err}", args.config);
-            None
-        }
-    };
-
-    let listen_addr = if args.addr != DEFAULT_SERVER_ADDR {
-        args.addr.clone()
-    } else {
-        file_config
-            .as_ref()
-            .and_then(|cfg| cfg.server_listen_addr())
-            .map(|addr| addr.to_string())
-            .unwrap_or_else(|| DEFAULT_SERVER_ADDR.to_string())
-    };
-
-    let wasm_path = if args.wasm_path != DEFAULT_WASM_PATH {
-        args.wasm_path.clone()
-    } else {
-        file_config
-            .as_ref()
-            .and_then(|cfg| cfg.wasm_module_path())
-            .map(|path| path.to_string())
-            .unwrap_or_else(|| DEFAULT_WASM_PATH.to_string())
-    };
-
-    let coordinator_addr = if args.coordinator_addr != DEFAULT_COORDINATOR_ADDR {
-        args.coordinator_addr.clone()
-    } else {
-        file_config
-            .as_ref()
-            .and_then(|cfg| cfg.coordinator_endpoint())
-            .map(|endpoint| endpoint.to_string())
-            .unwrap_or_else(|| DEFAULT_COORDINATOR_ADDR.to_string())
-    };
-
-    let status_interval_secs_raw = if args.status_interval_secs != DEFAULT_STATUS_INTERVAL_SECS {
-        args.status_interval_secs
-    } else {
-        file_config
-            .as_ref()
-            .and_then(|cfg| cfg.status_interval_secs())
-            .unwrap_or(DEFAULT_STATUS_INTERVAL_SECS)
-    };
-    let status_interval_secs = status_interval_secs_raw.max(5);
-
-    let static_taints = file_config
-        .as_ref()
-        .map(|cfg| build_taints(cfg.status_taints()))
-        .unwrap_or_default();
-
-    let allowed_host_paths = file_config
-        .as_ref()
-        .map(|cfg| cfg.security_allowed_paths().to_vec())
-        .unwrap_or_default();
-
-    let runtime_config =
-        EngineRuntimeConfig::from_section(file_config.as_ref().and_then(|cfg| cfg.runtime()))
-            .map_err(|err| anyhow::anyhow!("runtime configuration error: {err}"))?;
-    let container_runtime = Arc::new(ContainerRuntime::new(runtime_config));
-    let runtime_cfg_ref = container_runtime.config();
-    info!(
-        kind = ?runtime_cfg_ref.kind,
-        binary = %runtime_cfg_ref.binary_path.display(),
-        bundle_root = %runtime_cfg_ref.bundle_root.display(),
-        state_root = %runtime_cfg_ref.state_root.display(),
-        "Initialized container runtime"
-    );
-
-    // Detect GPU hardware
-    info!("Detecting GPU hardware...");
-    let gpu_detector = hardware::create_gpu_detector();
-    let gpu_process_monitor = hardware::create_gpu_process_monitor();
-    match gpu_detector.detect_gpus() {
-        Ok(report) => {
-            info!("Hardware detection completed:");
-            info!("  Rig ID: {}", report.rig_id);
-            info!("  GPU Count: {}", report.gpu_count());
-            info!("  Total VRAM: {:.2} GB", report.total_vram_gb());
-            if report.is_mock {
-                info!("  Mode: Mock (Fake GPUs for testing)");
-            } else if report.gpu_count() == 0 {
-                warn!("  Mode: CPU-only (No GPUs detected)");
-                warn!("  Universal Agent Runtime is active in fallback mode.");
-            } else {
-                info!("  Mode: Real (NVML)");
-            }
-            if let Some(cuda) = &report.system_cuda_version {
-                info!("  CUDA Version: {}", cuda);
-            }
-            for gpu in &report.gpus {
-                info!(
-                    "    GPU {}: {} ({:.2} GB VRAM)",
-                    gpu.index,
-                    gpu.device_name,
-                    gpu.vram_gb()
-                );
-            }
-        }
-        Err(e) => {
-            error!("GPU detection failed: {}", e);
-            error!("Continuing without GPU support");
-        }
+    // Ensure key directory exists
+    if let Some(parent) = PathBuf::from(&args.audit_key).parent() {
+        std::fs::create_dir_all(parent)?;
     }
-
-    // Initialize Wasm host
-    info!("Loading Wasm module from: {}", wasm_path);
-    let wasm_host = match AdepLogicHost::from_file(&wasm_path) {
-        Ok(host) => {
-            info!("Wasm module loaded successfully");
-            Arc::new(host)
-        }
-        Err(e) => {
-            error!("Failed to load Wasm module: {}", e);
-            error!(
-                "Please ensure the adep-logic Wasm file exists at: {}",
-                wasm_path
-            );
-            return Err(e);
-        }
-    };
 
     // Initialize AuditLogger
-    let audit_log_path = file_config
-        .as_ref()
-        .and_then(|cfg| cfg.security_audit_log_path())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::PathBuf::from(DEFAULT_AUDIT_LOG_PATH));
-
-    let audit_key_path = file_config
-        .as_ref()
-        .and_then(|cfg| cfg.security_audit_key_path())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::PathBuf::from(DEFAULT_AUDIT_KEY_PATH));
-
-    info!("Initializing AuditLogger...");
-    info!("  Log Path: {:?}", audit_log_path);
-    info!("  Key Path: {:?}", audit_key_path);
-
-    // TODO: Get real Node ID. For now using hostname or random UUID.
-    let node_id = hostname::get()
-        .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown-node".to_string());
-
     let audit_logger = Arc::new(
-        AuditLogger::new(audit_log_path, audit_key_path, node_id)
-            .map_err(|e| anyhow::anyhow!("Failed to initialize AuditLogger: {}", e))?,
+        AuditLogger::new(
+            PathBuf::from(&args.audit_log),
+            PathBuf::from(&args.audit_key),
+            "capsuled-engine".to_string(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to initialize audit logger: {}", e))?,
     );
 
-    // Initialize GPU Scrubber
-    let gpu_scrubber = Arc::new(GpuScrubber::new(Arc::clone(&audit_logger)));
+    info!("Audit logger initialized");
 
-    // Initialize Network Layer
-    info!("Initializing Network Layer...");
-    let network_config = file_config.as_ref().and_then(|cfg| cfg.network());
-
-    let tailscale_manager = Arc::new(network::tailscale::TailscaleManager::start(
-        network_config.and_then(|c| c.headscale_url.clone()),
-        network_config.and_then(|c| c.auth_key.clone()),
-        network_config.and_then(|c| c.state_dir.clone()),
-    ));
-
-    let service_registry = Arc::new(network::service_registry::ServiceRegistry::new(
-        network_config.and_then(|c| c.local_domain.clone()),
-    ));
-
-    // Wait briefly for VPN IP (optional, just for logging)
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    if let Some(ip) = tailscale_manager.get_vpn_ip() {
-        info!("Network Layer Initialized. VPN IP: {}", ip);
-    } else {
-        info!("Network Layer Initialized. Waiting for VPN IP...");
-    }
-
-    // Initialize mDNS Announcer
-    let mdns_announcer = match network::mdns::MdnsAnnouncer::new() {
-        Ok(mdns) => {
-            info!("mDNS Announcer initialized");
-            Some(Arc::new(mdns))
-        }
-        Err(e) => {
-            warn!("Failed to initialize mDNS Announcer: {}", e);
-            None
-        }
-    };
-
-    // Initialize Traefik Manager
-    let traefik_manager = if let Some(config) = &network_config {
-        let state_dir = config
-            .state_dir
-            .clone()
-            .unwrap_or_else(|| "/var/lib/capsuled".to_string());
-        let traefik_dir = std::path::Path::new(&state_dir).join("traefik");
-
-        match network::traefik::TraefikManager::new(&traefik_dir) {
-            Ok(tm) => {
-                info!("Traefik Manager initialized at {:?}", traefik_dir);
-                Some(Arc::new(tm))
-            }
-            Err(e) => {
-                warn!("Failed to initialize Traefik Manager: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    // Initialize Cloud Client if enabled
-    let cloud_client = if let Some(cloud_config) = file_config.as_ref().and_then(|cfg| cfg.cloud()) {
-        if cloud_config.enabled {
-            info!("Initializing SkyPilot cloud client...");
-            match capsuled_engine::cloud::skypilot::SkyPilotClient::new(cloud_config) {
-                Ok(client) => Some(Arc::new(client)),
-                Err(e) => {
-                    warn!("Failed to initialize cloud client: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    // Initialize capsule manager
-    info!("Initializing capsule manager...");
-    let capsule_manager = Arc::new(CapsuleManager::new(
-        audit_logger.clone(),
-        gpu_scrubber.clone(),
-        gpu_detector.clone(),
-        Some(service_registry.clone()),
-        mdns_announcer.clone(),
-        traefik_manager.clone(),
-        cloud_client,
-    ));
-
-    // Start status reporter to periodically send heartbeat reports to Coordinator
-    let status_reporter = StatusReporter::new(
-        coordinator_addr.clone(),
-        Duration::from_secs(status_interval_secs),
-        Arc::clone(&capsule_manager),
-        Arc::clone(&gpu_detector),
-        Arc::clone(&gpu_process_monitor),
-        static_taints,
-    );
-    let status_task = status_reporter.start();
-
-    // Determine backend mode string
-    let backend_mode = if match gpu_detector.detect_gpus() {
-        Ok(r) => r.is_mock,
-        Err(_) => false,
-    } {
-        "mock".to_string()
-    } else if match gpu_detector.detect_gpus() {
-        Ok(r) => r.gpu_count() == 0,
-        Err(_) => true, // Error usually implies fallback to CPU or failure, but here we assume CPU if we survived
-    } {
-        "cpu".to_string()
-    } else {
-        "gpu".to_string()
-    };
-
-    // Start REST API Server
-    info!("Starting REST API server on port 4500");
-    let api_capsule_manager = Arc::clone(&capsule_manager);
-    let api_service_registry = Arc::clone(&service_registry);
-    let api_gpu_detector = Arc::clone(&gpu_detector);
+    info!("Audit logger initialized");
     
+    // Initialize Egress Proxy (User-Space Filtering)
+    let proxy_port = args.port + 1; // e.g. 4501
+    let egress_proxy = Arc::new(EgressProxy::new(proxy_port));
+    
+    // Start Proxy
+    let proxy_clone = egress_proxy.clone();
     tokio::spawn(async move {
-        if let Err(e) = api_server::start_api_server(
-            4500,
-            api_capsule_manager,
-            api_service_registry,
-            api_gpu_detector,
-        ).await {
-            error!("REST API server failed: {}", e);
+        if let Err(e) = proxy_clone.start().await {
+            warn!("Failed to start Egress Proxy: {}", e);
         }
     });
 
-    // Start gRPC server
-    info!("Starting gRPC server on {}", listen_addr);
-    let server_result = grpc_server::start_grpc_server(
-        &listen_addr,
-        Arc::clone(&capsule_manager),
-        Arc::clone(&wasm_host),
-        Arc::clone(&container_runtime),
-        allowed_host_paths,
-        backend_mode,
-        tailscale_manager,
-        service_registry,
-        Arc::clone(&gpu_detector),
-    )
-    .await;
-    status_task.abort();
-    server_result.map_err(|e| anyhow::anyhow!("gRPC server error: {}", e))?;
+    // Detect GPU hardware
+    let gpu_detector = hardware::create_gpu_detector();
+    match gpu_detector.detect_gpus() {
+        Ok(report) => {
+            info!("GPU detection successful:");
+            info!("  Total GPUs: {}", report.gpus.len());
+            info!("  Total VRAM: {:.2} GB", report.total_vram_gb());
+            for gpu in &report.gpus {
+                info!("    GPU {}: {} ({:.2} GB)", gpu.index, gpu.device_name, gpu.vram_gb());
+            }
+        }
+        Err(e) => {
+            warn!("GPU detection failed (CPU mode): {}", e);
+        }
+    }
+
+    // Initialize Headscale if configured
+    let headscale_config = load_headscale_config()?;
+    if headscale_config.server_url != "" {
+        let headscale = HeadscaleClient::new(headscale_config);
+        
+        match headscale.connect().await {
+            Ok(info) => {
+                tracing::info!(
+                    tailnet_ip = %info.ip,
+                    hostname = %info.hostname,
+                    peers = info.peers.len(),
+                    "Connected to Tailnet"
+                );
+                
+                // Update machine registration with Tailnet IP
+                // update_machine_tailnet_ip(&info.ip).await?;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to connect to Tailnet, running in local mode");
+            }
+        }
+    }
+
+    // Initialize Service Registry (for port allocation and mDNS)
+    let service_registry = Arc::new(ServiceRegistry::new(None));
+
+    // Initialize Process Supervisor
+    let process_supervisor = Arc::new(ProcessSupervisor::new());
+
+    // Initialize Artifact Manager
+    let home_dir = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/tmp"));
+    let runtime_dir = home_dir.join(".gumball").join("runtimes");
+    
+    let registry_url = std::env::var("GUMBALL_REGISTRY_URL")
+        .unwrap_or_else(|_| {
+             // Try to find local registry relative to current executable or workspace
+             let local_registry = std::env::current_dir()
+                 .ok()
+                 .and_then(|cwd| {
+                     let candidates = vec![
+                         cwd.join("../../capsule-registry/registry.json"),
+                         cwd.join("../capsule-registry/registry.json"),
+                         cwd.join("capsule-registry/registry.json"),
+                     ];
+                     candidates.into_iter().find(|p| p.exists())
+                 });
+             
+             if let Some(path) = local_registry {
+                 format!("file://{}", path.to_string_lossy())
+             } else {
+                 "https://gist.githubusercontent.com/egamikohsuke/placeholder/raw/registry.json".to_string()
+             }
+        });
+
+    let artifact_config = ArtifactConfig {
+        registry_url,
+        cache_path: runtime_dir,
+    };
+
+    let artifact_manager = Arc::new(ArtifactManager::new(artifact_config).await.expect("Failed to initialize ArtifactManager"));
+
+    // Initialize CapsuleManager
+    let capsule_manager = Arc::new(CapsuleManager::new(
+        audit_logger.clone(),
+        gpu_detector.clone(),
+        Some(service_registry.clone()),
+        None, // mDNS announcer (optional)
+        None, // Traefik manager (optional)
+        None, // Cloud client (optional)
+        Some(artifact_manager.clone()),
+        Some(process_supervisor.clone()),
+        Some(proxy_port),
+        None, // runtime_config
+    ).map_err(|e| anyhow::anyhow!("Failed to initialize CapsuleManager: {}", e))?);
+
+    info!("CapsuleManager initialized");
+
+    // Initialize AuthManager
+    let auth_manager = Arc::new(capsuled_engine::auth::AuthManager::new());
+
+
+    // Start HTTP API Server
+    info!("Starting HTTP API server on port {}...", args.port);
+    
+    let http_capsule_manager = capsule_manager.clone();
+    let http_service_registry = service_registry.clone();
+    let http_gpu_detector = gpu_detector.clone();
+    let http_auth_manager = auth_manager;
+    
+    tokio::spawn(async move {
+        if let Err(e) = api_server::start_api_server(
+            args.port,
+            http_capsule_manager,
+            http_service_registry,
+            http_gpu_detector,
+            http_auth_manager,
+        ).await {
+            error!("HTTP API server error: {}", e);
+        }
+    });
+
+    // Initialize WasmHost
+    // Use minimal valid WASM header (magic + version) as fallback
+    let wasm_bytes = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+    let wasm_host = Arc::new(
+        capsuled_engine::wasm_host::AdepLogicHost::new(&wasm_bytes)
+            .unwrap_or_else(|e| panic!("Failed to initialize WasmHost: {}", e))
+    );
+
+    // Initialize ContainerRuntime
+    let runtime_config = match capsuled_engine::runtime::RuntimeConfig::from_section(None) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("Failed to detect container runtime: {}. Container workloads will fail.", e);
+            capsuled_engine::runtime::RuntimeConfig {
+                kind: capsuled_engine::runtime::RuntimeKind::Mock,
+                binary_path: std::path::PathBuf::from("/dev/null"),
+                bundle_root: std::env::temp_dir().join("capsuled").join("bundles"),
+                state_root: std::env::temp_dir().join("capsuled").join("state"),
+                log_dir: std::env::temp_dir().join("capsuled").join("logs"),
+                hook_retry_attempts: 1,
+            }
+        }
+    };
+    let runtime = Arc::new(capsuled_engine::runtime::ContainerRuntime::new(runtime_config));
+
+    // Initialize TailscaleManager
+    let tailscale_manager = Arc::new(capsuled_engine::network::tailscale::TailscaleManager::start(None, None, None));
+
+    let allowed_host_paths = vec![];
+    let backend_mode = "native".to_string();
+
+    // Start gRPC Server (Phase 2)
+    let grpc_port = 50051;
+    let grpc_addr = format!("0.0.0.0:{}", grpc_port);
+    
+    info!("Starting gRPC server on {}...", grpc_addr);
+    
+    let grpc_capsule_manager = capsule_manager.clone();
+    let grpc_service_registry = service_registry.clone();
+    let grpc_gpu_detector = gpu_detector.clone();
+    let grpc_artifact_manager = artifact_manager.clone();
+    
+    tokio::spawn(async move {
+        if let Err(e) = capsuled_engine::grpc_server::start_grpc_server(
+            &grpc_addr,
+            grpc_capsule_manager,
+            wasm_host,
+            runtime,
+            allowed_host_paths,
+            backend_mode,
+            tailscale_manager,
+            grpc_service_registry,
+            grpc_gpu_detector,
+            grpc_artifact_manager,
+        ).await {
+            error!("gRPC server failed: {}", e);
+        }
+    });
+
+    // Keep the process running
+    info!("Capsuled Engine started. Press Ctrl+C to stop.");
+    tokio::signal::ctrl_c().await?;
+    info!("Shutting down...");
 
     Ok(())
 }
 
-fn build_taints(entries: &[StatusTaint]) -> Vec<Taint> {
-    entries
-        .iter()
-        .filter_map(|entry| match parse_effect(&entry.effect) {
-            Some(effect) => Some(Taint {
-                key: entry.key.clone(),
-                value: entry.value.clone(),
-                effect: effect as i32,
-            }),
-            None => {
-                warn!(
-                    "Ignoring invalid taint effect '{}' for key '{}'. Supported values: Unspecified, NoSchedule, PreferNoSchedule",
-                    entry.effect,
-                    entry.key
-                );
-                None
-            }
-        })
-        .collect()
-}
-
-fn parse_effect(effect: &str) -> Option<TaintEffect> {
-    let trimmed = effect.trim();
-    if trimmed.is_empty() {
-        return Some(TaintEffect::NoSchedule);
-    }
-
-    let normalized = trimmed
-        .replace('-', "_")
-        .replace(' ', "_")
-        .to_ascii_uppercase();
-
-    match normalized.as_str() {
-        "UNSPECIFIED" | "TAINT_EFFECT_UNSPECIFIED" => Some(TaintEffect::Unspecified),
-        "NO_SCHEDULE" | "NOSCHEDULE" | "TAINT_EFFECT_NO_SCHEDULE" => Some(TaintEffect::NoSchedule),
-        "PREFER_NO_SCHEDULE" | "PREFERNOSCHEDULE" | "TAINT_EFFECT_PREFER_NO_SCHEDULE" => {
-            Some(TaintEffect::PreferNoSchedule)
-        }
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_effect_allows_various_inputs() {
-        assert_eq!(parse_effect(""), Some(TaintEffect::NoSchedule));
-        assert_eq!(parse_effect("NoSchedule"), Some(TaintEffect::NoSchedule));
-        assert_eq!(
-            parse_effect("prefer-no-schedule"),
-            Some(TaintEffect::PreferNoSchedule)
-        );
-        assert_eq!(
-            parse_effect("taint_effect_unspecified"),
-            Some(TaintEffect::Unspecified)
-        );
-        assert!(parse_effect("invalid").is_none());
-    }
-
-    #[test]
-    fn build_taints_skips_invalid_entries() {
-        let entries = vec![
-            StatusTaint {
-                key: "gpu".into(),
-                value: "absent".into(),
-                effect: "NoSchedule".into(),
-            },
-            StatusTaint {
-                key: "region".into(),
-                value: "us-east".into(),
-                effect: "invalid".into(),
-            },
-        ];
-
-        let taints = build_taints(&entries);
-        assert_eq!(taints.len(), 1);
-        assert_eq!(taints[0].key, "gpu");
-        assert_eq!(taints[0].value, "absent");
-        assert_eq!(taints[0].effect, TaintEffect::NoSchedule as i32);
-    }
+fn load_headscale_config() -> anyhow::Result<HeadscaleConfig> {
+    // Load from environment or config file
+    Ok(HeadscaleConfig {
+        server_url: std::env::var("GUMBALL_HEADSCALE_URL")
+            .unwrap_or_default(),
+        auth_key: std::env::var("GUMBALL_HEADSCALE_KEY").ok(),
+        ..Default::default()
+    })
 }

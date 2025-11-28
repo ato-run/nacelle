@@ -38,15 +38,18 @@ use std::collections::HashMap;
 ///   ]
 /// }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct AdepManifest {
     /// Capsule name (unique identifier)
+    #[serde(default)]
     pub name: String,
 
     /// Scheduling requirements (used by Coordinator)
+    #[serde(default)]
     pub scheduling: SchedulingConfig,
 
     /// Container execution configuration (used by Agent)
+    #[serde(default)]
     pub compute: ComputeConfig,
 
     /// Volume mounts (optional, for model files)
@@ -82,7 +85,7 @@ impl AdepManifest {
 ///
 /// This section defines constraints that the Coordinator's GPU-aware scheduler
 /// uses to select an appropriate Rig (Agent node) for placement.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct SchedulingConfig {
     #[serde(default)]
     pub gpu: Option<GpuConstraints>,
@@ -95,8 +98,7 @@ pub struct SchedulingConfig {
 }
 
 /// Cloud bursting constraints
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct CloudConstraints {
     /// Cloud accelerator type (e.g., "L4:1")
     pub accelerators: Option<String>,
@@ -109,8 +111,7 @@ pub struct CloudConstraints {
 /// GPU resource constraints for scheduling
 ///
 /// These constraints map directly to the Coordinator's `GpuConstraints` type (Week 2).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct GpuConstraints {
     /// Minimum required VRAM in gigabytes (0 = CPU-only workload)
     #[serde(default)]
@@ -123,11 +124,17 @@ pub struct GpuConstraints {
 }
 
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct NativeConfig {
+    pub runtime: String,
+    pub args: Vec<String>,
+}
+
 /// Container compute configuration
 ///
 /// This section defines how the capsule should be executed as an OCI container.
 /// The Agent uses this information to generate the OCI config.json.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ComputeConfig {
     /// OCI container image (e.g., "docker.io/vllm/vllm-openai:latest")
     pub image: String,
@@ -139,13 +146,17 @@ pub struct ComputeConfig {
     /// Environment variables in "KEY=VALUE" format
     #[serde(default)]
     pub env: Vec<String>,
+
+    /// Native runtime configuration (for macOS/Metal)
+    #[serde(default)]
+    pub native: Option<NativeConfig>,
 }
 
 /// Volume mount configuration
 ///
 /// Defines how host files (e.g., GGUF model files) are mounted into the container.
 /// This is essential for LLM inference where model files are stored on the host.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct AdepVolume {
     /// Mount type (currently only "bind" is supported)
     #[serde(rename = "type")]

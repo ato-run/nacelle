@@ -79,12 +79,16 @@ impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
         // Mapping policy: map capsule.name -> adep.name, and create a minimal compute
         // entry so the Agent can produce an OCI spec. Engines should provide a
         // default image for capsule-based workloads (placeholder).
-        let image = if let Some(_base) = c.ai.base_model.clone() {
-            // If base_model is present, prefer an AI runner image
-            "onescluster/ai-runner:latest".to_string()
+        let image = if let Some(base) = c.ai.base_model.clone() {
+            if base.is_empty() || base.eq_ignore_ascii_case("none") {
+                "".to_string()
+            } else {
+                // If base_model is present and valid, prefer an AI runner image
+                "onescluster/ai-runner:latest".to_string()
+            }
         } else {
-            // Default placeholder image for capsules without explicit compute
-            "onescluster/local-capsule:latest".to_string()
+            // No default image, allowing fallback to DevRuntime
+            "".to_string()
         };
 
         // Build scheduling with GPU hints (we set vram_min_gb if provided)
@@ -117,13 +121,35 @@ impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
             cloud: cloud_constraints,
         };
 
+        let (native, env) = if let Some(runtime) = c.runtime {
+            let native_config = if runtime.runtime_type == "native" {
+                Some(crate::adep::NativeConfig {
+                    runtime: runtime.executable.unwrap_or_default(),
+                    args: runtime.args.unwrap_or_default(),
+                })
+            } else {
+                None
+            };
+
+            let mut env_vars = vec![];
+            if let Some(env_map) = runtime.env {
+                for (k, v) in env_map {
+                    env_vars.push(format!("{}={}", k, v));
+                }
+            }
+            (native_config, env_vars)
+        } else {
+            (None, vec![])
+        };
+
         AdepManifest {
             name: c.capsule.name,
             scheduling,
             compute: ComputeConfig {
                 image,
                 args: vec![],
-                env: vec![],
+                env,
+                native,
             },
             volumes: vec![],
             metadata: std::collections::HashMap::new(),

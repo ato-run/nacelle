@@ -77,6 +77,16 @@ pub struct CloudConfig {
     pub enabled: bool,
     pub api_endpoint: Option<String>,
     pub api_key: Option<String>,
+    pub rclone: Option<RcloneConfig>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct RcloneConfig {
+    pub config_type: String,
+    pub provider: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub endpoint: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]

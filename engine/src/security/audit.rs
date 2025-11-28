@@ -44,12 +44,12 @@ pub enum AuditOperation {
     StopCapsule,
 }
 
-impl ToString for AuditOperation {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for AuditOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AuditOperation::DeployCapsule => "CAPSULE_DEPLOY".to_string(),
-            AuditOperation::StartCapsule => "CAPSULE_START".to_string(),
-            AuditOperation::StopCapsule => "CAPSULE_STOP".to_string(),
+            AuditOperation::DeployCapsule => write!(f, "CAPSULE_DEPLOY"),
+            AuditOperation::StartCapsule => write!(f, "CAPSULE_START"),
+            AuditOperation::StopCapsule => write!(f, "CAPSULE_STOP"),
         }
     }
 }
@@ -60,11 +60,11 @@ pub enum AuditStatus {
     Failure,
 }
 
-impl ToString for AuditStatus {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for AuditStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AuditStatus::Success => "SUCCESS".to_string(),
-            AuditStatus::Failure => "FAILURE".to_string(),
+            AuditStatus::Success => write!(f, "SUCCESS"),
+            AuditStatus::Failure => write!(f, "FAILURE"),
         }
     }
 }

@@ -347,6 +347,7 @@ mod tests {
             image: "hello-world".to_string(),
             args: vec!["/hello".to_string()],
             env: vec!["MY_VAR=test".to_string()],
+            native: None,
         };
         let volumes = vec![];
 
@@ -391,6 +392,7 @@ mod tests {
             image: "hello-world".to_string(),
             args: vec!["/hello".to_string()],
             env: vec!["MY_VAR=test".to_string()],
+            native: None,
         };
         let volumes = vec![];
         let empty_gpus: Vec<String> = vec![];
@@ -427,6 +429,7 @@ mod tests {
             image: "vllm/vllm-openai".to_string(),
             args: vec!["--model".to_string(), "/models/model.gguf".to_string()],
             env: vec!["MY_VAR=test".to_string()],
+            native: None,
         };
         let volumes = vec![];
 
@@ -483,6 +486,7 @@ mod tests {
             image: "ubuntu".into(),
             args: vec![],
             env: vec![],
+            native: None,
         };
         let volumes = vec![AdepVolume {
             r#type: "bind".into(),

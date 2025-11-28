@@ -28,7 +28,7 @@ tower-http = { version = "0.5", features = ["cors"] }
 # 既存の依存関係
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.11", features = ["json"] }
+
 clap = { version = "4.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
@@ -40,10 +40,10 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Hardware detection
 hostname = "0.4"
+dirs = "5.0"
 mdns-sd = "0.10"
 serde_yaml = "0.9"
-nvml-wrapper = { version = "0.9", optional = true }
-cudarc = { version = "0.17", features = ["driver", "cuda-version-from-build-system"], optional = true } # VRAM Scrubbing用
+
 
 # OCI runtime specification
 oci-spec = "0.6"
@@ -65,16 +65,36 @@ prometheus = "0.13"
 # Storage and container management (optional, for future implementation)
 # libadep-core = { path = "../../libadep/core" }
 libadep-core = { path = "../../libadep/core", features = ["toml-support"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+hcl-rs = "0.19.4"
+async-stream = "0.3.6"
+futures = "0.3.31"
+serde_urlencoded = "0.7.1"
+sha2 = "0.10.9"
+
+bytes = "1.11.0"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+zip = "2.1"
+tar = "0.4"
+flate2 = "1.0"
+async-trait = "0.1.89"
+nix = { version = "0.30.1", features = ["signal"] }
 # lvm-sys2 = "0.2"
 # libcryptsetup-rs = "0.9"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+nvml-wrapper = "0.9"
+cudarc = { version = "0.17", features = ["driver", "cuda-version-from-build-system"] }
+
 [features]
-default = []
-real-gpu = ["nvml-wrapper", "cudarc"]
+default = ["toml-support"]
 toml-support = ["libadep-core/toml-support"]
 
 [dev-dependencies]
 tempfile = "3.8"
+colored = "2.1"
+sysinfo = "0.30"
 
 [build-dependencies]
 tonic-build = "0.10"

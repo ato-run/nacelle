@@ -229,6 +229,7 @@ impl StatusReporter {
 
         let phase = match capsule.status {
             CapsuleStatus::Pending => WorkloadPhase::Pending,
+            CapsuleStatus::Provisioning => WorkloadPhase::Pending,
             CapsuleStatus::Running => WorkloadPhase::Running,
             CapsuleStatus::Stopped => WorkloadPhase::Succeeded,
             CapsuleStatus::Failed => WorkloadPhase::Failed,
@@ -408,23 +409,44 @@ pub enum StatusReporterError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hardware::scrubber::GpuScrubber;
+
     use crate::hardware::{GpuInfo, RigHardwareReport};
     use crate::security::audit::AuditLogger;
     use std::path::PathBuf;
     use std::time::Duration as StdDuration;
 
     fn create_test_manager() -> CapsuleManager {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = Box::leak(Box::new(tempfile::tempdir().unwrap()));
         let log_path = temp_dir.path().join("audit.log");
         let key_path = temp_dir.path().join("node_key.pem");
 
         let logger =
             Arc::new(AuditLogger::new(log_path, key_path, "test-node".to_string()).unwrap());
-        let scrubber = Arc::new(GpuScrubber::new(logger.clone()));
+        // let scrubber = Arc::new(GpuScrubber::new(logger.clone()));
 
         let gpu_detector = crate::hardware::create_gpu_detector();
-        CapsuleManager::new(logger, scrubber, gpu_detector, None, None, None, None)
+        
+        let runtime_config = crate::runtime::RuntimeConfig {
+            kind: crate::runtime::RuntimeKind::Mock,
+            binary_path: PathBuf::from("/tmp/mock_runtime"),
+            bundle_root: temp_dir.path().join("bundles"),
+            state_root: temp_dir.path().join("state"),
+            log_dir: temp_dir.path().join("logs"),
+            hook_retry_attempts: 1,
+        };
+
+        CapsuleManager::new(
+            logger, 
+            gpu_detector, 
+            None, 
+            None, 
+            None, 
+            None, 
+            None, 
+            None, 
+            None, 
+            Some(runtime_config)
+        ).unwrap()
     }
 
     fn sample_capsule(status: CapsuleStatus) -> Capsule {
@@ -444,6 +466,8 @@ mod tests {
             last_failure: None,
             last_exit_code: None,
             log_path: None,
+            started_at: None,
+            remote_url: None,
         }
     }
 

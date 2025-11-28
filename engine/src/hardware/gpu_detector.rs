@@ -336,8 +336,26 @@ pub fn create_gpu_detector() -> Arc<dyn GpuDetector> {
 
     #[cfg(not(feature = "real-gpu"))]
     {
-        tracing::info!("Using CPU-only detector (real-gpu feature not enabled)");
-        Arc::new(CpuGpuDetector::new())
+        #[cfg(target_os = "macos")]
+        {
+            use super::mac_gpu::MacGpuDetector;
+            match MacGpuDetector::new() {
+                Ok(detector) => {
+                    tracing::info!("Using Mac GPU detector");
+                    Arc::new(detector)
+                }
+                Err(e) => {
+                    tracing::warn!("Mac GPU detector failed ({}), falling back to CPU-only mode", e);
+                    Arc::new(CpuGpuDetector::new())
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            tracing::info!("Using CPU-only detector (real-gpu feature not enabled)");
+            Arc::new(CpuGpuDetector::new())
+        }
     }
 }
 

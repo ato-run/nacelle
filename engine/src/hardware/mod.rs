@@ -13,7 +13,8 @@
 pub mod gpu_detector;
 pub mod gpu_process_monitor;
 pub mod hardware_report;
-pub mod scrubber; // VRAM Scrubbing // Add this line
+
+pub mod mac_gpu;
 
 pub use gpu_detector::{create_gpu_detector, GpuDetectionError, GpuDetector};
 pub use gpu_process_monitor::{create_gpu_process_monitor, GpuProcessMonitor};

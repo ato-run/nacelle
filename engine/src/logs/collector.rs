@@ -24,11 +24,11 @@ pub enum LogStreamType {
     Stderr,
 }
 
-impl ToString for LogStreamType {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for LogStreamType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogStreamType::Stdout => "stdout".to_string(),
-            LogStreamType::Stderr => "stderr".to_string(),
+            LogStreamType::Stdout => write!(f, "stdout"),
+            LogStreamType::Stderr => write!(f, "stderr"),
         }
     }
 }

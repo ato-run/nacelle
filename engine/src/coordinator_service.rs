@@ -10,11 +10,11 @@ use crate::adep::{
 use crate::capsule_manager::CapsuleManager;
 use crate::oci::spec_builder::build_oci_spec;
 use crate::proto::onescluster::coordinator::v1::{
-    agent_service_server::AgentService as AgentServiceTrait, AdePManifest as ProtoAdePManifest,
-    DeployWorkloadRequest, DeployWorkloadResponse, FetchModelRequest, FetchModelResponse,
-    SchedulingConfig as ProtoSchedulingConfig, StopWorkloadRequest, StopWorkloadResponse,
+    agent_service_server::AgentService as AgentServiceTrait, DeployWorkloadRequest, DeployWorkloadResponse,
+    FetchModelRequest, FetchModelResponse, StopWorkloadRequest, StopWorkloadResponse,
 };
 use crate::runtime::{ContainerRuntime, LaunchRequest, RuntimeError};
+use crate::runtime::traits::Runtime;
 use crate::workload::manifest_loader::{load_manifest_str, ResourceRequirements};
 
 /// AgentService implements the Agent gRPC service
@@ -42,90 +42,7 @@ impl AgentService {
     }
 }
 
-fn convert_manifest(proto: &ProtoAdePManifest) -> Result<AdepManifest, Status> {
-    if proto.name.is_empty() {
-        return Err(Status::invalid_argument("manifest.name is required"));
-    }
-
-    let scheduling = convert_scheduling(proto.scheduling.as_ref());
-
-    let compute_proto = proto
-        .compute
-        .clone()
-        .ok_or_else(|| Status::invalid_argument("manifest.compute is required"))?;
-
-    if compute_proto.image.is_empty() {
-        return Err(Status::invalid_argument(
-            "manifest.compute.image is required",
-        ));
-    }
-
-    let env_pairs: Vec<String> = if compute_proto.env.is_empty() {
-        Vec::new()
-    } else {
-        let mut entries: Vec<_> = compute_proto.env.iter().collect();
-        entries.sort_by(|a, b| a.0.cmp(b.0));
-        entries
-            .into_iter()
-            .map(|(key, value)| format!("{}={}", key, value))
-            .collect()
-    };
-
-    let volumes = proto
-        .volumes
-        .iter()
-        .map(|volume| AdepVolume {
-            r#type: volume.r#type.clone(),
-            source: volume.source.clone(),
-            destination: volume.destination.clone(),
-            readonly: volume.readonly,
-        })
-        .collect();
-
-    Ok(AdepManifest {
-        name: proto.name.clone(),
-        scheduling,
-        compute: AdepComputeConfig {
-            image: compute_proto.image,
-            args: compute_proto.args,
-            env: env_pairs,
-        },
-        volumes,
-        metadata: proto.metadata.clone(),
-    })
-}
-
-fn convert_scheduling(proto: Option<&ProtoSchedulingConfig>) -> AdepSchedulingConfig {
-    match proto {
-        Some(config) => {
-            let gpu = config.gpu.as_ref().map(|gpu| AdepGpuConstraints {
-                vram_min_gb: gpu.vram_min_gb,
-                cuda_version_min: if gpu.cuda_version_min.is_empty() {
-                    None
-                } else {
-                    Some(gpu.cuda_version_min.clone())
-                },
-            });
-
-            let strategy = if config.strategy.trim().is_empty() {
-                None
-            } else {
-                Some(config.strategy.clone())
-            };
-
-            AdepSchedulingConfig {
-                gpu,
-                strategy,
-                cloud: None,
-            }
-        }
-        None => AdepSchedulingConfig {
-            gpu: None,
-            strategy: None,
-            cloud: None,
-        },
-    }
-}
+// Helper functions removed (no longer using Proto manifest types)
 
 #[tonic::async_trait]
 impl AgentServiceTrait for AgentService {
@@ -151,26 +68,23 @@ impl AgentServiceTrait for AgentService {
             req.workload_id
         );
 
-        // Prefer typed Proto manifest, otherwise parse manifest_json which may be JSON or TOML
+        if req.adep_json.is_empty() {
+             return Err(Status::invalid_argument(
+                 "DeployWorkloadRequest.adep_json must be provided",
+             ));
+        }
+
+        let manifest_str = String::from_utf8(req.adep_json.clone())
+            .map_err(|e| Status::invalid_argument(format!("Invalid UTF-8 in adep_json: {}", e)))?;
+
         let (manifest, resource_hints): (AdepManifest, Option<ResourceRequirements>) =
-            if let Some(proto_manifest) = req.manifest.as_ref() {
-                // Typed proto -> convert to AdepManifest
-                let m = convert_manifest(proto_manifest)?;
-                (m, None)
-            } else {
-                if req.manifest_json.is_empty() {
-                    return Err(Status::invalid_argument(
-                        "DeployWorkloadRequest.manifest or manifest_json must be provided",
-                    ));
-                }
-                match load_manifest_str(None, &req.manifest_json) {
-                    Ok((m, r)) => (m, r),
-                    Err(e) => {
-                        return Err(Status::invalid_argument(format!(
-                            "Invalid adep manifest: {}",
-                            e
-                        )))
-                    }
+            match load_manifest_str(None, &manifest_str) {
+                Ok((m, r)) => (m, r),
+                Err(e) => {
+                    return Err(Status::invalid_argument(format!(
+                        "Invalid adep manifest: {}",
+                        e
+                    )))
                 }
             };
 
@@ -187,12 +101,15 @@ impl AgentServiceTrait for AgentService {
             "Resolved rootfs for workload"
         );
 
+        // TODO: Handle resource_assignment from request if available, currently missing in proto
+        let resource_assignment = vec![]; 
+
         let oci_spec = build_oci_spec(
             &rootfs_path,
             &manifest.compute,
             &manifest.volumes,
             if requires_gpu {
-                Some(&req.resource_assignment)
+                Some(&resource_assignment)
             } else {
                 None
             },
@@ -201,12 +118,7 @@ impl AgentServiceTrait for AgentService {
         )
         .map_err(|e| Status::internal(format!("Failed to build OCI spec: {}", e)))?;
 
-        let manifest_json_owned = if req.manifest_json.is_empty() {
-            serde_json::to_string(&manifest)
-                .map_err(|err| Status::internal(format!("Failed to serialize manifest: {err}")))?
-        } else {
-            req.manifest_json.clone()
-        };
+        let manifest_json_owned = String::from_utf8(req.adep_json).unwrap_or_default();
 
         let launch_result = match self
             .runtime
@@ -259,14 +171,19 @@ impl AgentServiceTrait for AgentService {
             "✅ Deployment successful"
         );
 
+        // Construct WorkloadStatus
+        let status = crate::proto::onescluster::coordinator::v1::WorkloadStatus {
+            workload_id: req.workload_id,
+            name: manifest.name,
+            reserved_vram_bytes,
+            phase: crate::proto::onescluster::coordinator::v1::WorkloadPhase::Running as i32,
+            pid: launch_result.pid as u64,
+            observed_vram_bytes: 0, // TODO
+        };
+
         Ok(Response::new(DeployWorkloadResponse {
-            success: true,
-            message: format!(
-                "Workload '{}' deployed (pid={}, bundle={})",
-                manifest.name,
-                launch_result.pid,
-                launch_result.bundle_path.display()
-            ),
+            workload_id: status.workload_id.clone(),
+            status: Some(status),
         }))
     }
 
@@ -281,15 +198,15 @@ impl AgentServiceTrait for AgentService {
             Ok(_) => {
                 info!("Workload {} stopped successfully", req.workload_id);
                 Ok(Response::new(StopWorkloadResponse {
+                    workload_id: req.workload_id,
                     success: true,
-                    message: "Stopped successfully".to_string(),
                 }))
             }
             Err(e) => {
                 error!("Failed to stop workload {}: {}", req.workload_id, e);
                 Ok(Response::new(StopWorkloadResponse {
+                    workload_id: req.workload_id,
                     success: false,
-                    message: format!("Failed to stop: {}", e),
                 }))
             }
         }

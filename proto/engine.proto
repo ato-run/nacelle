@@ -9,14 +9,27 @@ service Engine {
   rpc GetResources(GetResourcesRequest) returns (ResourceInfo);
   rpc ValidateManifest(ValidateRequest) returns (ValidationResult);
   rpc GetSystemStatus(GetSystemStatusRequest) returns (SystemStatus);
+  rpc StreamLogs(LogRequest) returns (stream EngineLogEntry);
+}
+
+message LogRequest {
+  string capsule_id = 1;
+  bool follow = 2; // If true, stream updates. If false, return current content and close.
+  uint64 tail_lines = 3; // Number of lines to return from the end (0 for all/default)
+}
+
+message EngineLogEntry {
+  string line = 1;
+  string timestamp = 2; // ISO8601
+  string source = 3; // "stdout" or "stderr"
 }
 
 message GetResourcesRequest {
-  // 空のリクエストメッセージ
+  // Empty request message
 }
 
 message GetSystemStatusRequest {
-  // 空のリクエストメッセージ
+  // Empty request message
 }
 
 message DeployRequest {

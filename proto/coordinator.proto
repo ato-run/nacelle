@@ -1,162 +1,399 @@
 syntax = "proto3";
+
 package onescluster.coordinator.v1;
 
 option go_package = "github.com/onescluster/coordinator/pkg/proto;proto";
 
-// Coordinator service - handles communication FROM Agents TO Coordinator
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ============================================================================
+// Core Services
+// ============================================================================
+
+// CoordinatorService - Main control plane API
 service CoordinatorService {
-  // Agent reports its observed state (hardware + running workloads)
-  rpc ReportStatus(StatusReportRequest) returns (StatusReportResponse);
+    // Machine Management
+    rpc RegisterMachine(RegisterMachineRequest) returns (RegisterMachineResponse);
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse);
+    rpc GetMachine(GetMachineRequest) returns (Machine);
+    
+    // Capsule Lifecycle
+    rpc DeployCapsule(DeployCapsuleRequest) returns (DeployCapsuleResponse);
+    rpc StopCapsule(StopCapsuleRequest) returns (google.protobuf.Empty);
+    rpc GetCapsuleStatus(GetCapsuleStatusRequest) returns (GetCapsuleStatusResponse);
+    rpc ListCapsules(ListCapsulesRequest) returns (ListCapsulesResponse);
+    
+    // Streaming
+    rpc StreamLogs(StreamLogsRequest) returns (stream LogEntry);
+    rpc StreamMetrics(StreamMetricsRequest) returns (stream MetricSnapshot);
 }
 
-// Agent service - handles communication FROM Coordinator TO Agents
+// EngineService - Data plane API (Engine <-> Coordinator)
+service EngineService {
+    // Runtime execution
+    rpc ExecuteCapsule(ExecuteCapsuleRequest) returns (ExecuteCapsuleResponse);
+    rpc TerminateCapsule(TerminateCapsuleRequest) returns (TerminationResult);
+    
+    // Hardware operations
+    rpc GetHardwareInfo(google.protobuf.Empty) returns (HardwareInfo);
+    rpc ScrubVRAM(ScrubVRAMRequest) returns (ScrubVRAMResponse);
+    
+    // Artifact management
+    rpc EnsureRuntime(EnsureRuntimeRequest) returns (EnsureRuntimeResponse);
+}
+
+// AgentService - Coordinator -> Agent communication
 service AgentService {
-  // Coordinator instructs Agent to deploy a workload
-  rpc DeployWorkload(DeployWorkloadRequest) returns (DeployWorkloadResponse);
-
-  // Coordinator instructs Agent to stop a workload
-  rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
-
-  // Coordinator instructs Agent to fetch a model file
-  rpc FetchModel(FetchModelRequest) returns (FetchModelResponse);
+    rpc DeployWorkload(DeployWorkloadRequest) returns (DeployWorkloadResponse);
+    rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
+    rpc FetchModel(FetchModelRequest) returns (FetchModelResponse);
 }
 
-// Report submitted by Agent containing current hardware + workload state
-message StatusReportRequest {
-  RigStatus status = 1;
+// ============================================================================
+// Message Definitions
+// ============================================================================
+
+// --- Machine Messages ---
+
+message Machine {
+    string id = 1;
+    string hostname = 2;
+    string tailnet_ip = 3;
+    OperatingSystem os = 4;
+    repeated GpuInfo gpus = 5;
+    MachineStatus status = 6;
+    google.protobuf.Timestamp last_heartbeat = 7;
 }
 
-message StatusReportResponse {
-  bool success = 1;
-  string message = 2;
+enum OperatingSystem {
+    OS_UNSPECIFIED = 0;
+    OS_LINUX = 1;
+    OS_DARWIN = 2;
+    OS_WINDOWS = 3;
 }
 
-// Agent state snapshot (source of truth for reconciliation)
-message RigStatus {
-  string rig_id = 1;                    // Unique Rig identifier (hostname)
-  HardwareState hardware = 2;           // Hardware metrics (VRAM, drivers, GPUs)
-  repeated WorkloadStatus running_workloads = 3; // Workloads currently running on Agent
-  repeated Taint taints = 4;            // Scheduling taints advertised by Agent
-  uint64 reported_at_unix_seconds = 5;  // Timestamp of this report (epoch seconds)
-  bool is_mock = 6;                     // Whether this is mock data (for testing)
+enum MachineStatus {
+    MACHINE_STATUS_UNSPECIFIED = 0;
+    MACHINE_STATUS_ONLINE = 1;
+    MACHINE_STATUS_OFFLINE = 2;
+    MACHINE_STATUS_MAINTENANCE = 3;
 }
 
-// Hardware snapshot for a Rig
-message HardwareState {
-  repeated GpuInfo gpus = 1;            // List of GPUs on this Rig
-  string system_cuda_version = 2;       // System CUDA version (e.g., "12.2")
-  string system_driver_version = 3;     // NVIDIA driver version (e.g., "525.60.11")
-  uint64 total_vram_bytes = 4;          // Sum of VRAM across all GPUs
-  uint64 used_vram_bytes = 5;           // VRAM currently consumed by running workloads
-}
-
-// GPU information (maps to Rust GpuInfo)
 message GpuInfo {
-  uint32 index = 1;                     // GPU index (0-based)
-  string device_name = 2;               // GPU name (e.g., "NVIDIA GeForce RTX 4090")
-  uint64 vram_total_bytes = 3;          // Total VRAM in bytes
-  string cuda_compute_capability = 4;   // CUDA compute capability (e.g., "8.9")
-  uint64 vram_available_bytes = 5;      // Currently available VRAM (optional)
-  string uuid = 6;                      // GPU UUID (Unique Identifier)
+    int32 index = 1;
+    string name = 2;
+    string driver_version = 3;
+    uint64 vram_total_bytes = 4;
+    uint64 vram_free_bytes = 5;
+    float utilization_percent = 6;
+    float temperature_celsius = 7;
+    RuntimeType supported_runtime = 8;
 }
 
-// Workload instance currently running on the Rig
+enum RuntimeType {
+    RUNTIME_UNSPECIFIED = 0;
+    RUNTIME_CUDA = 1;      // NVIDIA GPU
+    RUNTIME_METAL = 2;     // Apple Silicon
+    RUNTIME_ROCM = 3;      // AMD GPU
+    RUNTIME_CPU = 4;       // CPU fallback
+}
+
+message RegisterMachineRequest {
+    string hostname = 1;
+    OperatingSystem os = 2;
+    repeated GpuInfo gpus = 3;
+    string tailnet_ip = 4;
+}
+
+message RegisterMachineResponse {
+    string machine_id = 1;
+    string auth_token = 2;
+}
+
+message HeartbeatRequest {
+    string machine_id = 1;
+    repeated GpuInfo gpu_snapshots = 2;
+    float cpu_utilization = 3;
+    uint64 ram_used_bytes = 4;
+    uint64 ram_total_bytes = 5;
+    repeated WorkloadStatus running_workloads = 6;
+}
+
+message HeartbeatResponse {
+    repeated PendingTask pending_tasks = 1;
+}
+
+message PendingTask {
+    string task_id = 1;
+    oneof task {
+        DeployCapsuleRequest deploy = 2;
+        StopCapsuleRequest stop = 3;
+    }
+}
+
+message ListMachinesRequest {
+    MachineStatus status_filter = 1;
+    int32 page_size = 2;
+    string page_token = 3;
+}
+
+message ListMachinesResponse {
+    repeated Machine machines = 1;
+    string next_page_token = 2;
+}
+
+message GetMachineRequest {
+    string machine_id = 1;
+}
+
+// --- Capsule Messages ---
+
+message Capsule {
+    string id = 1;
+    string machine_id = 2;
+    string runtime_id = 3;
+    string name = 4;
+    CapsuleStatus status = 5;
+    int32 port = 6;
+    map<string, string> config = 7;
+    google.protobuf.Timestamp deployed_at = 8;
+}
+
+enum CapsuleStatus {
+    CAPSULE_STATUS_UNSPECIFIED = 0;
+    CAPSULE_STATUS_PENDING = 1;
+    CAPSULE_STATUS_PULLING = 2;
+    CAPSULE_STATUS_STARTING = 3;
+    CAPSULE_STATUS_RUNNING = 4;
+    CAPSULE_STATUS_STOPPING = 5;
+    CAPSULE_STATUS_STOPPED = 6;
+    CAPSULE_STATUS_ERROR = 7;
+}
+
+message DeployCapsuleRequest {
+    string machine_id = 1;  // Optional - auto-schedule if empty
+    string runtime_name = 2;
+    string runtime_version = 3;  // "latest" or specific version
+    string name = 4;
+    map<string, string> config = 5;
+    ResourceRequirements resources = 6;
+}
+
+message ResourceRequirements {
+    uint64 min_vram_bytes = 1;
+    int32 min_gpu_count = 2;
+    uint64 min_ram_bytes = 3;
+}
+
+message DeployCapsuleResponse {
+    string capsule_id = 1;
+    string machine_id = 2;
+    int32 assigned_port = 3;
+    string access_url = 4;  // Tailnet URL
+}
+
+message StopCapsuleRequest {
+    string capsule_id = 1;
+    bool force = 2;
+}
+
+message GetCapsuleStatusRequest {
+    string capsule_id = 1;
+}
+
+message GetCapsuleStatusResponse {
+    CapsuleStatus status = 1;
+}
+
+message ListCapsulesRequest {
+    string machine_id = 1;  // Optional filter
+    CapsuleStatus status_filter = 2;
+}
+
+message ListCapsulesResponse {
+    repeated Capsule capsules = 1;
+    string next_page_token = 2;
+}
+
+// --- Streaming Messages ---
+
+message StreamLogsRequest {
+    string capsule_id = 1;
+    bool follow = 2;
+    int32 tail_lines = 3;  // Last N lines, 0 for all
+}
+
+message LogEntry {
+    google.protobuf.Timestamp timestamp = 1;
+    LogLevel level = 2;
+    string message = 3;
+    string source = 4;  // "stdout" or "stderr"
+}
+
+enum LogLevel {
+    LOG_LEVEL_UNSPECIFIED = 0;
+    LOG_LEVEL_DEBUG = 1;
+    LOG_LEVEL_INFO = 2;
+    LOG_LEVEL_WARN = 3;
+    LOG_LEVEL_ERROR = 4;
+}
+
+message StreamMetricsRequest {
+    string machine_id = 1;
+    int32 interval_seconds = 2;  // Polling interval
+}
+
+message MetricSnapshot {
+    google.protobuf.Timestamp timestamp = 1;
+    repeated GpuInfo gpus = 2;
+    float cpu_utilization = 3;
+    uint64 ram_used_bytes = 4;
+}
+
+// --- Engine-Specific Messages ---
+
+message ExecuteCapsuleRequest {
+    string capsule_id = 1;
+    RuntimeSpec runtime = 2;
+    map<string, string> env = 3;
+    repeated string args = 4;
+    int32 port = 5;
+    
+    // Compatibility with existing Engine implementation
+    oneof manifest {
+        string toml_content = 6;
+        bytes adep_json = 7;
+    }
+}
+
+message RuntimeSpec {
+    string name = 1;
+    string version = 2;
+    oneof execution {
+        DockerSpec docker = 3;
+        NativeSpec native = 4;
+    }
+}
+
+message DockerSpec {
+    string image = 1;
+    repeated string volumes = 2;
+    bool gpu_enabled = 3;
+}
+
+message NativeSpec {
+    string binary_path = 1;
+    string working_dir = 2;
+}
+
+message ExecuteCapsuleResponse {
+    int32 pid = 1;
+    int32 actual_port = 2;
+}
+
+message TerminateCapsuleRequest {
+    string capsule_id = 1;
+    int32 signal = 2;  // Unix signal, default SIGTERM
+    int32 timeout_seconds = 3;
+}
+
+message TerminationResult {
+    bool success = 1;
+    int32 exit_code = 2;
+    bool vram_scrubbed = 3;
+}
+
+message HardwareInfo {
+    OperatingSystem os = 1;
+    string os_version = 2;
+    string hostname = 3;
+    repeated GpuInfo gpus = 4;
+    uint64 total_ram_bytes = 5;
+    int32 cpu_cores = 6;
+    string cpu_model = 7;
+}
+
+message ScrubVRAMRequest {
+    repeated int32 gpu_indices = 1;  // Empty = all GPUs
+}
+
+message ScrubVRAMResponse {
+    repeated GpuScrubResult results = 1;
+}
+
+message GpuScrubResult {
+    int32 gpu_index = 1;
+    bool success = 2;
+    uint64 bytes_scrubbed = 3;
+    int64 duration_ms = 4;
+    string error_message = 5;
+}
+
+message EnsureRuntimeRequest {
+    string runtime_name = 1;
+    string version = 2;
+}
+
+message EnsureRuntimeResponse {
+    bool already_cached = 1;
+    string local_path = 2;
+    uint64 download_bytes = 3;
+}
+
+// --- Agent Service Messages ---
+
+message DeployWorkloadRequest {
+  string workload_id = 1;
+  bytes adep_json = 2;
+  repeated string resource_assignment = 3;
+}
+
+message DeployWorkloadResponse {
+  string workload_id = 1;
+  WorkloadStatus status = 2;
+}
+
+message StopWorkloadRequest {
+  string workload_id = 1;
+}
+
+message StopWorkloadResponse {
+  string workload_id = 1;
+  bool success = 2;
+}
+
 message WorkloadStatus {
-  string workload_id = 1;               // Unique workload identifier
-  string name = 2;                      // Human-friendly workload name (optional)
-  uint64 reserved_vram_bytes = 3;       // VRAM reserved by this workload
-  WorkloadPhase phase = 4;              // Observed execution phase
-  uint64 pid = 5;                       // Process ID of the container (0 = unknown)
-  uint64 observed_vram_bytes = 6;       // VRAM measured in bytes (fallback to reserved)
+  string workload_id = 1;
+  string name = 2;
+  uint64 reserved_vram_bytes = 3;
+  WorkloadPhase phase = 4;
+  uint64 pid = 5;
+  uint64 observed_vram_bytes = 6;
 }
 
 enum WorkloadPhase {
   WORKLOAD_PHASE_UNSPECIFIED = 0;
   WORKLOAD_PHASE_PENDING = 1;
   WORKLOAD_PHASE_RUNNING = 2;
-  WORKLOAD_PHASE_FAILED = 3;
-  WORKLOAD_PHASE_SUCCEEDED = 4;
+  WORKLOAD_PHASE_SUCCEEDED = 3;
+  WORKLOAD_PHASE_FAILED = 4;
 }
 
-// Node-level taints advertised for scheduling decisions
 message Taint {
   string key = 1;
   string value = 2;
-  TaintEffect effect = 3;
+  string effect = 3;
 }
 
-enum TaintEffect {
-  TAINT_EFFECT_UNSPECIFIED = 0;
-  TAINT_EFFECT_NO_SCHEDULE = 1;
-  TAINT_EFFECT_PREFER_NO_SCHEDULE = 2;
-}
-
-// Request to deploy a workload (Coordinator → Agent)
-message DeployWorkloadRequest {
-  string workload_id = 1;               // Unique workload identifier
-  AdePManifest manifest = 2;            // Strongly typed adep manifest
-  string manifest_json = 3;             // Original JSON payload (for compatibility)
-  repeated string resource_assignment = 4; // List of assigned GPU UUIDs
-}
-
-// Response to deploy request
-message DeployWorkloadResponse {
-  bool success = 1;
-  string message = 2;  // Success message or error details
-}
-
-// Request to stop a workload (Coordinator → Agent)
-message StopWorkloadRequest {
-  string workload_id = 1;
-}
-
-// Response to stop request
-message StopWorkloadResponse {
-  bool success = 1;
-  string message = 2;
-}
-
-// Strict schema for adep.json manifest
-message AdePManifest {
-  string name = 1;                      // Workload name
-  SchedulingConfig scheduling = 2;      // Scheduling preferences/constraints
-  ComputeConfig compute = 3;            // Container execution parameters
-  repeated Volume volumes = 4;          // Volume mounts
-  map<string, string> metadata = 5;     // Arbitrary metadata for future use
-}
-
-message SchedulingConfig {
-  GpuConstraints gpu = 1;               // GPU requirements
-  string strategy = 2;                  // Scheduling strategy hint (e.g., "best_fit")
-}
-
-message GpuConstraints {
-  uint64 vram_min_gb = 1;               // Minimum VRAM requirement (GB)
-  string cuda_version_min = 2;          // Minimum CUDA version requirement
-}
-
-message ComputeConfig {
-  string image = 1;                     // OCI image reference
-  repeated string args = 2;             // Container args (entrypoint + args)
-  map<string, string> env = 3;          // Environment variables key/value
-}
-
-message Volume {
-  string type = 1;                      // Mount type (e.g., "bind")
-  string source = 2;                    // Host path
-  string destination = 3;               // Container path
-  bool readonly = 4;                    // Read-only flag
-}
-
-// Request to fetch a model file from a URL
 message FetchModelRequest {
-  string url = 1;                       // Source URL to download from
-  string destination = 2;               // Destination file path on host
+  string url = 1;
+  string destination = 2;
 }
 
-// Response to fetch model request
 message FetchModelResponse {
   bool success = 1;
-  string message = 2;                   // Success message or error details
-  uint64 bytes_downloaded = 3;          // Total bytes downloaded
+  string message = 2;
+  uint64 bytes_downloaded = 3;
 }

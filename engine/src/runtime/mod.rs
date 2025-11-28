@@ -1,14 +1,20 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 
 use oci_spec::runtime::Spec;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
-use tracing::{debug, error, info, warn};
+use tracing::info;
 
 use crate::config::RuntimeSection;
+
+pub mod container;
+pub mod dev;
+pub mod native;
+pub mod traits;
+
+pub use container::ContainerRuntime;
+pub use dev::DevRuntime;
+pub use native::NativeRuntime;
+pub use traits::Runtime;
 
 const DEFAULT_HOOK_RETRY_ATTEMPTS: u32 = 1;
 
@@ -71,8 +77,6 @@ impl RuntimeConfig {
 
         let (kind, binary_path) = match (preferred_kind, explicit_binary) {
             (Some(kind), Some(path)) => {
-                // If both are specified, trust the user's preference for kind
-                // but still verify the binary exists
                 if path.exists() {
                     (kind, path)
                 } else {
@@ -91,7 +95,6 @@ impl RuntimeConfig {
                         tried: vec![path.to_string_lossy().into_owned()],
                     });
                 }
-                // Try to infer, but if it fails and the binary is mock_runtime, default to Mock
                 let inferred_kind = infer_kind_from_path(&path).or_else(|| {
                     if path.to_string_lossy().contains("mock_runtime") {
                         Some(RuntimeKind::Mock)
@@ -264,366 +267,6 @@ impl CommandOutput {
     }
 }
 
-/// Container runtime wrapper that launches workloads using runc/youki.
-#[derive(Debug, Clone)]
-pub struct ContainerRuntime {
-    config: RuntimeConfig,
-}
-
-impl ContainerRuntime {
-    pub fn new(config: RuntimeConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn config(&self) -> &RuntimeConfig {
-        &self.config
-    }
-
-    /// Launch workload via runtime.
-    pub async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
-        let bundle_path = self
-            .prepare_bundle(request.workload_id, request.spec)
-            .await?;
-        let log_path = self.prepare_log_path(request.workload_id).await?;
-        let pid_file = self
-            .config
-            .state_root
-            .join(format!("{}.pid", request.workload_id));
-
-        self.ensure_directory(&self.config.state_root).await?;
-
-        self.write_manifest_snapshot(request.workload_id, request.manifest_json)
-            .await?;
-
-        let mut attempts = 0;
-        loop {
-            attempts += 1;
-            match self
-                .create_and_start(request.workload_id, &bundle_path, &pid_file, &log_path)
-                .await
-            {
-                Ok(pid) => {
-                    info!(
-                        workload_id = request.workload_id,
-                        pid, "runtime launched container"
-                    );
-                    return Ok(LaunchResult {
-                        pid,
-                        bundle_path,
-                        log_path,
-                    });
-                }
-                Err(err) => {
-                    let (exit_code, stderr_text) = match &err {
-                        RuntimeError::CommandFailure {
-                            exit_code, stderr, ..
-                        } => (*exit_code, Some(stderr.trim().to_string())),
-                        _ => (None, None),
-                    };
-
-                    let should_retry = matches!(
-                        &err,
-                        RuntimeError::CommandFailure { stderr, .. }
-                            if attempts <= self.config.hook_retry_attempts + 1
-                                && hook_related_failure(stderr)
-                    );
-
-                    if should_retry {
-                        warn!(
-                            workload_id = request.workload_id,
-                            attempt = attempts,
-                            exit_code = ?exit_code,
-                            stderr = stderr_text.as_deref().unwrap_or(""),
-                            log_path = %log_path.display(),
-                            "runtime reported hook failure; retrying"
-                        );
-                        self.cleanup_after_failure(request.workload_id).await.ok();
-                        continue;
-                    }
-
-                    error!(
-                        workload_id = request.workload_id,
-                        attempts,
-                        exit_code = ?exit_code,
-                        stderr = stderr_text.as_deref().unwrap_or(""),
-                        log_path = %log_path.display(),
-                        ?err,
-                        "runtime launch failed"
-                    );
-
-                    self.cleanup_after_failure(request.workload_id).await.ok();
-                    return Err(err);
-                }
-            }
-        }
-    }
-
-    async fn prepare_bundle(
-        &self,
-        workload_id: &str,
-        spec: &Spec,
-    ) -> Result<PathBuf, RuntimeError> {
-        self.ensure_directory(&self.config.bundle_root).await?;
-        let bundle_path = self.config.bundle_root.join(workload_id);
-        self.ensure_directory(&bundle_path).await?;
-
-        if let Some(root) = spec.root() {
-            let path = root.path();
-            if !path.exists() {
-                return Err(RuntimeError::InvalidConfig(format!(
-                    "root filesystem path {} does not exist",
-                    path.display()
-                )));
-            }
-        }
-
-        let config_path = bundle_path.join("config.json");
-        let spec_json = serde_json::to_vec_pretty(spec).map_err(RuntimeError::SpecSerialization)?;
-        let mut file = fs::File::create(&config_path)
-            .await
-            .map_err(|source| RuntimeError::Io {
-                path: config_path.clone(),
-                source,
-            })?;
-        file.write_all(&spec_json)
-            .await
-            .map_err(|source| RuntimeError::Io {
-                path: config_path.clone(),
-                source,
-            })?;
-        file.flush().await.map_err(|source| RuntimeError::Io {
-            path: config_path.clone(),
-            source,
-        })?;
-
-        Ok(bundle_path)
-    }
-
-    async fn prepare_log_path(&self, workload_id: &str) -> Result<PathBuf, RuntimeError> {
-        self.ensure_directory(&self.config.log_dir).await?;
-        Ok(self.config.log_dir.join(format!("{}.log", workload_id)))
-    }
-
-    async fn write_manifest_snapshot(
-        &self,
-        workload_id: &str,
-        manifest_json: Option<&str>,
-    ) -> Result<(), RuntimeError> {
-        if manifest_json.is_none() {
-            return Ok(());
-        }
-
-        let snapshot_dir = self.config.bundle_root.join(workload_id);
-        self.ensure_directory(&snapshot_dir).await?;
-        let snapshot_path = snapshot_dir.join("manifest.json");
-        let mut file =
-            fs::File::create(&snapshot_path)
-                .await
-                .map_err(|source| RuntimeError::Io {
-                    path: snapshot_path.clone(),
-                    source,
-                })?;
-        file.write_all(manifest_json.unwrap().as_bytes())
-            .await
-            .map_err(|source| RuntimeError::Io {
-                path: snapshot_path.clone(),
-                source,
-            })?;
-        file.flush().await.map_err(|source| RuntimeError::Io {
-            path: snapshot_path.clone(),
-            source,
-        })?;
-        Ok(())
-    }
-
-    async fn create_and_start(
-        &self,
-        workload_id: &str,
-        bundle_path: &Path,
-        pid_file: &Path,
-        log_path: &Path,
-    ) -> Result<u32, RuntimeError> {
-        match self
-            .run_create(workload_id, bundle_path, pid_file, log_path)
-            .await?
-        {
-            Ok(()) => {}
-            Err(err) => return Err(err.into_error("create")),
-        }
-
-        match self.run_start(workload_id).await? {
-            Ok(()) => {}
-            Err(err) => return Err(err.into_error("start")),
-        }
-
-        let state = self.query_state(workload_id).await?;
-        Ok(state.pid)
-    }
-
-    async fn run_create(
-        &self,
-        workload_id: &str,
-        bundle_path: &Path,
-        pid_file: &Path,
-        log_path: &Path,
-    ) -> Result<Result<(), CommandOutput>, RuntimeError> {
-        let mut cmd = Command::new(&self.config.binary_path);
-        cmd.arg("create")
-            .arg("--root")
-            .arg(&self.config.state_root)
-            .arg("--bundle")
-            .arg(bundle_path)
-            .arg("--pid-file")
-            .arg(pid_file)
-            .arg("--log")
-            .arg(log_path)
-            .arg("--log-format")
-            .arg("json")
-            .arg(workload_id);
-
-        let result = self.spawn_command(cmd, "create").await?;
-        if let Err(ref output) = result {
-            if !output.stderr.is_empty() {
-                debug!(workload_id, "runtime create stderr: {}", output.stderr);
-            }
-        }
-        Ok(result)
-    }
-
-    async fn run_start(
-        &self,
-        workload_id: &str,
-    ) -> Result<Result<(), CommandOutput>, RuntimeError> {
-        let mut cmd = Command::new(&self.config.binary_path);
-        cmd.arg("start")
-            .arg("--root")
-            .arg(&self.config.state_root)
-            .arg(workload_id);
-
-        self.spawn_command(cmd, "start").await
-    }
-
-    async fn spawn_command(
-        &self,
-        mut cmd: Command,
-        operation: &str,
-    ) -> Result<Result<(), CommandOutput>, RuntimeError> {
-        cmd.stdout(Stdio::null());
-        cmd.stderr(Stdio::piped());
-        debug!(operation = %operation, "executing runtime command: {:?}", cmd);
-
-        match cmd.output().await {
-            Ok(output) => {
-                if output.status.success() {
-                    Ok(Ok(()))
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    Ok(Err(CommandOutput {
-                        stderr,
-                        exit_code: output.status.code(),
-                    }))
-                }
-            }
-            Err(source) => Err(RuntimeError::CommandExecution {
-                operation: operation.to_string(),
-                source,
-            }),
-        }
-    }
-
-    async fn query_state(&self, workload_id: &str) -> Result<RuntimeState, RuntimeError> {
-        let mut cmd = Command::new(&self.config.binary_path);
-        cmd.arg("state")
-            .arg("--root")
-            .arg(&self.config.state_root)
-            .arg(workload_id)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        let output = match cmd.output().await {
-            Ok(output) => output,
-            Err(source) => {
-                return Err(RuntimeError::CommandExecution {
-                    operation: "state".to_string(),
-                    source,
-                })
-            }
-        };
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            warn!(
-                workload_id,
-                "runtime state command failed: {}",
-                stderr.trim()
-            );
-            return Err(RuntimeError::CommandFailure {
-                operation: "state".to_string(),
-                exit_code: output.status.code(),
-                stderr,
-            });
-        }
-
-        serde_json::from_slice(&output.stdout)
-            .map_err(|source| RuntimeError::StateQueryFailed { source })
-    }
-
-    async fn cleanup_after_failure(&self, workload_id: &str) -> Result<(), RuntimeError> {
-        let mut cmd = Command::new(&self.config.binary_path);
-        cmd.arg("delete")
-            .arg("--force")
-            .arg("--root")
-            .arg(&self.config.state_root)
-            .arg(workload_id)
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped());
-
-        match cmd.output().await {
-            Ok(output) => {
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    warn!(
-                        workload_id,
-                        "runtime delete failed during cleanup: {}",
-                        stderr.trim()
-                    );
-                }
-                Ok(())
-            }
-            Err(source) => {
-                warn!(
-                    workload_id,
-                    error = %source,
-                    "failed to execute runtime delete for cleanup"
-                );
-                Ok(())
-            }
-        }
-    }
-
-    async fn ensure_directory(&self, path: &Path) -> Result<(), RuntimeError> {
-        if path.exists() {
-            return Ok(());
-        }
-        fs::create_dir_all(path)
-            .await
-            .map_err(|source| RuntimeError::Io {
-                path: path.to_path_buf(),
-                source,
-            })
-    }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct RuntimeState {
-    pid: u32,
-}
-
-fn hook_related_failure(stderr: &str) -> bool {
-    let lower = stderr.to_ascii_lowercase();
-    lower.contains("hook") || lower.contains("nvidia")
-}
-
 impl From<RuntimeError> for CommandOutput {
     fn from(err: RuntimeError) -> Self {
         match err {
@@ -697,15 +340,6 @@ mod tests {
     }
 
     #[test]
-    fn test_hook_related_failure() {
-        assert!(hook_related_failure("Error: hook failed"));
-        assert!(hook_related_failure("nvidia hook error"));
-        assert!(hook_related_failure("HOOK: failed to execute"));
-        assert!(!hook_related_failure("Container failed to start"));
-        assert!(!hook_related_failure("Unknown error"));
-    }
-
-    #[test]
     fn test_runtime_config_defaults() {
         // Test with no configuration
         let config = RuntimeConfig::from_section(None);
@@ -727,139 +361,6 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_container_runtime_new() {
-        // Create a minimal runtime config for testing
-        let temp_dir = TempDir::new().unwrap();
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config.clone());
-        assert_eq!(runtime.config().kind, RuntimeKind::Runc);
-        assert_eq!(runtime.config().hook_retry_attempts, 1);
-    }
-
-    #[tokio::test]
-    async fn test_prepare_bundle_creates_directories() {
-        let temp_dir = TempDir::new().unwrap();
-        let root_path = temp_dir.path().join("rootfs");
-        tokio::fs::create_dir_all(&root_path).await.unwrap();
-
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let spec = create_test_spec(root_path.to_str().unwrap());
-
-        let result = runtime.prepare_bundle("test-workload", &spec).await;
-        assert!(result.is_ok());
-
-        let bundle_path = result.unwrap();
-        assert!(bundle_path.exists());
-        assert!(bundle_path.join("config.json").exists());
-    }
-
-    #[tokio::test]
-    async fn test_prepare_bundle_invalid_rootfs() {
-        let temp_dir = TempDir::new().unwrap();
-        let nonexistent_root = temp_dir.path().join("nonexistent");
-
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let spec = create_test_spec(nonexistent_root.to_str().unwrap());
-
-        let result = runtime.prepare_bundle("test-workload", &spec).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
-    }
-
-    #[tokio::test]
-    async fn test_prepare_log_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let log_path = runtime.prepare_log_path("test-workload").await;
-
-        assert!(log_path.is_ok());
-        let path = log_path.unwrap();
-        assert!(path.to_string_lossy().contains("test-workload.log"));
-        assert!(path.parent().unwrap().exists());
-    }
-
-    #[tokio::test]
-    async fn test_write_manifest_snapshot() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let manifest_json = r#"{"name":"test","version":"1.0.0"}"#;
-
-        let result = runtime
-            .write_manifest_snapshot("test-workload", Some(manifest_json))
-            .await;
-
-        assert!(result.is_ok());
-
-        let snapshot_path = temp_dir.path().join("bundles/test-workload/manifest.json");
-        assert!(snapshot_path.exists());
-
-        let content = tokio::fs::read_to_string(snapshot_path).await.unwrap();
-        assert_eq!(content, manifest_json);
-    }
-
-    #[tokio::test]
-    async fn test_write_manifest_snapshot_none() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let result = runtime.write_manifest_snapshot("test-workload", None).await;
-
-        assert!(result.is_ok());
-    }
-
     #[test]
     fn test_runtime_error_display() {
         let err = RuntimeError::BinaryNotFound {
@@ -878,49 +379,6 @@ mod tests {
         };
         assert!(err.to_string().contains("create"));
         assert!(err.to_string().contains("error message"));
-    }
-
-    #[tokio::test]
-    async fn test_ensure_directory_creates() {
-        let temp_dir = TempDir::new().unwrap();
-        let new_dir = temp_dir.path().join("new_directory");
-
-        assert!(!new_dir.exists());
-
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let result = runtime.ensure_directory(&new_dir).await;
-
-        assert!(result.is_ok());
-        assert!(new_dir.exists());
-    }
-
-    #[tokio::test]
-    async fn test_ensure_directory_exists() {
-        let temp_dir = TempDir::new().unwrap();
-        let existing_dir = temp_dir.path();
-
-        let config = RuntimeConfig {
-            kind: RuntimeKind::Runc,
-            binary_path: PathBuf::from("/usr/bin/runc"),
-            bundle_root: temp_dir.path().join("bundles"),
-            state_root: temp_dir.path().join("state"),
-            log_dir: temp_dir.path().join("logs"),
-            hook_retry_attempts: 1,
-        };
-
-        let runtime = ContainerRuntime::new(config);
-        let result = runtime.ensure_directory(existing_dir).await;
-
-        assert!(result.is_ok());
     }
 
     #[test]
