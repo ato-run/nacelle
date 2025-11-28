@@ -1,0 +1,11 @@
+    Checking capsuled-engine v0.1.0 (/Users/egamikohsuke/Ekoh/projects/ato/onescluster/capsuled/engine)
+error: unexpected closing delimiter: `}`
+  --> src/runtime/container.rs:13:1
+   |
+ 9 | use tracing::{debug, error, info, warn};
+   |              - this opening brace...  - ...matches this closing brace
+...
+13 | };
+   | ^ unexpected closing delimiter
+
+error: could not compile `capsuled-engine` (lib) due to 1 previous error

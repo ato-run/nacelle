@@ -1,0 +1,405 @@
+warning: unused import: `tokio_stream::wrappers::IntervalStream`
+  --> src/api_server.rs:12:5
+   |
+12 | use tokio_stream::wrappers::IntervalStream;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `warn`
+  --> src/api_server.rs:15:28
+   |
+15 | use tracing::{info, error, warn};
+   |                            ^^^^
+
+warning: unused import: `AsyncSeekExt`
+   --> src/api_server.rs:314:43
+    |
+314 |             use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    |                                           ^^^^^^^^^^^^
+
+warning: unused import: `Path`
+ --> src/artifact/cache.rs:1:17
+  |
+1 | use std::path::{Path, PathBuf};
+  |                 ^^^^
+
+warning: unused import: `tokio::io::AsyncWriteExt`
+ --> src/cloud/skypilot.rs:9:5
+  |
+9 | use tokio::io::AsyncWriteExt;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `real-gpu`
+   --> src/hardware/gpu_detector.rs:140:7
+    |
+140 | #[cfg(feature = "real-gpu")]
+    |       ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `default` and `toml-support`
+    = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `real-gpu`
+   --> src/hardware/gpu_detector.rs:146:7
+    |
+146 | #[cfg(feature = "real-gpu")]
+    |       ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `default` and `toml-support`
+    = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+   --> src/hardware/gpu_detector.rs:158:7
+    |
+158 | #[cfg(feature = "real-gpu")]
+    |       ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `default` and `toml-support`
+    = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+   --> src/hardware/gpu_detector.rs:323:11
+    |
+323 |     #[cfg(feature = "real-gpu")]
+    |           ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `default` and `toml-support`
+    = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+   --> src/hardware/gpu_detector.rs:337:15
+    |
+337 |     #[cfg(not(feature = "real-gpu"))]
+    |               ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `default` and `toml-support`
+    = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+ --> src/hardware/gpu_process_monitor.rs:6:16
+  |
+6 | #[cfg_attr(not(feature = "real-gpu"), allow(dead_code))]
+  |                ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `toml-support`
+  = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+  --> src/hardware/gpu_process_monitor.rs:37:7
+   |
+37 | #[cfg(feature = "real-gpu")]
+   |       ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `toml-support`
+   = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+  --> src/hardware/gpu_process_monitor.rs:43:7
+   |
+43 | #[cfg(feature = "real-gpu")]
+   |       ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `toml-support`
+   = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+  --> src/hardware/gpu_process_monitor.rs:55:7
+   |
+55 | #[cfg(feature = "real-gpu")]
+   |       ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `toml-support`
+   = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `real-gpu`
+  --> src/hardware/gpu_process_monitor.rs:97:11
+   |
+97 |     #[cfg(feature = "real-gpu")]
+   |           ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `toml-support`
+   = help: consider adding `real-gpu` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `std::sync::Arc`
+ --> src/hardware/mac_gpu.rs:2:5
+  |
+2 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `error` and `warn`
+ --> src/security/vram_scrubber.rs:1:21
+  |
+1 | use tracing::{info, warn, error};
+  |                     ^^^^  ^^^^^
+
+warning: variable `position` is assigned to, but never used
+   --> src/api_server.rs:316:21
+    |
+316 |             let mut position = 0;
+    |                     ^^^^^^^^
+    |
+    = note: consider using `_position` instead
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: you might have meant to pattern match on the similarly named constant `MAX_BACKOFF_SECS`
+    |
+316 -             let mut position = 0;
+316 +             let mut status_reporter::MAX_BACKOFF_SECS = 0;
+    |
+
+warning: unused variable: `token`
+   --> src/auth.rs:110:25
+    |
+110 |             if let Some(token) = params.get("token") {
+    |                         ^^^^^ help: if this is intentional, prefix it with an underscore: `_token`
+
+warning: variable does not need to be mutable
+   --> src/auth.rs:103:9
+    |
+103 |     let mut provided_token = auth_header.and_then(|h| ...
+    |         ----^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/security/egress_proxy.rs:111:17
+    |
+111 | ...   let mut target_socket = TcpStream::connect(targe...
+    |           ----^^^^^^^^^^^^^
+    |           |
+    |           help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/security/egress_proxy.rs:129:17
+    |
+129 | ...   let mut target_socket = TcpStream::connect(host_...
+    |           ----^^^^^^^^^^^^^
+    |           |
+    |           help: remove this `mut`
+
+warning: unused import: `tokio_stream::StreamExt`
+  --> src/api_server.rs:13:5
+   |
+13 | use tokio_stream::StreamExt;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `supervisor`
+   --> src/runtime/dev.rs:126:29
+    |
+126 | ...     if let Some(supervisor) = &self.process_superv...
+    |                     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_supervisor`
+
+warning: variable does not need to be mutable
+  --> src/runtime/dev.rs:35:13
+   |
+35 | ...   let mut serve_dir = std::env::current_dir().unwra...
+   |           ----^^^^^^^^^
+   |           |
+   |           help: remove this `mut`
+
+warning: unused variable: `supervisor`
+   --> src/runtime/native.rs:151:29
+    |
+151 | ...     if let Some(supervisor) = &self.process_superv...
+    |                     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_supervisor`
+
+warning: unused variable: `p`
+  --> src/runtime/native.rs:38:71
+   |
+38 | ...).as_ref().and_then(|p| {
+   |                         ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `text`
+  --> src/workload/manifest_loader.rs:42:23
+   |
+42 | fn load_toml_manifest(text: &str) -> Result<(AdepManife...
+   |                       ^^^^ help: if this is intentional, prefix it with an underscore: `_text`
+
+warning: field `config_dir` is never read
+  --> src/network/traefik.rs:13:5
+   |
+11 | pub struct TraefikManager {
+   |            -------------- field in this struct
+12 |     process: Arc<Mutex<Option<Child>>>,
+13 |     config_dir: PathBuf,
+   |     ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `CommandOutput` is never constructed
+   --> src/runtime/mod.rs:255:8
+    |
+255 | struct CommandOutput {
+    |        ^^^^^^^^^^^^^
+
+warning: method `into_error` is never used
+   --> src/runtime/mod.rs:261:8
+    |
+260 | impl CommandOutput {
+    | ------------------ method in this implementation
+261 |     fn into_error(self, operation: impl Into<String>) ...
+    |        ^^^^^^^^^^
+
+    Checking capsuled-engine v0.1.0 (/Users/egamikohsuke/Ekoh/projects/ato/onescluster/capsuled/engine)
+warning: `capsuled-engine` (lib) generated 31 warnings (run `cargo fix --lib -p capsuled-engine` to apply 12 suggestions)
+error[E0432]: unresolved import `crate::artifact::ArtifactConfig`
+   --> src/runtime/native.rs:195:27
+    |
+195 |     use crate::artifact::{ArtifactConfig, ArtifactManager};
+    |                           ^^^^^^^^^^^^^^ no `ArtifactConfig` in `artifact`
+    |
+    = help: consider importing this struct instead:
+            crate::artifact::manager::ArtifactConfig
+
+error[E0425]: cannot find function `create_default_spec` in module `crate::oci::spec_builder`
+   --> src/runtime/native.rs:260:46
+    |
+260 |         let spec = crate::oci::spec_builder::create_default_spec(); 
+    |                                              ^^^^^^^^^^^^^^^^^^^ not found in `crate::oci::spec_builder`
+
+warning: unused import: `std::net::SocketAddr`
+ --> src/artifact/tests.rs:9:5
+  |
+9 | use std::net::SocketAddr;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::path::PathBuf`
+   --> src/capsule_manager.rs:596:9
+    |
+596 |     use std::path::PathBuf;
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `tempfile::TempDir`
+   --> src/runtime/mod.rs:290:9
+    |
+290 |     use tempfile::TempDir;
+    |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+ --> src/workload/tests.rs:3:9
+  |
+3 |     use super::*;
+  |         ^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/auth.rs:103:9
+    |
+103 |     let mut provided_token = auth_header.and_then(|h| h.strip_prefix("Bearer "));
+    |         ----^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/security/egress_proxy.rs:111:17
+    |
+111 |             let mut target_socket = TcpStream::connect(target).await?;
+    |                 ----^^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/security/egress_proxy.rs:129:17
+    |
+129 |             let mut target_socket = TcpStream::connect(host_port).await?;
+    |                 ----^^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+error[E0560]: struct `runtime::LaunchRequest<'_>` has no field named `bundle_path`
+   --> src/runtime/native.rs:270:13
+    |
+270 |             bundle_path: PathBuf::from("/tmp"), // Dummy
+    |             ^^^^^^^^^^^ `runtime::LaunchRequest<'_>` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0308]: mismatched types
+   --> src/runtime/native.rs:271:33
+    |
+271 |             manifest_json: Some(manifest_json.as_bytes()),
+    |                            ---- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `&str`, found `&[u8]`
+    |                            |
+    |                            arguments to this enum variant are incorrect
+    |
+    = note: expected reference `&str`
+               found reference `&[u8]`
+help: the type constructed contains `&[u8]` due to the type of the argument passed
+   --> src/runtime/native.rs:271:28
+    |
+271 |             manifest_json: Some(manifest_json.as_bytes()),
+    |                            ^^^^^------------------------^
+    |                                 |
+    |                                 this argument influences the type of `Some`
+note: tuple variant defined here
+   --> /Users/egamikohsuke/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:602:5
+    |
+602 |     Some(#[stable(feature = "rust1", since = "1.0.0")] T),
+    |     ^^^^
+help: try removing the method call
+    |
+271 -             manifest_json: Some(manifest_json.as_bytes()),
+271 +             manifest_json: Some(manifest_json),
+    |
+
+warning: unused variable: `temp_dir`
+   --> src/capsule_manager.rs:599:13
+    |
+599 |         let temp_dir = tempfile::tempdir().unwrap();
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_temp_dir`
+
+warning: unused variable: `metrics`
+   --> src/metrics/prometheus_metrics.rs:259:13
+    |
+259 |         let metrics = collector.gather().unwrap();
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_metrics`
+
+warning: unused variable: `supervisor`
+   --> src/runtime/dev.rs:126:29
+    |
+126 |                 if let Some(supervisor) = &self.process_supervisor {
+    |                             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_supervisor`
+
+warning: variable does not need to be mutable
+  --> src/runtime/dev.rs:35:13
+   |
+35 |         let mut serve_dir = std::env::current_dir().unwrap_or_default();
+   |             ----^^^^^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: unused variable: `supervisor`
+   --> src/runtime/native.rs:151:29
+    |
+151 |                 if let Some(supervisor) = &self.process_supervisor {
+    |                             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_supervisor`
+
+warning: unused variable: `p`
+  --> src/runtime/native.rs:38:71
+   |
+38 |         let native_config = request.spec.process().as_ref().and_then(|p| {
+   |                                                                       ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `text`
+  --> src/workload/manifest_loader.rs:42:23
+   |
+42 | fn load_toml_manifest(text: &str) -> Result<(AdepManifest, Option<ResourceRequirements>)> {
+   |                       ^^^^ help: if this is intentional, prefix it with an underscore: `_text`
+
+Some errors have detailed explanations: E0308, E0425, E0432, E0560.
+For more information about an error, try `rustc --explain E0308`.
+warning: `capsuled-engine` (lib test) generated 34 warnings (20 duplicates)
+error: could not compile `capsuled-engine` (lib test) due to 4 previous errors; 34 warnings emitted

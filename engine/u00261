@@ -1,0 +1,23 @@
+    Checking capsuled-engine v0.1.0 (/Users/egamikohsuke/Ekoh/projects/ato/onescluster/capsuled/engine)
+src/artifact_manager.rs:11:5: error[E0432]: unresolved import `futures_util`: use of unresolved module or unlinked crate `futures_util`
+src/api_server.rs:12:5: warning: unused import: `tokio_stream::wrappers::IntervalStream`
+src/api_server.rs:15:28: warning: unused import: `warn`
+src/api_server.rs:283:43: warning: unused import: `AsyncSeekExt`
+src/artifact_manager.rs:2:5: warning: unused import: `std::sync::Arc`
+src/artifact_manager.rs:12:5: warning: unused import: `bytes::Bytes`
+src/hardware/mac_gpu.rs:2:5: warning: unused import: `std::sync::Arc`
+src/capsule_manager.rs:181:42: warning: unused variable: `native`: help: if this is intentional, prefix it with an underscore: `_native`
+src/capsule_manager.rs:331:21: warning: variable does not need to be mutable
+src/capsule_manager.rs:305:46: error[E0382]: borrow of moved value: `child`: value borrowed here after move
+src/api_server.rs:285:21: warning: variable `position` is assigned to, but never used
+src/auth.rs:108:25: warning: unused variable: `token`: help: if this is intentional, prefix it with an underscore: `_token`
+src/auth.rs:101:9: warning: variable does not need to be mutable
+src/artifact_manager.rs:184:47: error[E0599]: no method named `next` found for opaque type `impl Stream<Item = Result<bytes::Bytes, reqwest::Error>>` in the current scope: method not found in `impl Stream<Item = Result<bytes::Bytes, reqwest::Error>>`
+src/artifact_manager.rs:186:20: error[E0277]: the size for values of type `[u8]` cannot be known at compilation time: doesn't have a size known at compile-time
+src/artifact_manager.rs:186:17: error[E0277]: the size for values of type `[u8]` cannot be known at compilation time: doesn't have a size known at compile-time
+src/artifact_manager.rs:200:17: error[E0277]: the size for values of type `[u8]` cannot be known at compilation time: doesn't have a size known at compile-time
+src/artifact_manager.rs:184:54: error[E0277]: the size for values of type `[u8]` cannot be known at compilation time: doesn't have a size known at compile-time
+src/api_server.rs:13:5: warning: unused import: `tokio_stream::StreamExt`
+src/workload/manifest_loader.rs:42:23: warning: unused variable: `text`: help: if this is intentional, prefix it with an underscore: `_text`
+warning: `capsuled-engine` (lib) generated 13 warnings
+error: could not compile `capsuled-engine` (lib) due to 7 previous errors; 13 warnings emitted
