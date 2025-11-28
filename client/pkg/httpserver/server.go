@@ -24,7 +24,8 @@ type Server struct {
 
 // Config holds HTTP server configuration
 type Config struct {
-	Addr string
+	Addr           string
+	RuntimeHandler *api.RuntimeHandler
 }
 
 // NewServer creates a new HTTP server instance
@@ -54,6 +55,9 @@ func NewServer(cfg Config) *Server {
 
 	// API endpoints
 	mux.HandleFunc("/api/v1/models/fetch", api.HandleFetchModel)
+	if cfg.RuntimeHandler != nil {
+		mux.HandleFunc("/api/v1/runtimes", cfg.RuntimeHandler.List)
+	}
 
 	s.server = &http.Server{
 		Addr:         cfg.Addr,

@@ -48,12 +48,14 @@ func NewScheduler() *Scheduler {
 			FilterHasGPU,        // 1. Check if Rig has any GPU at all
 			FilterByVRAM,        // 2. Check VRAM availability
 			FilterByCudaVersion, // 3. Check CUDA version compatibility
+			FilterByLocality,    // 4. Check Cloud Bursting constraints
 		},
 		ScoreFuncs: []struct {
 			Func   ScoreFunc
 			Weight int64
 		}{
 			{Func: ScoreByVRAMBinPacking, Weight: 1}, // Primary: bin packing strategy
+			{Func: ScoreByLocality, Weight: 10},      // Secondary: prefer local nodes strongly
 		},
 	}
 }

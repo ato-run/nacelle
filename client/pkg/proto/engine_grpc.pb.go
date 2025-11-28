@@ -24,6 +24,7 @@ const (
 	Engine_GetResources_FullMethodName     = "/onescluster.engine.v1.Engine/GetResources"
 	Engine_ValidateManifest_FullMethodName = "/onescluster.engine.v1.Engine/ValidateManifest"
 	Engine_GetSystemStatus_FullMethodName  = "/onescluster.engine.v1.Engine/GetSystemStatus"
+	Engine_StreamLogs_FullMethodName       = "/onescluster.engine.v1.Engine/StreamLogs"
 )
 
 // EngineClient is the client API for Engine service.
@@ -35,6 +36,7 @@ type EngineClient interface {
 	GetResources(ctx context.Context, in *GetResourcesRequest, opts ...grpc.CallOption) (*ResourceInfo, error)
 	ValidateManifest(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidationResult, error)
 	GetSystemStatus(ctx context.Context, in *GetSystemStatusRequest, opts ...grpc.CallOption) (*SystemStatus, error)
+	StreamLogs(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[EngineLogEntry], error)
 }
 
 type engineClient struct {
@@ -95,6 +97,25 @@ func (c *engineClient) GetSystemStatus(ctx context.Context, in *GetSystemStatusR
 	return out, nil
 }
 
+func (c *engineClient) StreamLogs(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[EngineLogEntry], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Engine_ServiceDesc.Streams[0], Engine_StreamLogs_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[LogRequest, EngineLogEntry]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_StreamLogsClient = grpc.ServerStreamingClient[EngineLogEntry]
+
 // EngineServer is the server API for Engine service.
 // All implementations must embed UnimplementedEngineServer
 // for forward compatibility.
@@ -104,6 +125,7 @@ type EngineServer interface {
 	GetResources(context.Context, *GetResourcesRequest) (*ResourceInfo, error)
 	ValidateManifest(context.Context, *ValidateRequest) (*ValidationResult, error)
 	GetSystemStatus(context.Context, *GetSystemStatusRequest) (*SystemStatus, error)
+	StreamLogs(*LogRequest, grpc.ServerStreamingServer[EngineLogEntry]) error
 	mustEmbedUnimplementedEngineServer()
 }
 
@@ -128,6 +150,9 @@ func (UnimplementedEngineServer) ValidateManifest(context.Context, *ValidateRequ
 }
 func (UnimplementedEngineServer) GetSystemStatus(context.Context, *GetSystemStatusRequest) (*SystemStatus, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSystemStatus not implemented")
+}
+func (UnimplementedEngineServer) StreamLogs(*LogRequest, grpc.ServerStreamingServer[EngineLogEntry]) error {
+	return status.Errorf(codes.Unimplemented, "method StreamLogs not implemented")
 }
 func (UnimplementedEngineServer) mustEmbedUnimplementedEngineServer() {}
 func (UnimplementedEngineServer) testEmbeddedByValue()                {}
@@ -240,6 +265,17 @@ func _Engine_GetSystemStatus_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Engine_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(LogRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EngineServer).StreamLogs(m, &grpc.GenericServerStream[LogRequest, EngineLogEntry]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_StreamLogsServer = grpc.ServerStreamingServer[EngineLogEntry]
+
 // Engine_ServiceDesc is the grpc.ServiceDesc for Engine service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -268,6 +304,12 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Engine_GetSystemStatus_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamLogs",
+			Handler:       _Engine_StreamLogs_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "engine.proto",
 }

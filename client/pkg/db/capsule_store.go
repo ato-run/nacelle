@@ -33,17 +33,20 @@ func (s *CapsuleStore) Create(ctx context.Context, capsule *Capsule) error {
 
 	query := `
 		INSERT INTO capsules (
-			id, name, node_id, manifest, status,
-			storage_path, bundle_path, network_config,
+			id, name, node_id, runtime_name, manifest, status,
+			port, access_url, storage_path, bundle_path, network_config,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := s.db.ExecContext(ctx, query,
 		capsule.ID,
 		capsule.Name,
 		capsule.NodeID,
+		capsule.RuntimeName,
 		capsule.Manifest,
 		capsule.Status,
+		capsule.Port,
+		capsule.AccessURL,
 		capsule.StoragePath,
 		capsule.BundlePath,
 		capsule.NetworkConfig,
@@ -61,8 +64,8 @@ func (s *CapsuleStore) Create(ctx context.Context, capsule *Capsule) error {
 // Get retrieves a capsule by ID
 func (s *CapsuleStore) Get(ctx context.Context, id string) (*Capsule, error) {
 	query := `
-		SELECT id, name, node_id, manifest, status,
-		       storage_path, bundle_path, network_config,
+		SELECT id, name, node_id, runtime_name, manifest, status,
+		       port, access_url, storage_path, bundle_path, network_config,
 		       created_at, updated_at
 		FROM capsules
 		WHERE id = ?`
@@ -74,8 +77,11 @@ func (s *CapsuleStore) Get(ctx context.Context, id string) (*Capsule, error) {
 		&capsule.ID,
 		&capsule.Name,
 		&capsule.NodeID,
+		&capsule.RuntimeName,
 		&capsule.Manifest,
 		&capsule.Status,
+		&capsule.Port,
+		&capsule.AccessURL,
 		&capsule.StoragePath,
 		&capsule.BundlePath,
 		&capsule.NetworkConfig,
@@ -99,8 +105,8 @@ func (s *CapsuleStore) Get(ctx context.Context, id string) (*Capsule, error) {
 // List retrieves all capsules, optionally filtered by node ID or status
 func (s *CapsuleStore) List(ctx context.Context, nodeID string, status CapsuleStatus) ([]*Capsule, error) {
 	query := `
-		SELECT id, name, node_id, manifest, status,
-		       storage_path, bundle_path, network_config,
+		SELECT id, name, node_id, runtime_name, manifest, status,
+		       port, access_url, storage_path, bundle_path, network_config,
 		       created_at, updated_at
 		FROM capsules
 		WHERE 1=1`
@@ -134,8 +140,11 @@ func (s *CapsuleStore) List(ctx context.Context, nodeID string, status CapsuleSt
 			&capsule.ID,
 			&capsule.Name,
 			&capsule.NodeID,
+			&capsule.RuntimeName,
 			&capsule.Manifest,
 			&capsule.Status,
+			&capsule.Port,
+			&capsule.AccessURL,
 			&capsule.StoragePath,
 			&capsule.BundlePath,
 			&capsule.NetworkConfig,
@@ -168,8 +177,11 @@ func (s *CapsuleStore) Update(ctx context.Context, capsule *Capsule) error {
 		UPDATE capsules
 		SET name = ?,
 		    node_id = ?,
+		    runtime_name = ?,
 		    manifest = ?,
 		    status = ?,
+		    port = ?,
+		    access_url = ?,
 		    storage_path = ?,
 		    bundle_path = ?,
 		    network_config = ?,
@@ -179,8 +191,11 @@ func (s *CapsuleStore) Update(ctx context.Context, capsule *Capsule) error {
 	result, err := s.db.ExecContext(ctx, query,
 		capsule.Name,
 		capsule.NodeID,
+		capsule.RuntimeName,
 		capsule.Manifest,
 		capsule.Status,
+		capsule.Port,
+		capsule.AccessURL,
 		capsule.StoragePath,
 		capsule.BundlePath,
 		capsule.NetworkConfig,

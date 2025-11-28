@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -57,26 +56,22 @@ func main() {
 			log.Fatalf("Failed to read manifest: %v", err)
 		}
 
-		var adepManifest pb.AdePManifest
-		if err := json.Unmarshal(data, &adepManifest); err != nil {
-			log.Fatalf("Failed to parse manifest JSON: %v", err)
-		}
-
+		// We don't need to unmarshal to AdePManifest anymore, just pass raw JSON bytes
 		fmt.Printf("Deploying workload from %s...\n", *manifest)
+		
+		workloadID := "test-workload-" + fmt.Sprintf("%d", time.Now().Unix())
 		resp, err := client.DeployWorkload(ctx, &pb.DeployWorkloadRequest{
-			WorkloadId:   "test-workload-" + fmt.Sprintf("%d", time.Now().Unix()),
-			Manifest:     &adepManifest,
-			ManifestJson: string(data),
+			WorkloadId: workloadID,
+			AdepJson:   data,
 		})
 		if err != nil {
 			log.Fatalf("DeployWorkload failed: %v", err)
 		}
-		fmt.Printf("Deploy success: %v, Message: %s\n", resp.Success, resp.Message)
-		// Print the capsule ID so we can stop it later
-		// The response doesn't contain it, but we generated it.
-		// Ideally the response should return it, but for now we rely on the log or fixed ID if we change it.
-		// Actually, let's just print what we sent.
-		// Wait, the request generation was inline. Let's extract it or just print "Check logs for ID".
+		
+		fmt.Printf("Deploy success! WorkloadID: %s\n", resp.WorkloadId)
+		if resp.Status != nil {
+			fmt.Printf("Status: %s (PID: %d)\n", resp.Status.Phase, resp.Status.Pid)
+		}
 
 	case "stop":
 		if *capsuleID == "" {
@@ -89,7 +84,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("StopWorkload failed: %v", err)
 		}
-		fmt.Printf("Stop success: %v, Message: %s\n", resp.Success, resp.Message)
+		fmt.Printf("Stop success: %v\n", resp.Success)
 
 	default:
 		log.Fatal("Unknown command. Use -cmd fetch, -cmd deploy, or -cmd stop")

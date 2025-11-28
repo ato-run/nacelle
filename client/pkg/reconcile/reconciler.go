@@ -18,26 +18,6 @@ type Store interface {
 	MarkCapsulePending(ctx context.Context, capsuleID string) error
 }
 
-type nodeStoreAdapter struct {
-	store *db.NodeStore
-}
-
-func (a *nodeStoreAdapter) ListDesiredWorkloads(ctx context.Context) (map[string]string, error) {
-	return a.store.ListDesiredWorkloads(ctx)
-}
-
-func (a *nodeStoreAdapter) ListNodeWorkloads(ctx context.Context) ([]*db.NodeWorkload, error) {
-	return a.store.ListNodeWorkloads(ctx)
-}
-
-func (a *nodeStoreAdapter) MarkCapsuleFailed(ctx context.Context, capsuleID string) error {
-	return a.store.MarkCapsuleFailed(ctx, capsuleID)
-}
-
-func (a *nodeStoreAdapter) MarkCapsulePending(ctx context.Context, capsuleID string) error {
-	return a.store.MarkCapsulePending(ctx, capsuleID)
-}
-
 // Reconciler periodically compares desired coordinator state with the reality reported by Agents.
 // It mitigates drift between reserved resources and actual workloads, preventing VRAM overcommit.
 type Reconciler struct {
@@ -65,9 +45,9 @@ func New(store Store, interval time.Duration) *Reconciler {
 	}
 }
 
-// NewWithNodeStore is a helper for callers that already depend on db.NodeStore.
-func NewWithNodeStore(nodeStore *db.NodeStore, interval time.Duration) *Reconciler {
-	return New(&nodeStoreAdapter{store: nodeStore}, interval)
+// NewWithStateManager is a helper for callers that already depend on db.StateManager.
+func NewWithStateManager(stateManager *db.StateManager, interval time.Duration) *Reconciler {
+	return New(stateManager, interval)
 }
 
 // Start launches the reconciliation loop. It returns a function that can be used to stop the loop.

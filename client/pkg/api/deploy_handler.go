@@ -4,19 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/onescluster/coordinator/pkg/db"
+	"github.com/onescluster/coordinator/pkg/engine"
 	pb "github.com/onescluster/coordinator/pkg/proto"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
 	"github.com/onescluster/coordinator/pkg/wasm"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+type DeployRequest struct {
+	RuntimeName    string             `json:"runtime_name"`
+	RuntimeVersion string             `json:"runtime_version"`
+	Config         map[string]string  `json:"config"`
+	Requirements   gpu.GpuConstraints `json:"requirements"`
+	AllowCloudBurst bool              `json:"allow_cloud_burst"`
+}
 
 // AdepManifest represents the adep.json structure (simplified for Week 4)
 type AdepManifest struct {
@@ -42,65 +49,8 @@ type ComputeConfig struct {
 	Env   []string `json:"env"`
 }
 
-// toProtoManifest converts the HTTP-level manifest into the strongly typed proto message.
-func toProtoManifest(m *AdepManifest) (*pb.AdePManifest, error) {
-	if m == nil {
-		return nil, fmt.Errorf("manifest is nil")
-	}
-
-	gpuConfig := &pb.GpuConstraints{}
-	if m.Scheduling.GPU != nil {
-		gpuConfig.VramMinGb = m.Scheduling.GPU.VramMinGB
-		if m.Scheduling.GPU.CudaVersionMin != nil {
-			gpuConfig.CudaVersionMin = *m.Scheduling.GPU.CudaVersionMin
-		}
-	}
-
-	scheduling := &pb.SchedulingConfig{
-		Gpu:      gpuConfig,
-		Strategy: m.Scheduling.Strategy,
-	}
-
-	compute := &pb.ComputeConfig{
-		Image: m.Compute.Image,
-		Args:  append([]string{}, m.Compute.Args...),
-		Env:   envSliceToMap(m.Compute.Env),
-	}
-
-	volumes := make([]*pb.Volume, 0, len(m.Volumes))
-	for _, v := range m.Volumes {
-		volumes = append(volumes, &pb.Volume{
-			Type:        v.Type,
-			Source:      v.Source,
-			Destination: v.Destination,
-			Readonly:    v.Readonly,
-		})
-	}
-
-	return &pb.AdePManifest{
-		Name:       m.Name,
-		Scheduling: scheduling,
-		Compute:    compute,
-		Volumes:    volumes,
-	}, nil
-}
-
-func envSliceToMap(env []string) map[string]string {
-	if len(env) == 0 {
-		return nil
-	}
-	result := make(map[string]string, len(env))
-	for _, kv := range env {
-		if kv == "" {
-			continue
-		}
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) == 2 {
-			result[parts[0]] = parts[1]
-		}
-	}
-	return result
-}
+// toProtoManifest removed (no longer needed)
+// envSliceToMap removed (no longer needed)
 
 type VolumeConfig struct {
 	Type        string `json:"type"`
@@ -115,16 +65,16 @@ type AgentClientFactory func(ctx context.Context, rigID string) (pb.AgentService
 
 // DeployHandler handles workload deployment requests
 type DeployHandler struct {
-	NodeStore          *db.NodeStore
+	StateManager       *db.StateManager
 	Scheduler          *gpu.Scheduler
 	AgentClientFactory AgentClientFactory // Optional: for testing (nil = use default)
 	WasmHost           *wasm.WasmerHost   // Optional: for Wasm validation
 }
 
 // NewDeployHandler creates a new deploy handler
-func NewDeployHandler(nodeStore *db.NodeStore, scheduler *gpu.Scheduler) *DeployHandler {
+func NewDeployHandler(stateManager *db.StateManager, scheduler *gpu.Scheduler) *DeployHandler {
 	return &DeployHandler{
-		NodeStore:          nodeStore,
+		StateManager:       stateManager,
 		Scheduler:          scheduler,
 		AgentClientFactory: nil, // Use default (localhost:50051)
 		WasmHost:           nil, // Initialize on first use
@@ -136,9 +86,9 @@ func NewDeployHandler(nodeStore *db.NodeStore, scheduler *gpu.Scheduler) *Deploy
 // Flow:
 // 1. Parse adep.json from request body
 // 2. Extract GPU constraints
-// 3. Query all available Rigs from NodeStore
+// 3. Query all available Rigs from StateManager
 // 4. Use Scheduler to find best Rig (Week 2 Filter-Score pipeline)
-// 5. Reserve VRAM atomically in NodeStore
+// 5. Reserve VRAM atomically in StateManager
 // 6. Call selected Agent's DeployWorkload gRPC endpoint
 // 7. Return deployment result
 func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
@@ -147,131 +97,135 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("🚀 Received deployment request")
-
-	// 1. Parse adep.json
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("❌ Failed to read request body: %v", err)
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	// 1.5 Validate manifest with Wasm (if available)
-	if h.WasmHost != nil {
-		valid, err := h.WasmHost.ValidateManifest(body)
-		if err != nil {
-			log.Printf("⚠️ Wasm validation error: %v", err)
-			// Don't fail on Wasm error, just log and continue
-		} else if !valid {
-			log.Printf("❌ Manifest validation failed (Wasm)")
-			http.Error(w, "Invalid manifest: name and version are required", http.StatusBadRequest)
-			return
-		} else {
-			log.Println("✅ Manifest validation passed (Wasm)")
-		}
-	}
-
-	var manifest AdepManifest
-	if err := json.Unmarshal(body, &manifest); err != nil {
-		log.Printf("❌ Failed to parse adep.json: %v", err)
-		http.Error(w, "Invalid adep.json format", http.StatusBadRequest)
+	// 1. Parse request
+	var req DeployRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("  Workload: %s", manifest.Name)
-	log.Printf("  Image: %s", manifest.Compute.Image)
-
-	// 2. Extract GPU constraints
-	if manifest.Scheduling.GPU == nil {
-		log.Println("❌ No GPU constraints specified")
-		http.Error(w, "GPU constraints required", http.StatusBadRequest)
-		return
+	// Ensure requirements are set
+	if req.Requirements.VramMinGB == 0 {
+		// Default to some reasonable value if not specified, or allow 0 for CPU workloads?
+		// For now, let's assume 0 means CPU only or no specific requirement.
 	}
 
-	constraints := &gpu.GpuConstraints{
-		VramMinGB:      manifest.Scheduling.GPU.VramMinGB,
-		CudaVersionMin: "",
-	}
-	if manifest.Scheduling.GPU.CudaVersionMin != nil {
-		constraints.CudaVersionMin = *manifest.Scheduling.GPU.CudaVersionMin
-	}
+	// Populate AllowCloudBurst from request to requirements
+	req.Requirements.AllowCloudBurst = req.AllowCloudBurst
 
-	log.Printf("  Required VRAM: %d GB", constraints.VramMinGB)
-	if constraints.CudaVersionMin != "" {
-		log.Printf("  Min CUDA Version: %s", constraints.CudaVersionMin)
-	}
-
-	// 3. Query all available Rigs
 	ctx := r.Context()
-	allRigs, err := h.NodeStore.GetAllGpuRigs(ctx)
+	// 1. Get available machines with GPUs
+	rigs, err := h.StateManager.GetAllGpuRigs(ctx)
 	if err != nil {
-		log.Printf("❌ Failed to query Rigs: %v", err)
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		http.Error(w, "failed to get GPU rigs", http.StatusInternalServerError)
 		return
 	}
 
-	if len(allRigs) == 0 {
-		log.Println("❌ No Rigs available in cluster")
-		http.Error(w, "No Rigs available", http.StatusServiceUnavailable)
-		return
-	}
-
-	log.Printf("  Available Rigs: %d", len(allRigs))
-
-	// 4. Use Scheduler to find best Rig
-	bestRig, assignedUUIDs, err := h.Scheduler.FindBestRigWithAssignment(allRigs, constraints)
+	// 2. Schedule to best machine
+	// Note: Task 5.2 will update Scheduler to support cloud bursting options.
+	// For now, we use existing FindBestRigWithAssignment.
+	bestRig, _, err := h.Scheduler.FindBestRigWithAssignment(rigs, &req.Requirements)
 	if err != nil {
-		log.Printf("❌ Scheduling failed: %v", err)
-		http.Error(w, fmt.Sprintf("Scheduling failed: %v", err), http.StatusServiceUnavailable)
+		http.Error(w, fmt.Sprintf("scheduling failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
 
-	log.Printf("✅ Scheduled to Rig: %s", bestRig.RigID)
-	log.Printf("  VRAM: %.2f GB available / %.2f GB total",
-		float64(bestRig.AvailableVRAMBytes())/(1024*1024*1024),
-		float64(bestRig.TotalVRAMBytes)/(1024*1024*1024))
-
-	// 5. Reserve VRAM atomically
-	requiredVRAM := constraints.VramMinGB * 1024 * 1024 * 1024
-	if err := h.NodeStore.ReserveVRAM(ctx, bestRig.RigID, requiredVRAM); err != nil {
-		log.Printf("❌ VRAM reservation failed: %v", err)
-		http.Error(w, "VRAM reservation failed", http.StatusConflict)
+	// 3. Reserve VRAM
+	// We need a workload ID.
+	workloadID := fmt.Sprintf("wl-%d", time.Now().UnixNano())
+	requiredVRAM := req.Requirements.RequiredVRAMBytes()
+	
+	if err := h.StateManager.ReserveVRAM(ctx, bestRig.RigID, workloadID, requiredVRAM); err != nil {
+		http.Error(w, "failed to reserve VRAM", http.StatusConflict)
 		return
 	}
 
-	log.Printf("  Reserved %d GB VRAM on Rig %s", constraints.VramMinGB, bestRig.RigID)
+	// 4. Connect to target Engine
+	// We need to get the Node info to get the address
+	node, exists := h.StateManager.GetNode(bestRig.RigID)
+	if !exists {
+		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		http.Error(w, "scheduled node not found", http.StatusInternalServerError)
+		return
+	}
 
-	// 6. Call Agent's DeployWorkload gRPC endpoint
-	manifestJSONBytes, _ := json.Marshal(manifest)
-	deployResp, err := h.callAgentDeploy(ctx, bestRig.RigID, string(manifestJSONBytes), &manifest, assignedUUIDs)
+	engineAddr := h.getEngineAddress(node)
+	engineClient, err := engine.NewRemoteEngineClient(engineAddr)
 	if err != nil {
-		log.Printf("❌ Agent deployment failed: %v", err)
 		// Rollback VRAM reservation
-		if rollbackErr := h.NodeStore.ReleaseVRAM(ctx, bestRig.RigID, requiredVRAM); rollbackErr != nil {
-			log.Printf("⚠️ VRAM rollback failed: %v", rollbackErr)
-		}
-		http.Error(w, fmt.Sprintf("Agent deployment failed: %v", err), http.StatusInternalServerError)
+		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		http.Error(w, fmt.Sprintf("failed to connect to engine: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	defer engineClient.Close()
+
+	// 5. Execute on remote Engine
+	// We need to construct AdepManifest from DeployRequest
+	manifest := AdepManifest{
+		Name:    req.RuntimeName,
+		// Version: req.RuntimeVersion, // AdepManifest doesn't have Version
+		Compute: ComputeConfig{
+			Image: req.RuntimeName, // Assuming image name matches runtime name
+		},
+		Scheduling: SchedulingConfig{
+			GPU: &GpuConstraints{
+				VramMinGB: req.Requirements.VramMinGB,
+			},
+		},
+	}
+	if req.Requirements.CudaVersionMin != "" {
+		manifest.Scheduling.GPU.CudaVersionMin = &req.Requirements.CudaVersionMin
+	}
+
+	manifestBytes, err := json.Marshal(manifest)
+	if err != nil {
+		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		http.Error(w, "failed to marshal manifest", http.StatusInternalServerError)
 		return
 	}
 
-	// 7. Return success response
-	log.Printf("✅ Deployment successful on Rig: %s", bestRig.RigID)
+	execReq := &pb.DeployRequest{
+		Manifest: &pb.DeployRequest_AdepJson{
+			AdepJson: manifestBytes,
+		},
+	}
+
+	resp, err := engineClient.DeployCapsule(ctx, execReq)
+	if err != nil {
+		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		http.Error(w, fmt.Sprintf("execution failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 6. Record capsule in DB
+	capsule := &db.Capsule{
+		ID:            resp.CapsuleId,
+		Name:          req.RuntimeName,
+		NodeID:        bestRig.RigID,
+		RuntimeName:   req.RuntimeName,
+		Manifest:      string(manifestBytes),
+		Status:        db.CapsuleStatusRunning,
+		AccessURL:     resp.LocalUrl, // Use LocalUrl from response
+		// Port is not in response. We can try to parse it from LocalUrl if needed.
+		// For now, leave it as 0.
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	
+	h.StateManager.CreateCapsule(capsule)
 
 	response := map[string]interface{}{
-		"success": deployResp.Success,
-		"message": deployResp.Message,
-		"rig_id":  bestRig.RigID,
+		"capsule_id": resp.CapsuleId,
+		"machine_id": bestRig.RigID,
+		"access_url": resp.LocalUrl,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
 
 // callAgentDeploy calls the selected Agent's DeployWorkload gRPC endpoint
-func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manifestJSON string, manifest *AdepManifest, assignedUUIDs []string) (*pb.DeployWorkloadResponse, error) {
+func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, workloadID string, manifestJSON []byte, assignedUUIDs []string) (*pb.DeployWorkloadResponse, error) {
 	var client pb.AgentServiceClient
 	var closeFunc func() error
 
@@ -308,15 +262,9 @@ func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manif
 	}
 
 	// Call DeployWorkload RPC
-	manifestProto, err := toProtoManifest(manifest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert manifest: %w", err)
-	}
-
 	req := &pb.DeployWorkloadRequest{
-		WorkloadId:         manifest.Name,
-		Manifest:           manifestProto,
-		ManifestJson:       manifestJSON,
+		WorkloadId:         workloadID,
+		AdepJson:           manifestJSON,
 		ResourceAssignment: assignedUUIDs,
 	}
 
@@ -326,4 +274,21 @@ func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, manif
 	}
 
 	return resp, nil
+}
+
+func (h *DeployHandler) getEngineAddress(machine *db.Node) string {
+	// Prefer Tailnet IP if available
+	if machine.TailnetIP != "" {
+		return fmt.Sprintf("%s:50051", machine.TailnetIP)
+	}
+	// Fallback to hostname (local network) or Address
+	return fmt.Sprintf("%s:50051", machine.Address)
+}
+
+func (h *DeployHandler) buildAccessURL(machine *db.Node, port int) string {
+	host := machine.TailnetIP
+	if host == "" {
+		host = machine.Address
+	}
+	return fmt.Sprintf("http://%s:%d", host, port)
 }

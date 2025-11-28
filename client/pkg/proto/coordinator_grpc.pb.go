@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,17 +20,37 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CoordinatorService_ReportStatus_FullMethodName = "/onescluster.coordinator.v1.CoordinatorService/ReportStatus"
+	CoordinatorService_RegisterMachine_FullMethodName  = "/onescluster.coordinator.v1.CoordinatorService/RegisterMachine"
+	CoordinatorService_Heartbeat_FullMethodName        = "/onescluster.coordinator.v1.CoordinatorService/Heartbeat"
+	CoordinatorService_ListMachines_FullMethodName     = "/onescluster.coordinator.v1.CoordinatorService/ListMachines"
+	CoordinatorService_GetMachine_FullMethodName       = "/onescluster.coordinator.v1.CoordinatorService/GetMachine"
+	CoordinatorService_DeployCapsule_FullMethodName    = "/onescluster.coordinator.v1.CoordinatorService/DeployCapsule"
+	CoordinatorService_StopCapsule_FullMethodName      = "/onescluster.coordinator.v1.CoordinatorService/StopCapsule"
+	CoordinatorService_GetCapsuleStatus_FullMethodName = "/onescluster.coordinator.v1.CoordinatorService/GetCapsuleStatus"
+	CoordinatorService_ListCapsules_FullMethodName     = "/onescluster.coordinator.v1.CoordinatorService/ListCapsules"
+	CoordinatorService_StreamLogs_FullMethodName       = "/onescluster.coordinator.v1.CoordinatorService/StreamLogs"
+	CoordinatorService_StreamMetrics_FullMethodName    = "/onescluster.coordinator.v1.CoordinatorService/StreamMetrics"
 )
 
 // CoordinatorServiceClient is the client API for CoordinatorService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Coordinator service - handles communication FROM Agents TO Coordinator
+// CoordinatorService - Main control plane API
 type CoordinatorServiceClient interface {
-	// Agent reports its observed state (hardware + running workloads)
-	ReportStatus(ctx context.Context, in *StatusReportRequest, opts ...grpc.CallOption) (*StatusReportResponse, error)
+	// Machine Management
+	RegisterMachine(ctx context.Context, in *RegisterMachineRequest, opts ...grpc.CallOption) (*RegisterMachineResponse, error)
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	ListMachines(ctx context.Context, in *ListMachinesRequest, opts ...grpc.CallOption) (*ListMachinesResponse, error)
+	GetMachine(ctx context.Context, in *GetMachineRequest, opts ...grpc.CallOption) (*Machine, error)
+	// Capsule Lifecycle
+	DeployCapsule(ctx context.Context, in *DeployCapsuleRequest, opts ...grpc.CallOption) (*DeployCapsuleResponse, error)
+	StopCapsule(ctx context.Context, in *StopCapsuleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	GetCapsuleStatus(ctx context.Context, in *GetCapsuleStatusRequest, opts ...grpc.CallOption) (*GetCapsuleStatusResponse, error)
+	ListCapsules(ctx context.Context, in *ListCapsulesRequest, opts ...grpc.CallOption) (*ListCapsulesResponse, error)
+	// Streaming
+	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogEntry], error)
+	StreamMetrics(ctx context.Context, in *StreamMetricsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[MetricSnapshot], error)
 }
 
 type coordinatorServiceClient struct {
@@ -40,24 +61,143 @@ func NewCoordinatorServiceClient(cc grpc.ClientConnInterface) CoordinatorService
 	return &coordinatorServiceClient{cc}
 }
 
-func (c *coordinatorServiceClient) ReportStatus(ctx context.Context, in *StatusReportRequest, opts ...grpc.CallOption) (*StatusReportResponse, error) {
+func (c *coordinatorServiceClient) RegisterMachine(ctx context.Context, in *RegisterMachineRequest, opts ...grpc.CallOption) (*RegisterMachineResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StatusReportResponse)
-	err := c.cc.Invoke(ctx, CoordinatorService_ReportStatus_FullMethodName, in, out, cOpts...)
+	out := new(RegisterMachineResponse)
+	err := c.cc.Invoke(ctx, CoordinatorService_RegisterMachine_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *coordinatorServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, CoordinatorService_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) ListMachines(ctx context.Context, in *ListMachinesRequest, opts ...grpc.CallOption) (*ListMachinesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMachinesResponse)
+	err := c.cc.Invoke(ctx, CoordinatorService_ListMachines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) GetMachine(ctx context.Context, in *GetMachineRequest, opts ...grpc.CallOption) (*Machine, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Machine)
+	err := c.cc.Invoke(ctx, CoordinatorService_GetMachine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) DeployCapsule(ctx context.Context, in *DeployCapsuleRequest, opts ...grpc.CallOption) (*DeployCapsuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeployCapsuleResponse)
+	err := c.cc.Invoke(ctx, CoordinatorService_DeployCapsule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) StopCapsule(ctx context.Context, in *StopCapsuleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, CoordinatorService_StopCapsule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) GetCapsuleStatus(ctx context.Context, in *GetCapsuleStatusRequest, opts ...grpc.CallOption) (*GetCapsuleStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCapsuleStatusResponse)
+	err := c.cc.Invoke(ctx, CoordinatorService_GetCapsuleStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) ListCapsules(ctx context.Context, in *ListCapsulesRequest, opts ...grpc.CallOption) (*ListCapsulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCapsulesResponse)
+	err := c.cc.Invoke(ctx, CoordinatorService_ListCapsules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coordinatorServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogEntry], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &CoordinatorService_ServiceDesc.Streams[0], CoordinatorService_StreamLogs_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamLogsRequest, LogEntry]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CoordinatorService_StreamLogsClient = grpc.ServerStreamingClient[LogEntry]
+
+func (c *coordinatorServiceClient) StreamMetrics(ctx context.Context, in *StreamMetricsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[MetricSnapshot], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &CoordinatorService_ServiceDesc.Streams[1], CoordinatorService_StreamMetrics_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamMetricsRequest, MetricSnapshot]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CoordinatorService_StreamMetricsClient = grpc.ServerStreamingClient[MetricSnapshot]
+
 // CoordinatorServiceServer is the server API for CoordinatorService service.
 // All implementations must embed UnimplementedCoordinatorServiceServer
 // for forward compatibility.
 //
-// Coordinator service - handles communication FROM Agents TO Coordinator
+// CoordinatorService - Main control plane API
 type CoordinatorServiceServer interface {
-	// Agent reports its observed state (hardware + running workloads)
-	ReportStatus(context.Context, *StatusReportRequest) (*StatusReportResponse, error)
+	// Machine Management
+	RegisterMachine(context.Context, *RegisterMachineRequest) (*RegisterMachineResponse, error)
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	ListMachines(context.Context, *ListMachinesRequest) (*ListMachinesResponse, error)
+	GetMachine(context.Context, *GetMachineRequest) (*Machine, error)
+	// Capsule Lifecycle
+	DeployCapsule(context.Context, *DeployCapsuleRequest) (*DeployCapsuleResponse, error)
+	StopCapsule(context.Context, *StopCapsuleRequest) (*emptypb.Empty, error)
+	GetCapsuleStatus(context.Context, *GetCapsuleStatusRequest) (*GetCapsuleStatusResponse, error)
+	ListCapsules(context.Context, *ListCapsulesRequest) (*ListCapsulesResponse, error)
+	// Streaming
+	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogEntry]) error
+	StreamMetrics(*StreamMetricsRequest, grpc.ServerStreamingServer[MetricSnapshot]) error
 	mustEmbedUnimplementedCoordinatorServiceServer()
 }
 
@@ -68,8 +208,35 @@ type CoordinatorServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCoordinatorServiceServer struct{}
 
-func (UnimplementedCoordinatorServiceServer) ReportStatus(context.Context, *StatusReportRequest) (*StatusReportResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReportStatus not implemented")
+func (UnimplementedCoordinatorServiceServer) RegisterMachine(context.Context, *RegisterMachineRequest) (*RegisterMachineResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterMachine not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) ListMachines(context.Context, *ListMachinesRequest) (*ListMachinesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListMachines not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) GetMachine(context.Context, *GetMachineRequest) (*Machine, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMachine not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) DeployCapsule(context.Context, *DeployCapsuleRequest) (*DeployCapsuleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeployCapsule not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) StopCapsule(context.Context, *StopCapsuleRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopCapsule not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) GetCapsuleStatus(context.Context, *GetCapsuleStatusRequest) (*GetCapsuleStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCapsuleStatus not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) ListCapsules(context.Context, *ListCapsulesRequest) (*ListCapsulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListCapsules not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogEntry]) error {
+	return status.Errorf(codes.Unimplemented, "method StreamLogs not implemented")
+}
+func (UnimplementedCoordinatorServiceServer) StreamMetrics(*StreamMetricsRequest, grpc.ServerStreamingServer[MetricSnapshot]) error {
+	return status.Errorf(codes.Unimplemented, "method StreamMetrics not implemented")
 }
 func (UnimplementedCoordinatorServiceServer) mustEmbedUnimplementedCoordinatorServiceServer() {}
 func (UnimplementedCoordinatorServiceServer) testEmbeddedByValue()                            {}
@@ -92,23 +259,171 @@ func RegisterCoordinatorServiceServer(s grpc.ServiceRegistrar, srv CoordinatorSe
 	s.RegisterService(&CoordinatorService_ServiceDesc, srv)
 }
 
-func _CoordinatorService_ReportStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StatusReportRequest)
+func _CoordinatorService_RegisterMachine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterMachineRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CoordinatorServiceServer).ReportStatus(ctx, in)
+		return srv.(CoordinatorServiceServer).RegisterMachine(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: CoordinatorService_ReportStatus_FullMethodName,
+		FullMethod: CoordinatorService_RegisterMachine_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CoordinatorServiceServer).ReportStatus(ctx, req.(*StatusReportRequest))
+		return srv.(CoordinatorServiceServer).RegisterMachine(ctx, req.(*RegisterMachineRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _CoordinatorService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_ListMachines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMachinesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).ListMachines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_ListMachines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).ListMachines(ctx, req.(*ListMachinesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_GetMachine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMachineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).GetMachine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_GetMachine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).GetMachine(ctx, req.(*GetMachineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_DeployCapsule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployCapsuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).DeployCapsule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_DeployCapsule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).DeployCapsule(ctx, req.(*DeployCapsuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_StopCapsule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopCapsuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).StopCapsule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_StopCapsule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).StopCapsule(ctx, req.(*StopCapsuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_GetCapsuleStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCapsuleStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).GetCapsuleStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_GetCapsuleStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).GetCapsuleStatus(ctx, req.(*GetCapsuleStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_ListCapsules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCapsulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoordinatorServiceServer).ListCapsules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoordinatorService_ListCapsules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoordinatorServiceServer).ListCapsules(ctx, req.(*ListCapsulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoordinatorService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamLogsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(CoordinatorServiceServer).StreamLogs(m, &grpc.GenericServerStream[StreamLogsRequest, LogEntry]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CoordinatorService_StreamLogsServer = grpc.ServerStreamingServer[LogEntry]
+
+func _CoordinatorService_StreamMetrics_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamMetricsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(CoordinatorServiceServer).StreamMetrics(m, &grpc.GenericServerStream[StreamMetricsRequest, MetricSnapshot]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CoordinatorService_StreamMetricsServer = grpc.ServerStreamingServer[MetricSnapshot]
 
 // CoordinatorService_ServiceDesc is the grpc.ServiceDesc for CoordinatorService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -118,8 +433,311 @@ var CoordinatorService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CoordinatorServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ReportStatus",
-			Handler:    _CoordinatorService_ReportStatus_Handler,
+			MethodName: "RegisterMachine",
+			Handler:    _CoordinatorService_RegisterMachine_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _CoordinatorService_Heartbeat_Handler,
+		},
+		{
+			MethodName: "ListMachines",
+			Handler:    _CoordinatorService_ListMachines_Handler,
+		},
+		{
+			MethodName: "GetMachine",
+			Handler:    _CoordinatorService_GetMachine_Handler,
+		},
+		{
+			MethodName: "DeployCapsule",
+			Handler:    _CoordinatorService_DeployCapsule_Handler,
+		},
+		{
+			MethodName: "StopCapsule",
+			Handler:    _CoordinatorService_StopCapsule_Handler,
+		},
+		{
+			MethodName: "GetCapsuleStatus",
+			Handler:    _CoordinatorService_GetCapsuleStatus_Handler,
+		},
+		{
+			MethodName: "ListCapsules",
+			Handler:    _CoordinatorService_ListCapsules_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamLogs",
+			Handler:       _CoordinatorService_StreamLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamMetrics",
+			Handler:       _CoordinatorService_StreamMetrics_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "coordinator.proto",
+}
+
+const (
+	EngineService_ExecuteCapsule_FullMethodName   = "/onescluster.coordinator.v1.EngineService/ExecuteCapsule"
+	EngineService_TerminateCapsule_FullMethodName = "/onescluster.coordinator.v1.EngineService/TerminateCapsule"
+	EngineService_GetHardwareInfo_FullMethodName  = "/onescluster.coordinator.v1.EngineService/GetHardwareInfo"
+	EngineService_ScrubVRAM_FullMethodName        = "/onescluster.coordinator.v1.EngineService/ScrubVRAM"
+	EngineService_EnsureRuntime_FullMethodName    = "/onescluster.coordinator.v1.EngineService/EnsureRuntime"
+)
+
+// EngineServiceClient is the client API for EngineService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// EngineService - Data plane API (Engine <-> Coordinator)
+type EngineServiceClient interface {
+	// Runtime execution
+	ExecuteCapsule(ctx context.Context, in *ExecuteCapsuleRequest, opts ...grpc.CallOption) (*ExecuteCapsuleResponse, error)
+	TerminateCapsule(ctx context.Context, in *TerminateCapsuleRequest, opts ...grpc.CallOption) (*TerminationResult, error)
+	// Hardware operations
+	GetHardwareInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*HardwareInfo, error)
+	ScrubVRAM(ctx context.Context, in *ScrubVRAMRequest, opts ...grpc.CallOption) (*ScrubVRAMResponse, error)
+	// Artifact management
+	EnsureRuntime(ctx context.Context, in *EnsureRuntimeRequest, opts ...grpc.CallOption) (*EnsureRuntimeResponse, error)
+}
+
+type engineServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewEngineServiceClient(cc grpc.ClientConnInterface) EngineServiceClient {
+	return &engineServiceClient{cc}
+}
+
+func (c *engineServiceClient) ExecuteCapsule(ctx context.Context, in *ExecuteCapsuleRequest, opts ...grpc.CallOption) (*ExecuteCapsuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteCapsuleResponse)
+	err := c.cc.Invoke(ctx, EngineService_ExecuteCapsule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) TerminateCapsule(ctx context.Context, in *TerminateCapsuleRequest, opts ...grpc.CallOption) (*TerminationResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TerminationResult)
+	err := c.cc.Invoke(ctx, EngineService_TerminateCapsule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) GetHardwareInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*HardwareInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HardwareInfo)
+	err := c.cc.Invoke(ctx, EngineService_GetHardwareInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) ScrubVRAM(ctx context.Context, in *ScrubVRAMRequest, opts ...grpc.CallOption) (*ScrubVRAMResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScrubVRAMResponse)
+	err := c.cc.Invoke(ctx, EngineService_ScrubVRAM_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineServiceClient) EnsureRuntime(ctx context.Context, in *EnsureRuntimeRequest, opts ...grpc.CallOption) (*EnsureRuntimeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnsureRuntimeResponse)
+	err := c.cc.Invoke(ctx, EngineService_EnsureRuntime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// EngineServiceServer is the server API for EngineService service.
+// All implementations must embed UnimplementedEngineServiceServer
+// for forward compatibility.
+//
+// EngineService - Data plane API (Engine <-> Coordinator)
+type EngineServiceServer interface {
+	// Runtime execution
+	ExecuteCapsule(context.Context, *ExecuteCapsuleRequest) (*ExecuteCapsuleResponse, error)
+	TerminateCapsule(context.Context, *TerminateCapsuleRequest) (*TerminationResult, error)
+	// Hardware operations
+	GetHardwareInfo(context.Context, *emptypb.Empty) (*HardwareInfo, error)
+	ScrubVRAM(context.Context, *ScrubVRAMRequest) (*ScrubVRAMResponse, error)
+	// Artifact management
+	EnsureRuntime(context.Context, *EnsureRuntimeRequest) (*EnsureRuntimeResponse, error)
+	mustEmbedUnimplementedEngineServiceServer()
+}
+
+// UnimplementedEngineServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedEngineServiceServer struct{}
+
+func (UnimplementedEngineServiceServer) ExecuteCapsule(context.Context, *ExecuteCapsuleRequest) (*ExecuteCapsuleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteCapsule not implemented")
+}
+func (UnimplementedEngineServiceServer) TerminateCapsule(context.Context, *TerminateCapsuleRequest) (*TerminationResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TerminateCapsule not implemented")
+}
+func (UnimplementedEngineServiceServer) GetHardwareInfo(context.Context, *emptypb.Empty) (*HardwareInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetHardwareInfo not implemented")
+}
+func (UnimplementedEngineServiceServer) ScrubVRAM(context.Context, *ScrubVRAMRequest) (*ScrubVRAMResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ScrubVRAM not implemented")
+}
+func (UnimplementedEngineServiceServer) EnsureRuntime(context.Context, *EnsureRuntimeRequest) (*EnsureRuntimeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnsureRuntime not implemented")
+}
+func (UnimplementedEngineServiceServer) mustEmbedUnimplementedEngineServiceServer() {}
+func (UnimplementedEngineServiceServer) testEmbeddedByValue()                       {}
+
+// UnsafeEngineServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to EngineServiceServer will
+// result in compilation errors.
+type UnsafeEngineServiceServer interface {
+	mustEmbedUnimplementedEngineServiceServer()
+}
+
+func RegisterEngineServiceServer(s grpc.ServiceRegistrar, srv EngineServiceServer) {
+	// If the following call pancis, it indicates UnimplementedEngineServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&EngineService_ServiceDesc, srv)
+}
+
+func _EngineService_ExecuteCapsule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteCapsuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).ExecuteCapsule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_ExecuteCapsule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).ExecuteCapsule(ctx, req.(*ExecuteCapsuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_TerminateCapsule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TerminateCapsuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).TerminateCapsule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_TerminateCapsule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).TerminateCapsule(ctx, req.(*TerminateCapsuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_GetHardwareInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).GetHardwareInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_GetHardwareInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).GetHardwareInfo(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_ScrubVRAM_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScrubVRAMRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).ScrubVRAM(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_ScrubVRAM_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).ScrubVRAM(ctx, req.(*ScrubVRAMRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EngineService_EnsureRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureRuntimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServiceServer).EnsureRuntime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EngineService_EnsureRuntime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServiceServer).EnsureRuntime(ctx, req.(*EnsureRuntimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// EngineService_ServiceDesc is the grpc.ServiceDesc for EngineService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var EngineService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "onescluster.coordinator.v1.EngineService",
+	HandlerType: (*EngineServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ExecuteCapsule",
+			Handler:    _EngineService_ExecuteCapsule_Handler,
+		},
+		{
+			MethodName: "TerminateCapsule",
+			Handler:    _EngineService_TerminateCapsule_Handler,
+		},
+		{
+			MethodName: "GetHardwareInfo",
+			Handler:    _EngineService_GetHardwareInfo_Handler,
+		},
+		{
+			MethodName: "ScrubVRAM",
+			Handler:    _EngineService_ScrubVRAM_Handler,
+		},
+		{
+			MethodName: "EnsureRuntime",
+			Handler:    _EngineService_EnsureRuntime_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -136,13 +754,10 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Agent service - handles communication FROM Coordinator TO Agents
+// AgentService - Coordinator -> Agent communication
 type AgentServiceClient interface {
-	// Coordinator instructs Agent to deploy a workload
 	DeployWorkload(ctx context.Context, in *DeployWorkloadRequest, opts ...grpc.CallOption) (*DeployWorkloadResponse, error)
-	// Coordinator instructs Agent to stop a workload
 	StopWorkload(ctx context.Context, in *StopWorkloadRequest, opts ...grpc.CallOption) (*StopWorkloadResponse, error)
-	// Coordinator instructs Agent to fetch a model file
 	FetchModel(ctx context.Context, in *FetchModelRequest, opts ...grpc.CallOption) (*FetchModelResponse, error)
 }
 
@@ -188,13 +803,10 @@ func (c *agentServiceClient) FetchModel(ctx context.Context, in *FetchModelReque
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
 //
-// Agent service - handles communication FROM Coordinator TO Agents
+// AgentService - Coordinator -> Agent communication
 type AgentServiceServer interface {
-	// Coordinator instructs Agent to deploy a workload
 	DeployWorkload(context.Context, *DeployWorkloadRequest) (*DeployWorkloadResponse, error)
-	// Coordinator instructs Agent to stop a workload
 	StopWorkload(context.Context, *StopWorkloadRequest) (*StopWorkloadResponse, error)
-	// Coordinator instructs Agent to fetch a model file
 	FetchModel(context.Context, *FetchModelRequest) (*FetchModelResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }

@@ -20,6 +20,7 @@ type RigGpuInfo struct {
 	UsedVRAMBytes     uint64    // Currently reserved VRAM on this Rig (sum of all running capsules)
 	CudaDriverVersion string    // CUDA driver version (e.g., "12.2")
 	Gpus              []GpuInfo // List of individual GPUs
+	IsRemote          bool      // True if the node is connected via Tailnet (Cloud Bursting)
 }
 
 // GpuInfo represents a single GPU device
@@ -71,8 +72,9 @@ func (r *RigGpuInfo) CudaVersion() (*semver.Version, error) {
 //	  }
 //	}
 type GpuConstraints struct {
-	VramMinGB      uint64 // Minimum required VRAM in GB (0 = no GPU required)
-	CudaVersionMin string // Minimum required CUDA version (empty = no requirement)
+	VramMinGB       uint64 // Minimum required VRAM in GB (0 = no GPU required)
+	CudaVersionMin  string // Minimum required CUDA version (empty = no requirement)
+	AllowCloudBurst bool   // If true, allows scheduling on remote nodes
 }
 
 // RequiresGPU returns true if this workload requires GPU resources.

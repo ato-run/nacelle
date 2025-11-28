@@ -18,11 +18,35 @@ type Node struct {
 	ID            string     `json:"id"`             // ULID
 	Address       string     `json:"address"`        // IP:PORT
 	HeadscaleName string     `json:"headscale_name"` // Node name in headscale
+	TailnetIP     string     `json:"tailnet_ip"`     // Node Tailnet IP address
 	Status        NodeStatus `json:"status"`         // Current status
 	IsMaster      bool       `json:"is_master"`      // True if this is the master
 	LastSeen      time.Time  `json:"last_seen"`      // Last heartbeat time
 	CreatedAt     time.Time  `json:"created_at"`     // Registration time
 	UpdatedAt     time.Time  `json:"updated_at"`     // Last update time
+}
+
+// NodeWorkload represents a workload reported by a node
+type NodeWorkload struct {
+	NodeID            string    `json:"node_id"`
+	WorkloadID        string    `json:"workload_id"`
+	Name              string    `json:"name"`
+	ReservedVRAMBytes uint64    `json:"reserved_vram_bytes"`
+	ObservedVRAMBytes uint64    `json:"observed_vram_bytes"`
+	PID               int64     `json:"pid"`
+	Phase             string    `json:"phase"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// NodeGpu represents a GPU on a node
+type NodeGpu struct {
+	ID             string    `json:"id"` // UUID
+	NodeID         string    `json:"node_id"`
+	Index          int       `json:"index"`
+	Name           string    `json:"name"`
+	TotalVRAMBytes uint64    `json:"total_vram_bytes"`
+	UsedVRAMBytes  uint64    `json:"used_vram_bytes"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // CapsuleStatus represents the status of a capsule
@@ -40,8 +64,11 @@ type Capsule struct {
 	ID            string        `json:"id"`             // ULID
 	Name          string        `json:"name"`           // Human-readable name
 	NodeID        string        `json:"node_id"`        // Node where deployed
+	RuntimeName   string        `json:"runtime_name"`   // Runtime name (e.g. python, node)
 	Manifest      string        `json:"manifest"`       // JSON manifest (adep.json)
 	Status        CapsuleStatus `json:"status"`         // Current status
+	Port          int           `json:"port"`           // Exposed port
+	AccessURL     string        `json:"access_url"`     // Access URL
 	StoragePath   string        `json:"storage_path"`   // Storage path on node
 	BundlePath    string        `json:"bundle_path"`    // OCI bundle path on node
 	NetworkConfig string        `json:"network_config"` // JSON network config

@@ -9,14 +9,15 @@ import (
 )
 
 // NodeHandler handles Node (Rig) operations
+// NodeHandler handles Node (Rig) operations
 type NodeHandler struct {
-	NodeStore *db.NodeStore
+	StateManager *db.StateManager
 }
 
 // NewNodeHandler creates a new node handler
-func NewNodeHandler(nodeStore *db.NodeStore) *NodeHandler {
+func NewNodeHandler(stateManager *db.StateManager) *NodeHandler {
 	return &NodeHandler{
-		NodeStore: nodeStore,
+		StateManager: stateManager,
 	}
 }
 
@@ -53,8 +54,8 @@ func (h *NodeHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Query all GPU Rigs from the database
-	rigs, err := h.NodeStore.GetAllGpuRigs(ctx)
+	// Query all GPU Rigs from StateManager
+	rigs, err := h.StateManager.GetAllGpuRigs(ctx)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to query nodes: %v", err), http.StatusInternalServerError)
 		return
@@ -66,6 +67,15 @@ func (h *NodeHandler) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		// Note: RigGpuInfo doesn't have detailed GPU list yet
 		// This will be added in Phase 2 when we expand GPU monitoring
 		gpus := []GPUInfo{} // Empty for now
+		for _, g := range rig.Gpus {
+			gpus = append(gpus, GPUInfo{
+				Index:     uint32(0), // TODO: Fix index
+				UUID:      g.UUID,
+				Model:     g.DeviceName,
+				VRAMBytes: g.TotalVRAMBytes,
+				UsedVRAM:  0, // TODO: Per-GPU usage
+			})
+		}
 
 		node := NodeInfo{
 			RigID:            rig.RigID,

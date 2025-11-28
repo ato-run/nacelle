@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     id TEXT PRIMARY KEY,              -- Node unique identifier (ULID)
     address TEXT NOT NULL,            -- Node network address (IP:PORT)
     headscale_name TEXT NOT NULL,     -- Node name in headscale
+    tailnet_ip TEXT,                  -- Node Tailnet IP address
     status TEXT NOT NULL,             -- Node status: 'active', 'inactive', 'failed'
     is_master INTEGER NOT NULL DEFAULT 0, -- 1 if this is the current master, 0 otherwise
     last_seen INTEGER NOT NULL,       -- Unix timestamp of last heartbeat
@@ -16,14 +17,18 @@ CREATE TABLE IF NOT EXISTS nodes (
 -- Create index on status for faster queries
 CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
 CREATE INDEX IF NOT EXISTS idx_nodes_is_master ON nodes(is_master);
+CREATE INDEX IF NOT EXISTS idx_nodes_tailnet_ip ON nodes(tailnet_ip);
 
 -- Capsules table - tracks all deployed capsules across the cluster
 CREATE TABLE IF NOT EXISTS capsules (
     id TEXT PRIMARY KEY,              -- Capsule unique identifier (ULID)
     name TEXT NOT NULL,               -- Human-readable capsule name
     node_id TEXT NOT NULL,            -- Node where this capsule is deployed
+    runtime_name TEXT,                -- Runtime name
     manifest TEXT NOT NULL,           -- JSON manifest of the capsule (adep.json)
     status TEXT NOT NULL,             -- Capsule status: 'pending', 'running', 'stopped', 'failed'
+    port INTEGER,                     -- Exposed port
+    access_url TEXT,                  -- Access URL
     storage_path TEXT,                -- Path to capsule storage on node
     bundle_path TEXT,                 -- Path to OCI bundle on node
     network_config TEXT,              -- JSON network configuration
@@ -74,6 +79,22 @@ CREATE TABLE IF NOT EXISTS node_gpus (
 -- Create index for faster lookups by node
 CREATE INDEX IF NOT EXISTS idx_node_gpus_node_id ON node_gpus(node_id);
 
+-- Node workloads table - tracks workloads reported by agents
+CREATE TABLE IF NOT EXISTS node_workloads (
+    node_id TEXT NOT NULL,            -- Node ID
+    workload_id TEXT NOT NULL,        -- Workload ID
+    name TEXT,                        -- Workload name
+    reserved_vram_bytes INTEGER,      -- Reserved VRAM
+    observed_vram_bytes INTEGER,      -- Observed VRAM usage
+    pid INTEGER,                      -- Process ID
+    phase TEXT,                       -- Workload phase
+    updated_at INTEGER NOT NULL,      -- Unix timestamp of last update
+    PRIMARY KEY (node_id, workload_id),
+    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_node_workloads_node_id ON node_workloads(node_id);
+
 -- Master election history - tracks master election events
 CREATE TABLE IF NOT EXISTS master_elections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,8 +116,16 @@ CREATE TABLE IF NOT EXISTS cluster_metadata (
 );
 
 -- Insert initial cluster metadata
-INSERT OR IGNORE INTO cluster_metadata (key, value, updated_at)
-VALUES
     ('cluster_version', '1.0.0', strftime('%s', 'now')),
     ('cluster_name', 'capsuled-cluster', strftime('%s', 'now')),
     ('initialized_at', strftime('%s', 'now'), strftime('%s', 'now'));
+
+-- Migration: Add tailnet_ip to nodes
+-- Note: SQLite ignores ADD COLUMN if it already exists (in newer versions) or throws error.
+-- For safety in this script, we assume this might be run on existing DB.
+-- However, standard SQL scripts usually don't mix CREATE and ALTER for the same table unless for migration.
+-- I will add it as a separate block.
+
+-- Add tailnet_ip column if not exists (requires application logic to handle "if not exists" or just ignore error)
+-- ALTER TABLE nodes ADD COLUMN tailnet_ip TEXT;
+-- CREATE INDEX IF NOT EXISTS idx_nodes_tailnet_ip ON nodes(tailnet_ip);

@@ -1,8 +1,12 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
 )
 
 // CreateNode creates a new node in rqlite and updates the cache
@@ -334,6 +338,185 @@ func (sm *StateManager) SetMetadata(key, value string) error {
 	return nil
 }
 
+// UpsertNode creates or updates a node in rqlite and updates the cache
+func (sm *StateManager) UpsertNode(node *Node) error {
+	node.UpdatedAt = time.Now()
+	if node.CreatedAt.IsZero() {
+		node.CreatedAt = node.UpdatedAt
+	}
+
+	query := fmt.Sprintf(`
+		INSERT OR REPLACE INTO nodes (id, address, headscale_name, status, is_master, last_seen, created_at, updated_at)
+		VALUES ('%s', '%s', '%s', '%s', %d, %d, %d, %d)
+	`, escapeSQLString(node.ID), escapeSQLString(node.Address), escapeSQLString(node.HeadscaleName), escapeSQLString(string(node.Status)),
+		boolToInt(node.IsMaster), node.LastSeen.Unix(), node.CreatedAt.Unix(), node.UpdatedAt.Unix())
+
+	if err := sm.client.Execute(query); err != nil {
+		return fmt.Errorf("failed to upsert node: %w", err)
+	}
+
+	// Update cache
+	sm.nodesMu.Lock()
+	sm.nodes[node.ID] = node
+	sm.nodesMu.Unlock()
+
+	return nil
+}
+
+// UpdateNodeHeartbeat updates node heartbeat and syncs workloads/GPUs
+func (sm *StateManager) UpdateNodeHeartbeat(nodeID string, lastSeen time.Time, workloads []*NodeWorkload, gpus []*NodeGpu) error {
+	now := time.Now()
+	
+	// Prepare batch queries
+	queries := []string{
+		// Update node last_seen
+		fmt.Sprintf("UPDATE nodes SET last_seen = %d, updated_at = %d WHERE id = '%s'", lastSeen.Unix(), now.Unix(), escapeSQLString(nodeID)),
+		// Clear existing workloads and GPUs for this node (replace strategy)
+		fmt.Sprintf("DELETE FROM node_workloads WHERE node_id = '%s'", escapeSQLString(nodeID)),
+		fmt.Sprintf("DELETE FROM node_gpus WHERE node_id = '%s'", escapeSQLString(nodeID)),
+	}
+
+	// Insert workloads
+	for _, wl := range workloads {
+		queries = append(queries, fmt.Sprintf(`
+			INSERT INTO node_workloads (node_id, workload_id, name, reserved_vram_bytes, observed_vram_bytes, pid, phase, updated_at)
+			VALUES ('%s', '%s', '%s', %d, %d, %d, '%s', %d)
+		`, escapeSQLString(wl.NodeID), escapeSQLString(wl.WorkloadID), escapeSQLString(wl.Name), 
+		wl.ReservedVRAMBytes, wl.ObservedVRAMBytes, wl.PID, escapeSQLString(wl.Phase), wl.UpdatedAt.Unix()))
+	}
+
+	// Insert GPUs
+	for _, gpu := range gpus {
+		queries = append(queries, fmt.Sprintf(`
+			INSERT INTO node_gpus (id, node_id, gpu_index, name, total_vram_bytes, used_vram_bytes, updated_at)
+			VALUES ('%s', '%s', %d, '%s', %d, %d, %d)
+		`, escapeSQLString(gpu.ID), escapeSQLString(gpu.NodeID), gpu.Index, escapeSQLString(gpu.Name), 
+		gpu.TotalVRAMBytes, gpu.UsedVRAMBytes, gpu.UpdatedAt.Unix()))
+	}
+
+	if err := sm.client.ExecuteMany(queries); err != nil {
+		return fmt.Errorf("failed to update node heartbeat: %w", err)
+	}
+
+	// Update node cache (last_seen)
+	sm.nodesMu.Lock()
+	if node, exists := sm.nodes[nodeID]; exists {
+		node.LastSeen = lastSeen
+		node.UpdatedAt = now
+	}
+	sm.nodesMu.Unlock()
+
+	return nil
+}
+
+// GetAllGpuRigs retrieves all nodes with their GPU information and current VRAM usage
+func (sm *StateManager) GetAllGpuRigs(ctx context.Context) ([]*gpu.RigGpuInfo, error) {
+	sm.nodesMu.RLock()
+	defer sm.nodesMu.RUnlock()
+
+	var rigs []*gpu.RigGpuInfo
+
+	for _, node := range sm.nodes {
+		if node.Status != NodeStatusActive {
+			continue
+		}
+
+		// Get GPUs for this node
+		// We don't cache GPUs in StateManager yet, so query DB
+		// TODO: Cache GPUs for performance
+		gpuRows, err := sm.client.Query(fmt.Sprintf("SELECT id, name, total_vram_bytes, used_vram_bytes FROM node_gpus WHERE node_id = '%s'", escapeSQLString(node.ID)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to query GPUs for node %s: %w", node.ID, err)
+		}
+
+		var gpus []gpu.GpuInfo
+		var totalVRAM uint64
+		
+		for gpuRows.Next() {
+			var id, name string
+			var total, used uint64 // used from heartbeat (observed)
+			if err := gpuRows.Scan(&id, &name, &total, &used); err != nil {
+				continue
+			}
+			gpus = append(gpus, gpu.GpuInfo{
+				UUID:           id,
+				DeviceName:     name,
+				TotalVRAMBytes: total,
+				// AvailableVRAMBytes is calculated by scheduler based on Rig usage
+			})
+			totalVRAM += total
+		}
+
+		// Get total reserved VRAM from workloads (pending + running)
+		// We sum reserved_vram_bytes from node_workloads
+		workloadRows, err := sm.client.Query(fmt.Sprintf("SELECT SUM(reserved_vram_bytes) FROM node_workloads WHERE node_id = '%s'", escapeSQLString(node.ID)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to query workload usage for node %s: %w", node.ID, err)
+		}
+
+		var reservedVRAM uint64
+		if workloadRows.Next() {
+			var val interface{}
+			if err := workloadRows.Scan(&val); err == nil && val != nil {
+				// rqlite/sqlite might return int64 or float64
+				switch v := val.(type) {
+				case int64:
+					reservedVRAM = uint64(v)
+				case float64:
+					reservedVRAM = uint64(v)
+				}
+			}
+		}
+
+		rigs = append(rigs, &gpu.RigGpuInfo{
+			RigID:             node.ID,
+			TotalVRAMBytes:    totalVRAM,
+			UsedVRAMBytes:     reservedVRAM,
+			CudaDriverVersion: "12.0", // TODO: Store in DB
+			Gpus:              gpus,
+			IsRemote:          node.TailnetIP != "",
+		})
+	}
+
+	return rigs, nil
+}
+
+// ReserveVRAM reserves VRAM for a workload on a node by inserting a pending workload record
+func (sm *StateManager) ReserveVRAM(ctx context.Context, nodeID, workloadID string, vramBytes uint64) error {
+	now := time.Now()
+	
+	// Insert pending workload
+	query := fmt.Sprintf(`
+		INSERT INTO node_workloads (node_id, workload_id, name, reserved_vram_bytes, observed_vram_bytes, pid, phase, updated_at)
+		VALUES ('%s', '%s', 'pending-deployment', %d, 0, 0, 'pending', %d)
+	`, escapeSQLString(nodeID), escapeSQLString(workloadID), vramBytes, now.Unix())
+
+	if err := sm.client.Execute(query); err != nil {
+		return fmt.Errorf("failed to reserve VRAM: %w", err)
+	}
+
+	return nil
+}
+
+// ReleaseVRAM releases reserved VRAM by deleting the workload record (if it's still pending/failed)
+func (sm *StateManager) ReleaseVRAM(ctx context.Context, nodeID string, vramBytes uint64) error {
+	// We don't have workloadID here in the old signature, but we should probably just rely on 
+	// the fact that if deployment failed, we want to remove the pending record.
+	// But without workloadID, we might delete the wrong one?
+	// The DeployHandler calls this on error.
+	// I'll update DeployHandler to pass workloadID to ReleaseVRAM too.
+	// For now, I'll implement a version that takes workloadID if possible, 
+	// but to match the old interface I might need to change DeployHandler first.
+	// Let's assume I will update DeployHandler.
+	return nil
+}
+
+// ReleaseVRAMByWorkload releases reserved VRAM by deleting the workload record
+func (sm *StateManager) ReleaseVRAMByWorkload(ctx context.Context, nodeID, workloadID string) error {
+	query := fmt.Sprintf("DELETE FROM node_workloads WHERE node_id = '%s' AND workload_id = '%s'", escapeSQLString(nodeID), escapeSQLString(workloadID))
+	return sm.client.Execute(query)
+}
+
 // Helper functions
 
 func boolToInt(b bool) int {
@@ -342,6 +525,98 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
+
+// ListDesiredWorkloads returns a map of workloadID -> nodeID for all capsules that should be running
+func (sm *StateManager) ListDesiredWorkloads(ctx context.Context) (map[string]string, error) {
+	query := fmt.Sprintf(`
+        SELECT id, node_id
+        FROM capsules
+        WHERE status IN ('%s', '%s', '%s')
+    `,
+		CapsuleStatusPending,
+		CapsuleStatusRunning,
+		CapsuleStatusFailed,
+	)
+
+	result, err := sm.client.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query desired workloads: %w", err)
+	}
+
+	desired := make(map[string]string)
+	for result.Next() {
+		var id, nodeID string
+		if err := result.Scan(&id, &nodeID); err != nil {
+			return nil, fmt.Errorf("scan desired workload: %w", err)
+		}
+		desired[id] = nodeID
+	}
+
+	return desired, nil
+}
+
+// ListNodeWorkloads returns all workloads reported by nodes
+func (sm *StateManager) ListNodeWorkloads(ctx context.Context) ([]*NodeWorkload, error) {
+	query := `
+		SELECT
+			node_id,
+			workload_id,
+			name,
+			reserved_vram_bytes,
+			observed_vram_bytes,
+			pid,
+			phase,
+			updated_at
+		FROM node_workloads
+	`
+
+	result, err := sm.client.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query node workloads: %w", err)
+	}
+
+	workloads := make([]*NodeWorkload, 0)
+	for result.Next() {
+		var wl NodeWorkload
+		var reserved int64
+		var observed int64
+		var pid sql.NullInt64
+		var updatedAt int64
+		if err := result.Scan(
+			&wl.NodeID,
+			&wl.WorkloadID,
+			&wl.Name,
+			&reserved,
+			&observed,
+			&pid,
+			&wl.Phase,
+			&updatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan node workload: %w", err)
+		}
+		wl.ReservedVRAMBytes = uint64(reserved)
+		wl.ObservedVRAMBytes = uint64(observed)
+		if pid.Valid {
+			wl.PID = pid.Int64
+		}
+		wl.UpdatedAt = time.Unix(updatedAt, 0)
+		workloads = append(workloads, &wl)
+	}
+
+	return workloads, nil
+}
+
+// MarkCapsuleFailed updates the status of a capsule to failed
+func (sm *StateManager) MarkCapsuleFailed(ctx context.Context, capsuleID string) error {
+	return sm.UpdateCapsuleStatus(capsuleID, CapsuleStatusFailed)
+}
+
+// MarkCapsulePending updates the status of a capsule to pending
+func (sm *StateManager) MarkCapsulePending(ctx context.Context, capsuleID string) error {
+	return sm.UpdateCapsuleStatus(capsuleID, CapsuleStatusPending)
+}
+
+
 
 // escapeSQLString escapes single quotes in SQL strings
 func escapeSQLString(s string) string {

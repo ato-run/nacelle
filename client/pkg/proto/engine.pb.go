@@ -21,6 +21,126 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type LogRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CapsuleId     string                 `protobuf:"bytes,1,opt,name=capsule_id,json=capsuleId,proto3" json:"capsule_id,omitempty"`
+	Follow        bool                   `protobuf:"varint,2,opt,name=follow,proto3" json:"follow,omitempty"`                        // If true, stream updates. If false, return current content and close.
+	TailLines     uint64                 `protobuf:"varint,3,opt,name=tail_lines,json=tailLines,proto3" json:"tail_lines,omitempty"` // Number of lines to return from the end (0 for all/default)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogRequest) Reset() {
+	*x = LogRequest{}
+	mi := &file_engine_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogRequest) ProtoMessage() {}
+
+func (x *LogRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
+func (*LogRequest) Descriptor() ([]byte, []int) {
+	return file_engine_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *LogRequest) GetCapsuleId() string {
+	if x != nil {
+		return x.CapsuleId
+	}
+	return ""
+}
+
+func (x *LogRequest) GetFollow() bool {
+	if x != nil {
+		return x.Follow
+	}
+	return false
+}
+
+func (x *LogRequest) GetTailLines() uint64 {
+	if x != nil {
+		return x.TailLines
+	}
+	return 0
+}
+
+type EngineLogEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Line          string                 `protobuf:"bytes,1,opt,name=line,proto3" json:"line,omitempty"`
+	Timestamp     string                 `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // ISO8601
+	Source        string                 `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`       // "stdout" or "stderr"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EngineLogEntry) Reset() {
+	*x = EngineLogEntry{}
+	mi := &file_engine_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EngineLogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EngineLogEntry) ProtoMessage() {}
+
+func (x *EngineLogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_engine_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EngineLogEntry.ProtoReflect.Descriptor instead.
+func (*EngineLogEntry) Descriptor() ([]byte, []int) {
+	return file_engine_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EngineLogEntry) GetLine() string {
+	if x != nil {
+		return x.Line
+	}
+	return ""
+}
+
+func (x *EngineLogEntry) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *EngineLogEntry) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
 type GetResourcesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -29,7 +149,7 @@ type GetResourcesRequest struct {
 
 func (x *GetResourcesRequest) Reset() {
 	*x = GetResourcesRequest{}
-	mi := &file_engine_proto_msgTypes[0]
+	mi := &file_engine_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -41,7 +161,7 @@ func (x *GetResourcesRequest) String() string {
 func (*GetResourcesRequest) ProtoMessage() {}
 
 func (x *GetResourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[0]
+	mi := &file_engine_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54,7 +174,7 @@ func (x *GetResourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResourcesRequest.ProtoReflect.Descriptor instead.
 func (*GetResourcesRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{0}
+	return file_engine_proto_rawDescGZIP(), []int{2}
 }
 
 type GetSystemStatusRequest struct {
@@ -65,7 +185,7 @@ type GetSystemStatusRequest struct {
 
 func (x *GetSystemStatusRequest) Reset() {
 	*x = GetSystemStatusRequest{}
-	mi := &file_engine_proto_msgTypes[1]
+	mi := &file_engine_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -77,7 +197,7 @@ func (x *GetSystemStatusRequest) String() string {
 func (*GetSystemStatusRequest) ProtoMessage() {}
 
 func (x *GetSystemStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[1]
+	mi := &file_engine_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -90,7 +210,7 @@ func (x *GetSystemStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSystemStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetSystemStatusRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{1}
+	return file_engine_proto_rawDescGZIP(), []int{3}
 }
 
 type DeployRequest struct {
@@ -109,7 +229,7 @@ type DeployRequest struct {
 
 func (x *DeployRequest) Reset() {
 	*x = DeployRequest{}
-	mi := &file_engine_proto_msgTypes[2]
+	mi := &file_engine_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -121,7 +241,7 @@ func (x *DeployRequest) String() string {
 func (*DeployRequest) ProtoMessage() {}
 
 func (x *DeployRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[2]
+	mi := &file_engine_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -134,7 +254,7 @@ func (x *DeployRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployRequest.ProtoReflect.Descriptor instead.
 func (*DeployRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{2}
+	return file_engine_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeployRequest) GetCapsuleId() string {
@@ -210,7 +330,7 @@ type DeployResponse struct {
 
 func (x *DeployResponse) Reset() {
 	*x = DeployResponse{}
-	mi := &file_engine_proto_msgTypes[3]
+	mi := &file_engine_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +342,7 @@ func (x *DeployResponse) String() string {
 func (*DeployResponse) ProtoMessage() {}
 
 func (x *DeployResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[3]
+	mi := &file_engine_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +355,7 @@ func (x *DeployResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployResponse.ProtoReflect.Descriptor instead.
 func (*DeployResponse) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{3}
+	return file_engine_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DeployResponse) GetCapsuleId() string {
@@ -268,7 +388,7 @@ type StopRequest struct {
 
 func (x *StopRequest) Reset() {
 	*x = StopRequest{}
-	mi := &file_engine_proto_msgTypes[4]
+	mi := &file_engine_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -280,7 +400,7 @@ func (x *StopRequest) String() string {
 func (*StopRequest) ProtoMessage() {}
 
 func (x *StopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[4]
+	mi := &file_engine_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -293,7 +413,7 @@ func (x *StopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRequest.ProtoReflect.Descriptor instead.
 func (*StopRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{4}
+	return file_engine_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *StopRequest) GetCapsuleId() string {
@@ -313,7 +433,7 @@ type StopResponse struct {
 
 func (x *StopResponse) Reset() {
 	*x = StopResponse{}
-	mi := &file_engine_proto_msgTypes[5]
+	mi := &file_engine_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +445,7 @@ func (x *StopResponse) String() string {
 func (*StopResponse) ProtoMessage() {}
 
 func (x *StopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[5]
+	mi := &file_engine_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +458,7 @@ func (x *StopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopResponse.ProtoReflect.Descriptor instead.
 func (*StopResponse) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{5}
+	return file_engine_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *StopResponse) GetCapsuleId() string {
@@ -369,7 +489,7 @@ type ResourceInfo struct {
 
 func (x *ResourceInfo) Reset() {
 	*x = ResourceInfo{}
-	mi := &file_engine_proto_msgTypes[6]
+	mi := &file_engine_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +501,7 @@ func (x *ResourceInfo) String() string {
 func (*ResourceInfo) ProtoMessage() {}
 
 func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[6]
+	mi := &file_engine_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +514,7 @@ func (x *ResourceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceInfo.ProtoReflect.Descriptor instead.
 func (*ResourceInfo) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{6}
+	return file_engine_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ResourceInfo) GetCpuCores() uint64 {
@@ -448,7 +568,7 @@ type ValidateRequest struct {
 
 func (x *ValidateRequest) Reset() {
 	*x = ValidateRequest{}
-	mi := &file_engine_proto_msgTypes[7]
+	mi := &file_engine_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +580,7 @@ func (x *ValidateRequest) String() string {
 func (*ValidateRequest) ProtoMessage() {}
 
 func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[7]
+	mi := &file_engine_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +593,7 @@ func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRequest) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{7}
+	return file_engine_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ValidateRequest) GetAdepJson() []byte {
@@ -493,7 +613,7 @@ type ValidationResult struct {
 
 func (x *ValidationResult) Reset() {
 	*x = ValidationResult{}
-	mi := &file_engine_proto_msgTypes[8]
+	mi := &file_engine_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -505,7 +625,7 @@ func (x *ValidationResult) String() string {
 func (*ValidationResult) ProtoMessage() {}
 
 func (x *ValidationResult) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[8]
+	mi := &file_engine_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +638,7 @@ func (x *ValidationResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidationResult.ProtoReflect.Descriptor instead.
 func (*ValidationResult) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{8}
+	return file_engine_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ValidationResult) GetValid() bool {
@@ -547,7 +667,7 @@ type SystemStatus struct {
 
 func (x *SystemStatus) Reset() {
 	*x = SystemStatus{}
-	mi := &file_engine_proto_msgTypes[9]
+	mi := &file_engine_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +679,7 @@ func (x *SystemStatus) String() string {
 func (*SystemStatus) ProtoMessage() {}
 
 func (x *SystemStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[9]
+	mi := &file_engine_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +692,7 @@ func (x *SystemStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemStatus.ProtoReflect.Descriptor instead.
 func (*SystemStatus) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{9}
+	return file_engine_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SystemStatus) GetBackendMode() string {
@@ -616,7 +736,7 @@ type CapsuleInfo struct {
 
 func (x *CapsuleInfo) Reset() {
 	*x = CapsuleInfo{}
-	mi := &file_engine_proto_msgTypes[10]
+	mi := &file_engine_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +748,7 @@ func (x *CapsuleInfo) String() string {
 func (*CapsuleInfo) ProtoMessage() {}
 
 func (x *CapsuleInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[10]
+	mi := &file_engine_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +761,7 @@ func (x *CapsuleInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapsuleInfo.ProtoReflect.Descriptor instead.
 func (*CapsuleInfo) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{10}
+	return file_engine_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CapsuleInfo) GetId() string {
@@ -693,7 +813,7 @@ type ResourceUsage struct {
 
 func (x *ResourceUsage) Reset() {
 	*x = ResourceUsage{}
-	mi := &file_engine_proto_msgTypes[11]
+	mi := &file_engine_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +825,7 @@ func (x *ResourceUsage) String() string {
 func (*ResourceUsage) ProtoMessage() {}
 
 func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_engine_proto_msgTypes[11]
+	mi := &file_engine_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +838,7 @@ func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceUsage.ProtoReflect.Descriptor instead.
 func (*ResourceUsage) Descriptor() ([]byte, []int) {
-	return file_engine_proto_rawDescGZIP(), []int{11}
+	return file_engine_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ResourceUsage) GetCpuCoresTotal() uint64 {
@@ -767,7 +887,18 @@ var File_engine_proto protoreflect.FileDescriptor
 
 const file_engine_proto_rawDesc = "" +
 	"\n" +
-	"\fengine.proto\x12\x15onescluster.engine.v1\"\x15\n" +
+	"\fengine.proto\x12\x15onescluster.engine.v1\"b\n" +
+	"\n" +
+	"LogRequest\x12\x1d\n" +
+	"\n" +
+	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12\x16\n" +
+	"\x06follow\x18\x02 \x01(\bR\x06follow\x12\x1d\n" +
+	"\n" +
+	"tail_lines\x18\x03 \x01(\x04R\ttailLines\"Z\n" +
+	"\x0eEngineLogEntry\x12\x12\n" +
+	"\x04line\x18\x01 \x01(\tR\x04line\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\"\x15\n" +
 	"\x13GetResourcesRequest\"\x18\n" +
 	"\x16GetSystemStatusRequest\"\xb3\x01\n" +
 	"\rDeployRequest\x12\x1d\n" +
@@ -824,13 +955,15 @@ const file_engine_proto_rawDesc = "" +
 	"\x12memory_bytes_total\x18\x03 \x01(\x04R\x10memoryBytesTotal\x12*\n" +
 	"\x11memory_bytes_used\x18\x04 \x01(\x04R\x0fmemoryBytesUsed\x12(\n" +
 	"\x10vram_bytes_total\x18\x05 \x01(\x04R\x0evramBytesTotal\x12&\n" +
-	"\x0fvram_bytes_used\x18\x06 \x01(\x04R\rvramBytesUsed2\xeb\x03\n" +
+	"\x0fvram_bytes_used\x18\x06 \x01(\x04R\rvramBytesUsed2\xc5\x04\n" +
 	"\x06Engine\x12\\\n" +
 	"\rDeployCapsule\x12$.onescluster.engine.v1.DeployRequest\x1a%.onescluster.engine.v1.DeployResponse\x12V\n" +
 	"\vStopCapsule\x12\".onescluster.engine.v1.StopRequest\x1a#.onescluster.engine.v1.StopResponse\x12_\n" +
 	"\fGetResources\x12*.onescluster.engine.v1.GetResourcesRequest\x1a#.onescluster.engine.v1.ResourceInfo\x12c\n" +
 	"\x10ValidateManifest\x12&.onescluster.engine.v1.ValidateRequest\x1a'.onescluster.engine.v1.ValidationResult\x12e\n" +
-	"\x0fGetSystemStatus\x12-.onescluster.engine.v1.GetSystemStatusRequest\x1a#.onescluster.engine.v1.SystemStatusB4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
+	"\x0fGetSystemStatus\x12-.onescluster.engine.v1.GetSystemStatusRequest\x1a#.onescluster.engine.v1.SystemStatus\x12X\n" +
+	"\n" +
+	"StreamLogs\x12!.onescluster.engine.v1.LogRequest\x1a%.onescluster.engine.v1.EngineLogEntry0\x01B4Z2github.com/onescluster/coordinator/pkg/proto;protob\x06proto3"
 
 var (
 	file_engine_proto_rawDescOnce sync.Once
@@ -844,38 +977,42 @@ func file_engine_proto_rawDescGZIP() []byte {
 	return file_engine_proto_rawDescData
 }
 
-var file_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_engine_proto_goTypes = []any{
-	(*GetResourcesRequest)(nil),    // 0: onescluster.engine.v1.GetResourcesRequest
-	(*GetSystemStatusRequest)(nil), // 1: onescluster.engine.v1.GetSystemStatusRequest
-	(*DeployRequest)(nil),          // 2: onescluster.engine.v1.DeployRequest
-	(*DeployResponse)(nil),         // 3: onescluster.engine.v1.DeployResponse
-	(*StopRequest)(nil),            // 4: onescluster.engine.v1.StopRequest
-	(*StopResponse)(nil),           // 5: onescluster.engine.v1.StopResponse
-	(*ResourceInfo)(nil),           // 6: onescluster.engine.v1.ResourceInfo
-	(*ValidateRequest)(nil),        // 7: onescluster.engine.v1.ValidateRequest
-	(*ValidationResult)(nil),       // 8: onescluster.engine.v1.ValidationResult
-	(*SystemStatus)(nil),           // 9: onescluster.engine.v1.SystemStatus
-	(*CapsuleInfo)(nil),            // 10: onescluster.engine.v1.CapsuleInfo
-	(*ResourceUsage)(nil),          // 11: onescluster.engine.v1.ResourceUsage
-	nil,                            // 12: onescluster.engine.v1.ResourceInfo.LocalServicesEntry
+	(*LogRequest)(nil),             // 0: onescluster.engine.v1.LogRequest
+	(*EngineLogEntry)(nil),         // 1: onescluster.engine.v1.EngineLogEntry
+	(*GetResourcesRequest)(nil),    // 2: onescluster.engine.v1.GetResourcesRequest
+	(*GetSystemStatusRequest)(nil), // 3: onescluster.engine.v1.GetSystemStatusRequest
+	(*DeployRequest)(nil),          // 4: onescluster.engine.v1.DeployRequest
+	(*DeployResponse)(nil),         // 5: onescluster.engine.v1.DeployResponse
+	(*StopRequest)(nil),            // 6: onescluster.engine.v1.StopRequest
+	(*StopResponse)(nil),           // 7: onescluster.engine.v1.StopResponse
+	(*ResourceInfo)(nil),           // 8: onescluster.engine.v1.ResourceInfo
+	(*ValidateRequest)(nil),        // 9: onescluster.engine.v1.ValidateRequest
+	(*ValidationResult)(nil),       // 10: onescluster.engine.v1.ValidationResult
+	(*SystemStatus)(nil),           // 11: onescluster.engine.v1.SystemStatus
+	(*CapsuleInfo)(nil),            // 12: onescluster.engine.v1.CapsuleInfo
+	(*ResourceUsage)(nil),          // 13: onescluster.engine.v1.ResourceUsage
+	nil,                            // 14: onescluster.engine.v1.ResourceInfo.LocalServicesEntry
 }
 var file_engine_proto_depIdxs = []int32{
-	12, // 0: onescluster.engine.v1.ResourceInfo.local_services:type_name -> onescluster.engine.v1.ResourceInfo.LocalServicesEntry
-	10, // 1: onescluster.engine.v1.SystemStatus.capsules:type_name -> onescluster.engine.v1.CapsuleInfo
-	11, // 2: onescluster.engine.v1.SystemStatus.resources:type_name -> onescluster.engine.v1.ResourceUsage
-	2,  // 3: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
-	4,  // 4: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
-	0,  // 5: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
-	7,  // 6: onescluster.engine.v1.Engine.ValidateManifest:input_type -> onescluster.engine.v1.ValidateRequest
-	1,  // 7: onescluster.engine.v1.Engine.GetSystemStatus:input_type -> onescluster.engine.v1.GetSystemStatusRequest
-	3,  // 8: onescluster.engine.v1.Engine.DeployCapsule:output_type -> onescluster.engine.v1.DeployResponse
-	5,  // 9: onescluster.engine.v1.Engine.StopCapsule:output_type -> onescluster.engine.v1.StopResponse
-	6,  // 10: onescluster.engine.v1.Engine.GetResources:output_type -> onescluster.engine.v1.ResourceInfo
-	8,  // 11: onescluster.engine.v1.Engine.ValidateManifest:output_type -> onescluster.engine.v1.ValidationResult
-	9,  // 12: onescluster.engine.v1.Engine.GetSystemStatus:output_type -> onescluster.engine.v1.SystemStatus
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
+	14, // 0: onescluster.engine.v1.ResourceInfo.local_services:type_name -> onescluster.engine.v1.ResourceInfo.LocalServicesEntry
+	12, // 1: onescluster.engine.v1.SystemStatus.capsules:type_name -> onescluster.engine.v1.CapsuleInfo
+	13, // 2: onescluster.engine.v1.SystemStatus.resources:type_name -> onescluster.engine.v1.ResourceUsage
+	4,  // 3: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
+	6,  // 4: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
+	2,  // 5: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
+	9,  // 6: onescluster.engine.v1.Engine.ValidateManifest:input_type -> onescluster.engine.v1.ValidateRequest
+	3,  // 7: onescluster.engine.v1.Engine.GetSystemStatus:input_type -> onescluster.engine.v1.GetSystemStatusRequest
+	0,  // 8: onescluster.engine.v1.Engine.StreamLogs:input_type -> onescluster.engine.v1.LogRequest
+	5,  // 9: onescluster.engine.v1.Engine.DeployCapsule:output_type -> onescluster.engine.v1.DeployResponse
+	7,  // 10: onescluster.engine.v1.Engine.StopCapsule:output_type -> onescluster.engine.v1.StopResponse
+	8,  // 11: onescluster.engine.v1.Engine.GetResources:output_type -> onescluster.engine.v1.ResourceInfo
+	10, // 12: onescluster.engine.v1.Engine.ValidateManifest:output_type -> onescluster.engine.v1.ValidationResult
+	11, // 13: onescluster.engine.v1.Engine.GetSystemStatus:output_type -> onescluster.engine.v1.SystemStatus
+	1,  // 14: onescluster.engine.v1.Engine.StreamLogs:output_type -> onescluster.engine.v1.EngineLogEntry
+	9,  // [9:15] is the sub-list for method output_type
+	3,  // [3:9] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -886,7 +1023,7 @@ func file_engine_proto_init() {
 	if File_engine_proto != nil {
 		return
 	}
-	file_engine_proto_msgTypes[2].OneofWrappers = []any{
+	file_engine_proto_msgTypes[4].OneofWrappers = []any{
 		(*DeployRequest_AdepJson)(nil),
 		(*DeployRequest_TomlContent)(nil),
 	}
@@ -896,7 +1033,7 @@ func file_engine_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_engine_proto_rawDesc), len(file_engine_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
