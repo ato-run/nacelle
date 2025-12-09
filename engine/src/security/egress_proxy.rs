@@ -108,7 +108,7 @@ async fn handle_connection(mut client_socket: TcpStream, whitelist: Arc<RwLock<V
             // Connect to target
             // We need the port.
             let target = request_str.split_whitespace().nth(1).ok_or("Invalid CONNECT")?;
-            let mut target_socket = TcpStream::connect(target).await?;
+            let target_socket = TcpStream::connect(target).await?;
 
             // Send 200 OK to client
             client_socket.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
@@ -126,7 +126,7 @@ async fn handle_connection(mut client_socket: TcpStream, whitelist: Arc<RwLock<V
             // We need to parse the full URL or just forward to the Host?
             // Simple approach: Connect to Host:80 and forward everything.
             let host_port = if host.contains(':') { host.to_string() } else { format!("{}:80", host) };
-            let mut target_socket = TcpStream::connect(host_port).await?;
+            let target_socket = TcpStream::connect(host_port).await?;
             
             // We didn't consume the buffer yet (peek).
             // But we can't easily "un-peek".

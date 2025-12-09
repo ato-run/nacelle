@@ -1,12 +1,10 @@
 use std::sync::Arc;
+use std::time::Instant;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{error, info, warn};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 
 use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
-use crate::oci;
 use crate::proto::onescluster::coordinator::v1::engine_service_server::{EngineService as EngineServiceTrait, EngineServiceServer};
 use crate::proto::onescluster::coordinator::v1::{
     EnsureRuntimeRequest, EnsureRuntimeResponse, ExecuteCapsuleRequest, ExecuteCapsuleResponse,
@@ -16,10 +14,11 @@ use crate::proto::onescluster::engine::v1::{
     deploy_request::Manifest as DeployManifest,
     engine_server::{Engine, EngineServer},
     CapsuleInfo, DeployRequest, DeployResponse, GetResourcesRequest, GetSystemStatusRequest,
-    EngineLogEntry, LogRequest, ResourceInfo, ResourceUsage, StopRequest, StopResponse, SystemStatus,
+    EngineLogEntry, ResourceInfo, ResourceUsage, StopRequest, StopResponse, SystemStatus,
     ValidateRequest, ValidationResult,
 };
 use crate::runtime::ContainerRuntime;
+use crate::security::vram_scrubber::VramScrubber;
 use crate::wasm_host::AdepLogicHost;
 use crate::workload;
 use crate::artifact::ArtifactManager;
@@ -35,8 +34,8 @@ pub struct EngineService {
     backend_mode: String,
     tailscale_manager: Arc<TailscaleManager>,
     service_registry: Arc<ServiceRegistry>,
-    runtime: Arc<ContainerRuntime>,
-    allowed_host_paths: Vec<String>,
+    _runtime: Arc<ContainerRuntime>,
+    _allowed_host_paths: Vec<String>,
     gpu_detector: Arc<dyn GpuDetector>,
     artifact_manager: Arc<ArtifactManager>,
 }
@@ -59,8 +58,8 @@ impl EngineService {
             backend_mode,
             tailscale_manager,
             service_registry,
-            runtime,
-            allowed_host_paths,
+            _runtime: runtime,
+            _allowed_host_paths: allowed_host_paths,
             gpu_detector,
             artifact_manager,
         }
@@ -115,15 +114,7 @@ impl EngineServiceTrait for EngineService {
             )
             .await
         {
-            Ok(result) => {
-                let local_url = self
-                    .service_registry
-                    .get_services()
-                    .iter()
-                    .find(|s| s.name == req.capsule_id)
-                    .map(|s| format!("http://localhost:{}", s.port))
-                    .unwrap_or_else(|| format!("http://localhost"));
-
+            Ok(_result) => {
                 // Get actual PID from CapsuleManager
                 let pid = self.capsule_manager.get_capsule_pid(&req.capsule_id).unwrap_or(0);
 
@@ -147,11 +138,11 @@ impl EngineServiceTrait for EngineService {
         info!("TerminateCapsule request: capsule_id={}", req.capsule_id);
 
         match self.capsule_manager.stop_capsule(&req.capsule_id).await {
-            Ok(_) => {
+            Ok(scrubbed) => {
                 Ok(Response::new(TerminationResult {
                     success: true,
                     exit_code: 0,
-                    vram_scrubbed: false,
+                    vram_scrubbed: scrubbed,
                 }))
             }
             Err(e) => {
@@ -234,11 +225,90 @@ impl EngineServiceTrait for EngineService {
 
     async fn scrub_vram(
         &self,
-        _request: Request<crate::proto::onescluster::coordinator::v1::ScrubVramRequest>,
+        request: Request<crate::proto::onescluster::coordinator::v1::ScrubVramRequest>,
     ) -> Result<Response<crate::proto::onescluster::coordinator::v1::ScrubVramResponse>, Status> {
-        // TODO: Implement actual VRAM scrubbing
+        let req = request.into_inner();
+
+        // Determine GPU indices: empty -> all detected GPUs
+        let mut gpu_indices: Vec<usize> = if req.gpu_indices.is_empty() {
+            match self.gpu_detector.detect_gpus() {
+                Ok(report) => report.gpus.iter().map(|g| g.index as usize).collect(),
+                Err(e) => {
+                    return Ok(Response::new(
+                        crate::proto::onescluster::coordinator::v1::ScrubVramResponse {
+                            results: vec![crate::proto::onescluster::coordinator::v1::GpuScrubResult {
+                                gpu_index: -1,
+                                success: false,
+                                bytes_scrubbed: 0,
+                                duration_ms: 0,
+                                error_message: format!("GPU detection failed: {}", e),
+                            }],
+                        },
+                    ));
+                }
+            }
+        } else {
+            req.gpu_indices
+                .iter()
+                .filter_map(|i| if *i >= 0 { Some(*i as usize) } else { None })
+                .collect()
+        };
+
+        gpu_indices.sort_unstable();
+        gpu_indices.dedup();
+
+        if gpu_indices.is_empty() {
+            return Ok(Response::new(crate::proto::onescluster::coordinator::v1::ScrubVramResponse {
+                results: vec![],
+            }));
+        }
+
+        let mut handles = Vec::new();
+        for idx in gpu_indices {
+            handles.push(tokio::task::spawn_blocking(move || {
+                let start = Instant::now();
+                let res = VramScrubber::new(idx).and_then(|s| s.scrub());
+                let duration_ms = start.elapsed().as_millis() as i64;
+                (idx, res, duration_ms)
+            }));
+        }
+
+        let mut results = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok((idx, Ok(stats), duration_ms)) => {
+                    let success = stats.message.is_none() && stats.bytes_scrubbed > 0;
+                    results.push(crate::proto::onescluster::coordinator::v1::GpuScrubResult {
+                        gpu_index: idx as i32,
+                        success,
+                        bytes_scrubbed: stats.bytes_scrubbed,
+                        duration_ms,
+                        error_message: stats.message.unwrap_or_default(),
+                    });
+                }
+                Ok((idx, Err(e), duration_ms)) => {
+                    results.push(crate::proto::onescluster::coordinator::v1::GpuScrubResult {
+                        gpu_index: idx as i32,
+                        success: false,
+                        bytes_scrubbed: 0,
+                        duration_ms,
+                        error_message: e.to_string(),
+                    });
+                }
+                Err(e) => {
+                    results.push(crate::proto::onescluster::coordinator::v1::GpuScrubResult {
+                        gpu_index: -1,
+                        success: false,
+                        bytes_scrubbed: 0,
+                        duration_ms: 0,
+                        error_message: format!("Join error: {}", e),
+                    });
+                }
+            }
+        }
+
         Ok(Response::new(crate::proto::onescluster::coordinator::v1::ScrubVramResponse {
-            results: vec![],
+            results,
         }))
     }
 }
@@ -339,7 +409,7 @@ impl Engine for EngineService {
         info!("StopCapsule request: capsule_id={}", req.capsule_id);
 
         match self.capsule_manager.stop_capsule(&req.capsule_id).await {
-            Ok(_) => {
+            Ok(_scrubbed) => {
                 info!("Capsule {} stopped successfully", req.capsule_id);
                 Ok(Response::new(StopResponse {
                     capsule_id: req.capsule_id,

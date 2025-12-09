@@ -32,17 +32,33 @@ impl AuthManager {
         }
     }
     
-    /// Write token to ~/.gumball/auth_token for Desktop app
+    /// Write token to app data directory for Desktop app
+    /// 
+    /// On macOS: ~/Library/Application Support/dev.gumball.app/auth_token
+    /// On Linux: ~/.local/share/dev.gumball.app/auth_token
+    /// On Windows: %APPDATA%/dev.gumball.app/auth_token
     fn write_token_to_file(token: &str) -> std::io::Result<()> {
         use std::fs;
         use std::path::PathBuf;
         
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let gumball_dir = PathBuf::from(home).join(".gumball");
-        fs::create_dir_all(&gumball_dir)?;
+        // Use platform-specific app data directory to match Tauri's app_local_data_dir()
+        let app_data_dir = if cfg!(target_os = "macos") {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home).join("Library/Application Support/dev.gumball.app")
+        } else if cfg!(target_os = "windows") {
+            let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(appdata).join("dev.gumball.app")
+        } else {
+            // Linux and others
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home).join(".local/share/dev.gumball.app")
+        };
         
-        let token_file = gumball_dir.join("auth_token");
-        fs::write(token_file, token)?;
+        fs::create_dir_all(&app_data_dir)?;
+        
+        let token_file = app_data_dir.join("auth_token");
+        tracing::info!("Writing auth token to: {:?}", token_file);
+        fs::write(&token_file, token)?;
         Ok(())
     }
 
@@ -100,20 +116,7 @@ pub async fn auth_middleware(
         .and_then(|v| v.to_str().ok());
 
     // Check for Bearer token in header
-    let mut provided_token = auth_header.and_then(|h| h.strip_prefix("Bearer "));
-
-    // If not in header, check query params (for SSE)
-    if provided_token.is_none() {
-        if let Some(query) = req.uri().query() {
-            let params: std::collections::HashMap<String, String> = 
-                serde_urlencoded::from_str(query).unwrap_or_default();
-            if let Some(token) = params.get("token") {
-                // We need to return a reference, but params owns the string.
-                // Since provided_token is Option<&str>, we can't easily assign it here without changing logic.
-                // Let's restructure.
-            }
-        }
-    }
+    let provided_token = auth_header.and_then(|h| h.strip_prefix("Bearer "));
     
     // Simpler approach: Get token string from either source
     let token_str = if let Some(t) = provided_token {

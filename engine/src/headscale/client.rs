@@ -113,6 +113,7 @@ impl HeadscaleClient {
     }
 
     /// Disconnect from Tailnet
+    #[allow(dead_code)]
     pub async fn disconnect(&self) -> Result<(), HeadscaleError> {
         let output = Command::new("tailscale")
             .arg("down")

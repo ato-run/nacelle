@@ -3,10 +3,13 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/rqlite/gorqlite"
+
+	"github.com/onescluster/coordinator/pkg/util"
 )
 
 // Config holds rqlite connection configuration
@@ -59,25 +62,17 @@ func NewClient(config *Config) (*Client, error) {
 
 // connect establishes a connection to rqlite with retry logic
 func (c *Client) connect() error {
-	var lastErr error
-
-	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
-		if attempt > 0 {
-			time.Sleep(c.config.RetryDelay)
-		}
-
+	operation := func() error {
 		// Try each address in the configuration
 		for _, addr := range c.config.Addresses {
 			conn, err := gorqlite.Open(addr)
 			if err != nil {
-				lastErr = err
 				continue
 			}
 
 			// Test the connection
 			_, err = conn.Leader()
 			if err != nil {
-				lastErr = err
 				continue
 			}
 
@@ -87,9 +82,10 @@ func (c *Client) connect() error {
 
 			return nil
 		}
+		return fmt.Errorf("failed to connect to any rqlite address")
 	}
 
-	return fmt.Errorf("failed to connect after %d attempts: %w", c.config.MaxRetries, lastErr)
+	return util.RetryWithBackoff(operation, uint64(c.config.MaxRetries))
 }
 
 // Execute runs a write query (INSERT, UPDATE, DELETE) with automatic retry on failure
@@ -137,19 +133,51 @@ func (c *Client) ExecuteMany(queries []string) error {
 		c.mu.RUnlock()
 	}
 
-	_, err := conn.Write(queries)
+	results, err := conn.Write(queries)
 	if err != nil {
-		// Try to reconnect and retry once
-		if reconnectErr := c.connect(); reconnectErr != nil {
-			return fmt.Errorf("failed to execute queries and reconnect: %w", err)
+		// Attempt a single reconnect and retry to handle transient connection drops.
+		if reconnectErr := c.connect(); reconnectErr == nil {
+			c.mu.RLock()
+			conn = c.conn
+			c.mu.RUnlock()
+			if retryResults, retryErr := conn.Write(queries); retryErr == nil {
+				results = retryResults
+				err = nil
+			} else {
+				results = retryResults
+				err = retryErr
+			}
 		}
-		c.mu.RLock()
-		conn = c.conn
-		c.mu.RUnlock()
-		_, err = conn.Write(queries)
 	}
 
-	return err
+	collectErrors := func(res []gorqlite.WriteResult) []string {
+		var errs []string
+		for i, r := range res {
+			if r.Err != nil {
+				errMsg := fmt.Sprintf("statement %d error: %v SQL: %s", i, r.Err, queries[i])
+				errMsg = strings.ReplaceAll(errMsg, "\n", " ")
+				errMsg = strings.ReplaceAll(errMsg, "\t", " ")
+				errMsg = strings.Join(strings.Fields(errMsg), " ")
+				fmt.Printf("%s\n", errMsg)
+				errs = append(errs, errMsg)
+			}
+		}
+		return errs
+	}
+
+	if err != nil {
+		errDetails := collectErrors(results)
+		if len(errDetails) > 0 {
+			return fmt.Errorf("%w; details: %s", err, strings.Join(errDetails, " | "))
+		}
+		return err
+	}
+
+	if errs := collectErrors(results); len(errs) > 0 {
+		return fmt.Errorf("statement errors: %s", strings.Join(errs, " | "))
+	}
+
+	return nil
 }
 
 // Query runs a read query (SELECT) with automatic retry on failure

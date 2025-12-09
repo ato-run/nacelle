@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::adep::AdepManifest;
 use crate::hardware::GpuDetector;
@@ -10,6 +10,10 @@ use crate::runtime::{
     RuntimeConfig, RuntimeError,
 };
 use crate::security::audit::{AuditLogger, AuditOperation, AuditStatus};
+use crate::security::vram_scrubber::VramScrubber;
+use crate::billing::usage::UsageTracker;
+use crate::billing::reporter::UsageReporter;
+use crate::storage::{StorageConfig, StorageManager};
 
 /// Capsule represents a running capsule instance
 #[derive(Clone, Debug)]
@@ -30,6 +34,7 @@ pub struct Capsule {
 
     pub started_at: Option<std::time::SystemTime>,
     pub remote_url: Option<String>,
+    pub user_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,6 +81,13 @@ pub struct CapsuleManager {
     
     // Artifact Manager
     artifact_manager: Option<Arc<ArtifactManager>>,
+
+    // Storage Manager (Phase 5)
+    storage_manager: Option<Arc<StorageManager>>,
+
+    // Billing
+    usage_tracker: Arc<UsageTracker>,
+    usage_reporter: Option<Arc<UsageReporter>>,
 }
 
 impl CapsuleManager {
@@ -91,6 +103,8 @@ impl CapsuleManager {
         process_supervisor: Option<Arc<ProcessSupervisor>>,
         egress_proxy_port: Option<u16>,
         runtime_config: Option<RuntimeConfig>,
+        usage_reporter: Option<Arc<UsageReporter>>,
+        storage_config: Option<StorageConfig>,
     ) -> Result<Self, crate::runtime::RuntimeError> {
         // Initialize runtimes
         let runtime_config = if let Some(config) = runtime_config {
@@ -125,6 +139,12 @@ impl CapsuleManager {
             egress_proxy_port,
         ));
 
+        // Initialize StorageManager if config provided
+        let storage_manager = storage_config.map(|config| {
+            info!("Initializing StorageManager with VG: {}", config.default_vg);
+            Arc::new(StorageManager::new(config))
+        });
+
         Ok(Self {
             capsules: RwLock::new(HashMap::new()),
             audit_logger,
@@ -137,6 +157,9 @@ impl CapsuleManager {
             native_runtime,
             dev_runtime,
             artifact_manager,
+            storage_manager,
+            usage_tracker: Arc::new(UsageTracker::new()),
+            usage_reporter,
         })
     }
 
@@ -210,6 +233,7 @@ impl CapsuleManager {
                                 log_path: None,
                                 started_at: Some(std::time::SystemTime::now()),
                                 remote_url: None,
+                                user_id: None,
                             };
                             self.capsules.write().unwrap().insert(capsule_id.clone(), capsule);
 
@@ -249,12 +273,21 @@ impl CapsuleManager {
 
         // Ensure Runtime Artifact (if native)
         if let Some(native_config) = &manifest.compute.native {
-            if let Some(am) = &self.artifact_manager {
+            let runtime_id = native_config.runtime.as_str();
+            
+            // Skip artifact download for system-level runtimes (mlx, llama, vllm)
+            // These are expected to be installed via pip/homebrew and accessed directly
+            let system_runtimes = ["mlx", "llama", "vllm"];
+            let is_system_runtime = system_runtimes.iter().any(|r| runtime_id.starts_with(r));
+            
+            if is_system_runtime {
+                info!("Using system runtime '{}' - skipping artifact download", runtime_id);
+            } else if let Some(am) = &self.artifact_manager {
                 let (runtime_id, version) = if let Some(at_pos) = native_config.runtime.find('@') {
                     let (id, ver) = native_config.runtime.split_at(at_pos);
                     (id, &ver[1..])
                 } else {
-                    (native_config.runtime.as_str(), "latest")
+                    (runtime_id, "latest")
                 };
 
                 info!("Ensuring runtime artifact {}@{}...", runtime_id, version);
@@ -345,8 +378,10 @@ impl CapsuleManager {
         };
 
         // Determine which runtime to use
+        info!("[DEBUG] Selecting runtime: native={:?}, oci_image={:?}", manifest.compute.native, oci_image);
         let runtime: Arc<dyn Runtime> = if manifest.compute.native.is_some() {
             // Check if we are on macOS
+            info!("[DEBUG] Native config exists, using NativeRuntime (macOS={})", cfg!(target_os = "macos"));
             if cfg!(target_os = "macos") {
                 self.native_runtime.clone()
             } else {
@@ -358,9 +393,11 @@ impl CapsuleManager {
             }
         } else if !oci_image.is_empty() {
              // If OCI image is specified, use ContainerRuntime
+             info!("[DEBUG] Using ContainerRuntime for OCI image");
              self.container_runtime.clone()
         } else {
              // Fallback to DevRuntime (Mock)
+             info!("[DEBUG] No native or OCI config, falling back to DevRuntime");
              self.dev_runtime.clone()
         };
 
@@ -401,6 +438,9 @@ impl CapsuleManager {
             0, // TODO: Track reserved VRAM
         )?;
 
+        // Start usage tracking
+        self.usage_tracker.start_tracking(capsule_id.clone());
+
         Ok("running".to_string())
     }
 
@@ -435,6 +475,7 @@ impl CapsuleManager {
                 log_path: None,
                 started_at: None,
                 remote_url: None,
+                user_id: None,
             });
 
         entry.adep_json = manifest_json.as_bytes().to_vec();
@@ -450,6 +491,7 @@ impl CapsuleManager {
         entry.last_exit_code = None;
         entry.log_path = Some(runtime.log_path.to_string_lossy().to_string());
         entry.started_at = Some(std::time::SystemTime::now());
+        entry.user_id = manifest.metadata.get("user_id").cloned();
 
         info!(
             capsule_id = capsule_id,
@@ -458,27 +500,23 @@ impl CapsuleManager {
             "Recorded capsule runtime launch"
         );
 
-        // Audit Log: CAPSULE_DEPLOY
-        self.audit_logger.log_event(
-            &AuditOperation::DeployCapsule.to_string(),
-            None,
-            &AuditStatus::Success.to_string(),
-            Some(format!(
-                "Deployed workload {} (image={})",
-                capsule_id, manifest.compute.image
-            )),
-        )?;
+        // Audit Log: CAPSULE_DEPLOY (async, fire-and-forget)
+        let logger = self.audit_logger.clone();
+        tokio::spawn(async move {
+            logger.log_event(AuditOperation::DeployCapsule, AuditStatus::Success).await;
+        });
 
-        // Audit Log: CAPSULE_START
-        self.audit_logger.log_event(
-            &AuditOperation::StartCapsule.to_string(),
-            None,
-            &AuditStatus::Success.to_string(),
-            Some(format!(
-                "Started workload {} (pid={})",
-                capsule_id, runtime.pid
-            )),
-        )?;
+        // Audit Log: CAPSULE_START (async, fire-and-forget)
+        let logger = self.audit_logger.clone();
+        tokio::spawn(async move {
+            logger.log_event(AuditOperation::StartCapsule, AuditStatus::Success).await;
+        });
+        
+        // Log details separately
+        info!(
+            "Started workload {} (pid={})",
+            capsule_id, runtime.pid
+        );
 
         Ok(())
     }
@@ -507,6 +545,7 @@ impl CapsuleManager {
                 log_path: None,
                 started_at: None,
                 remote_url: None,
+                user_id: None,
             });
 
         entry.status = CapsuleStatus::Failed;
@@ -563,8 +602,8 @@ impl CapsuleManager {
         capsules.get(capsule_id).and_then(|c| c.log_path.clone())
     }
 
-    /// Stop and remove a capsule
-    pub async fn stop_capsule(&self, capsule_id: &str) -> Result<()> {
+    /// Stop and remove a capsule. Returns whether VRAM scrubbing was performed successfully.
+    pub async fn stop_capsule(&self, capsule_id: &str) -> Result<bool> {
         info!("Stopping capsule {}", capsule_id);
 
         let adep_json = {
@@ -572,19 +611,21 @@ impl CapsuleManager {
             capsules.get(capsule_id).map(|c| c.adep_json.clone())
         };
 
-        if let Some(json) = adep_json {
-             let manifest: AdepManifest = serde_json::from_slice(&json).unwrap_or_default();
-             
-             let runtime: Arc<dyn Runtime> = if manifest.compute.native.is_some() {
+        let manifest: Option<AdepManifest> = adep_json
+            .as_ref()
+            .and_then(|json| serde_json::from_slice(json).ok());
+
+        if let Some(ref manifest) = manifest {
+            let runtime: Arc<dyn Runtime> = if manifest.compute.native.is_some() {
                 if cfg!(target_os = "macos") {
                     self.native_runtime.clone()
                 } else {
                     self.dev_runtime.clone()
                 }
             } else if !manifest.compute.image.is_empty() {
-                 self.container_runtime.clone()
+                self.container_runtime.clone()
             } else {
-                 self.dev_runtime.clone()
+                self.dev_runtime.clone()
             };
 
             if let Err(e) = runtime.stop(capsule_id).await {
@@ -614,15 +655,12 @@ impl CapsuleManager {
             }
         }
 
-        // Log audit event
-        if let Err(e) = self.audit_logger.log_event(
-            &AuditOperation::StopCapsule.to_string(),
-            None,
-            &AuditStatus::Success.to_string(),
-            Some(format!("Stopped capsule {}", capsule_id)),
-        ) {
-            error!("Failed to log audit event: {}", e);
-        }
+        // Log audit event (async, fire-and-forget)
+        let logger = self.audit_logger.clone();
+        tokio::spawn(async move {
+            logger.log_event(AuditOperation::StopCapsule, AuditStatus::Success).await;
+        });
+        info!("Stopped capsule {}", capsule_id);
 
         {
             let mut capsules = self
@@ -639,17 +677,79 @@ impl CapsuleManager {
             }
         }
 
-        Ok(())
+        // Stop usage tracking and report
+        if let Some(start_time) = self.usage_tracker.stop_tracking(capsule_id) {
+            let user_id = {
+                let capsules = self.capsules.read().map_err(|e| anyhow!("Lock error: {}", e))?;
+                capsules.get(capsule_id).and_then(|c| c.user_id.clone())
+            };
+
+            if let Some(uid) = user_id {
+                if let Some(reporter) = &self.usage_reporter {
+                    let end_time = std::time::SystemTime::now();
+                    let reporter = reporter.clone();
+                    let cid = capsule_id.to_string();
+                    tokio::spawn(async move {
+                        reporter.report(cid, uid, start_time, end_time).await;
+                    });
+                }
+            }
+        }
+
+        // Cleanup storage if StorageManager is configured
+        if let Some(storage_manager) = &self.storage_manager {
+            info!("Cleaning up storage for capsule {}", capsule_id);
+            match storage_manager.cleanup_capsule_storage(capsule_id) {
+                Ok(_) => info!("Storage cleaned up for capsule {}", capsule_id),
+                Err(e) => warn!("Failed to cleanup storage for capsule {}: {}", capsule_id, e),
+            }
+        }
+
+        // Scrub VRAM if the capsule used a GPU
+        let mut scrubbed = false;
+        if let Some(manifest) = &manifest {
+            if manifest.requires_gpu() {
+                let gpu_indices = match self.gpu_detector.detect_gpus() {
+                    Ok(report) => report.gpus.iter().map(|g| g.index as usize).collect::<Vec<_>>(),
+                    Err(e) => {
+                        warn!("Failed to detect GPUs for scrubbing: {}", e);
+                        Vec::new()
+                    }
+                };
+
+                if !gpu_indices.is_empty() {
+                    let scrub_task = tokio::task::spawn_blocking(move || {
+                        crate::security::vram_scrubber::scrub_gpu_indices(&gpu_indices, VramScrubber::new)
+                    });
+
+                    match scrub_task.await {
+                        Ok(results) => {
+                            for stats in results.iter() {
+                                if let Some(msg) = &stats.message {
+                                    warn!("Partial VRAM scrub on GPU {}: {}", stats.gpu_index, msg);
+                                } else {
+                                    info!("Scrubbed GPU {} bytes={} chunks={}", stats.gpu_index, stats.bytes_scrubbed, stats.chunks);
+                                }
+                            }
+                            scrubbed = results.iter().any(|s| s.message.is_none() && s.bytes_scrubbed > 0);
+                        }
+                        Err(e) => {
+                            warn!("VRAM scrubbing task failed: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(scrubbed)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn create_test_manager() -> CapsuleManager {
-        let temp_dir = tempfile::tempdir().unwrap();
         // Keep temp_dir alive? It will be dropped at end of function, but paths are used.
         // In tests, temp_dir is usually dropped at end of test.
         // Here we return Manager which holds paths.
@@ -682,7 +782,6 @@ esac
 
         let log_path = temp_dir.path().join("audit.log");
         let key_path = temp_dir.path().join("node_key.pem");
-
         let logger =
             Arc::new(AuditLogger::new(log_path, key_path, "test-node".to_string()).unwrap());
         let gpu_detector = crate::hardware::create_gpu_detector();
@@ -706,7 +805,9 @@ esac
             None, 
             None, 
             None, 
-            Some(runtime_config)
+            Some(runtime_config),
+            None, // usage_reporter
+            None, // storage_config
         ).unwrap()
     }
 
@@ -744,6 +845,7 @@ esac
         // Stop
         let result = manager.stop_capsule("test-capsule").await;
         assert!(result.is_ok());
+        assert!(!result.unwrap());
     }
 
     #[tokio::test]

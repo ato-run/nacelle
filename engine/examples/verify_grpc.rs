@@ -17,18 +17,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = client.get_hardware_info(request).await?;
     let hardware_info = response.into_inner();
 
-    if let Some(hw) = &hardware_info.hardware {
-        let total_vram = hw.total_vram_bytes;
-        let used_vram = hw.used_vram_bytes;
-        let available_vram = hw.gpus.get(0).map(|g| g.vram_available_bytes).unwrap_or(0);
+    if !hardware_info.gpus.is_empty() {
+        let gpu = &hardware_info.gpus[0];
+        let total_vram = gpu.vram_total_bytes;
 
         if total_vram > 0 {
             let total_gb = total_vram as f64 / 1024.0 / 1024.0 / 1024.0;
             println!(
                 "{}",
                 format!(
-                    "[SUCCESS] Mac GPU detected: {:.2} GB VRAM total ({} bytes)",
-                    total_gb, total_vram
+                    "[SUCCESS] GPU detected: {} - {:.2} GB VRAM total",
+                    gpu.name, total_gb
                 )
                 .green()
             );
@@ -40,8 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     } else {
-        println!("{}", "[ERROR] No hardware info returned".red());
-        return Ok(());
+        println!("{}", "[WARNING] No GPUs detected".yellow());
     }
 
     // Step 2: Build test manifest using mock_runtime (direct path)
@@ -85,29 +83,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n{}", "🚀 Step 3: ExecuteCapsule".bold());
     let exec_request = ExecuteCapsuleRequest {
         capsule_id: "test-verification-capsule".to_string(),
-        runtime_name: "native".to_string(),
-        runtime_version: "latest".to_string(),
-        workload_name: "Test Verification Capsule".to_string(),
+        runtime: None, // RuntimeSpec is optional
+        env: std::collections::HashMap::new(),
+        args: vec![],
+        port: 0,
         manifest: Some(
             capsuled_engine::proto::onescluster::coordinator::v1::execute_capsule_request::Manifest::AdepJson(
                 test_manifest_json.to_string().into_bytes(),
             ),
         ),
-        resource_assignment: vec![],
     };
 
     let exec_response = client.execute_capsule(exec_request).await?;
     let exec_result = exec_response.into_inner();
 
     let pid = exec_result.pid;
-    let status = &exec_result.status;
+    let actual_port = exec_result.actual_port;
 
-    if pid > 0 && status == "running" {
+    if pid > 0 {
         println!(
             "{}",
             format!(
-                "[SUCCESS] Capsule started (PID: {}, Status: {}, URL: {})",
-                pid, status, exec_result.local_url
+                "[SUCCESS] Capsule started (PID: {}, Port: {})",
+                pid, actual_port
             )
             .green()
         );
@@ -115,8 +113,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "{}",
             format!(
-                "[ERROR] Capsule failed to start (PID: {}, Status: {})",
-                pid, status
+                "[ERROR] Capsule failed to start (PID: {})",
+                pid
             )
             .red()
         );
@@ -135,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "{}",
             format!(
-                "[SUCCESS] Process verified running (PID: {}, Name: {})",
+                "[SUCCESS] Process verified running (PID: {}, Name: {:?})",
                 pid,
                 process.name()
             )
@@ -157,17 +155,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n{}", "🛑 Step 5: TerminateCapsule".bold());
     let term_request = TerminateCapsuleRequest {
         capsule_id: "test-verification-capsule".to_string(),
+        signal: 15, // SIGTERM
+        timeout_seconds: 10,
     };
 
     let term_response = client.terminate_capsule(term_request).await?;
     let term_result = term_response.into_inner();
 
     if term_result.success {
-        println!("{}", "[SUCCESS] Capsule terminated".green());
+        println!("{}", format!("[SUCCESS] Capsule terminated (exit_code: {})", term_result.exit_code).green());
     } else {
         println!(
             "{}",
-            format!("[ERROR] Termination failed: {}", term_result.message).red()
+            format!("[ERROR] Termination failed (exit_code: {})", term_result.exit_code).red()
         );
         return Ok(());
     }

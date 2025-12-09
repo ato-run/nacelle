@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // InitSchema initializes the database schema in rqlite
@@ -20,10 +22,11 @@ func InitSchema(client *Client) error {
 
 	schema := string(schemaBytes)
 
-	// Execute schema
-	// Note: In production, you might want to split this into multiple statements
-	// and execute them individually for better error handling
-	if err := client.Execute(schema); err != nil {
+	// Split schema into individual statements (rqlite doesn't support multi-statement exec)
+	statements := splitSQLStatements(schema)
+	
+	// Execute schema statements
+	if err := client.ExecuteMany(statements); err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}
 
@@ -40,6 +43,8 @@ func VerifySchema(client *Client) error {
 		"capsule_resources",
 		"master_elections",
 		"cluster_metadata",
+		"runtimes",
+		"runtime_versions",
 	}
 
 	for _, table := range requiredTables {
@@ -54,6 +59,50 @@ func VerifySchema(client *Client) error {
 	}
 
 	log.Println("Schema verification successful")
+	return nil
+}
+
+// ApplyMigrations applies SQL migrations from the migrations directory
+func ApplyMigrations(client *Client) error {
+	log.Println("Applying database migrations...")
+
+	migrationsDir := filepath.Join("pkg", "db", "migrations")
+	files, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read migrations directory: %w", err)
+	}
+
+	// Ensure deterministic order (001, 002, ...)
+	sort.Slice(files, func(i, j int) bool { return files[i].Name() < files[j].Name() })
+
+	for _, file := range files {
+		if filepath.Ext(file.Name()) != ".sql" {
+			continue
+		}
+
+		migrationPath := filepath.Join(migrationsDir, file.Name())
+		migrationBytes, err := os.ReadFile(migrationPath)
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", file.Name(), err)
+		}
+
+		// Split migration into individual statements
+		statements := splitSQLStatements(string(migrationBytes))
+		
+		if err := client.ExecuteMany(statements); err != nil {
+			msg := err.Error()
+			// Allow idempotent reruns (duplicate columns/tables)
+			if strings.Contains(msg, "duplicate column name") || strings.Contains(msg, "already exists") {
+				log.Printf("Migration %s had benign duplicate errors, continuing: %v", file.Name(), err)
+				continue
+			}
+			return fmt.Errorf("failed to execute migration %s: %w", file.Name(), err)
+		}
+
+		log.Printf("Migration applied: %s", file.Name())
+	}
+
+	log.Println("All migrations applied successfully")
 	return nil
 }
 
@@ -75,6 +124,41 @@ func MigrateFromSQLite(sqlitePath string, client *Client) error {
 	// 4. Verifying data integrity
 
 	return nil
+}
+
+// splitSQLStatements splits a SQL script into individual statements
+// Handles semicolon-separated statements and basic comment removal
+func splitSQLStatements(sql string) []string {
+	var statements []string
+	var current string
+	lines := strings.Split(sql, "\n")
+	
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		
+		current += line + "\n"
+		
+		// Check if line ends with semicolon (statement terminator)
+		if strings.HasSuffix(trimmed, ";") {
+			stmt := strings.TrimSpace(current)
+			if stmt != "" && stmt != ";" {
+				statements = append(statements, stmt)
+			}
+			current = ""
+		}
+	}
+	
+	// Add any remaining statement
+	if current := strings.TrimSpace(current); current != "" && current != ";" {
+		statements = append(statements, current)
+	}
+	
+	return statements
 }
 
 // InitializeClusterState initializes the cluster state with default values

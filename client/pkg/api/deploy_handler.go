@@ -114,6 +114,19 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	req.Requirements.AllowCloudBurst = req.AllowCloudBurst
 
 	ctx := r.Context()
+	userID, _ := ctx.Value("user_id").(string)
+
+	// Enforce Limits
+	if userID != "" {
+		activeCount := h.StateManager.GetActiveCapsuleCount(userID)
+		// TODO: Fetch actual limit from subscription
+		limit := 5 
+		if activeCount >= limit {
+			http.Error(w, fmt.Sprintf("Capsule limit reached (%d)", limit), http.StatusForbidden)
+			return
+		}
+	}
+
 	// 1. Get available machines with GPUs
 	rigs, err := h.StateManager.GetAllGpuRigs(ctx)
 	if err != nil {
@@ -200,6 +213,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	// 6. Record capsule in DB
 	capsule := &db.Capsule{
 		ID:            resp.CapsuleId,
+		UserID:        userID,
 		Name:          req.RuntimeName,
 		NodeID:        bestRig.RigID,
 		RuntimeName:   req.RuntimeName,

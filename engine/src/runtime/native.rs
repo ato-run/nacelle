@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::process::Command;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 
 use crate::artifact::ArtifactManager;
 use crate::process_supervisor::ProcessSupervisor;
@@ -35,7 +35,7 @@ impl NativeRuntime {
 #[async_trait]
 impl Runtime for NativeRuntime {
     async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
-        let native_config = request.spec.process().as_ref().and_then(|p| {
+        let native_config = request.spec.process().as_ref().and_then(|_process| {
             // In a real implementation, we would parse the spec to find native config.
             // For now, we assume the caller has validated this or we extract from env/args.
             // However, the current `LaunchRequest` passes `Spec`.
@@ -76,16 +76,53 @@ impl Runtime for NativeRuntime {
 
         info!("Ensuring runtime {}@{}", runtime_id, version);
 
-        // Check if runtime is an absolute path to an existing file (for testing/development)
-        let binary_path = if std::path::Path::new(runtime_id).is_absolute() && std::path::Path::new(runtime_id).exists() {
-            info!("Using direct path: {}", runtime_id);
-            std::path::PathBuf::from(runtime_id)
-        } else if let Some(am) = &self.artifact_manager {
-            am.ensure_runtime(runtime_id, version, None)
-                .await
-                .map_err(|e| RuntimeError::InvalidConfig(format!("Failed to ensure runtime: {}", e)))?
-        } else {
-            return Err(RuntimeError::InvalidConfig("ArtifactManager not configured and runtime is not a direct path".to_string()));
+        // Special handling for built-in runtimes (mlx, llama, vllm)
+        let binary_path = match runtime_id {
+            "mlx" => {
+                // MLX runtime uses start.sh in ~/.gumball/runtimes/mlx
+                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                let mlx_runtime_path = PathBuf::from(&home)
+                    .join(".gumball")
+                    .join("runtimes")
+                    .join("mlx")
+                    .join("start.sh");
+                
+                // Fallback to development path
+                if mlx_runtime_path.exists() {
+                    info!("Using MLX runtime at: {:?}", mlx_runtime_path);
+                    mlx_runtime_path
+                } else {
+                    // Try project path for development
+                    let dev_path = std::env::current_dir()
+                        .unwrap_or_default()
+                        .parent()
+                        .map(|p| p.join("desktop/mlx-runtime/start.sh"))
+                        .unwrap_or_default();
+                    if dev_path.exists() {
+                        info!("Using MLX dev runtime at: {:?}", dev_path);
+                        dev_path
+                    } else {
+                        return Err(RuntimeError::InvalidConfig(
+                            format!("MLX runtime not found. Expected at {:?} or {:?}", mlx_runtime_path, dev_path)
+                        ));
+                    }
+                }
+            }
+            _ if std::path::Path::new(runtime_id).is_absolute() && std::path::Path::new(runtime_id).exists() => {
+                // Check if runtime is an absolute path to an existing file
+                info!("Using direct path: {}", runtime_id);
+                std::path::PathBuf::from(runtime_id)
+            }
+            _ => {
+                // Use artifact manager for other runtimes
+                if let Some(am) = &self.artifact_manager {
+                    am.ensure_runtime(runtime_id, version, None)
+                        .await
+                        .map_err(|e| RuntimeError::InvalidConfig(format!("Failed to ensure runtime: {}", e)))?
+                } else {
+                    return Err(RuntimeError::InvalidConfig("ArtifactManager not configured and runtime is not a direct path".to_string()));
+                }
+            }
         };
 
         // Variable expansion (e.g. ${PORT})
@@ -100,13 +137,30 @@ impl Runtime for NativeRuntime {
             if let Some(env) = process.env() {
                 for e in env {
                     if let Some((k, v)) = e.split_once('=') {
+                        // Filter out problematic empty HOST variable
+                        if k == "HOST" && (v.is_empty() || v.trim().is_empty()) {
+                            warn!("Filtering out empty/whitespace HOST environment variable");
+                            continue;
+                        }
                         env_vars.insert(k.to_string(), v.to_string());
                     }
                 }
             }
         }
         
+        info!("[DEBUG] Native runtime env_vars: {:?}", env_vars);
+        
+        if let Some(host_val) = env_vars.get("HOST") {
+            warn!("[DEBUG] HOST environment variable detected: '{}'", host_val);
+            if host_val.is_empty() {
+                error!("[DEBUG] HOST is empty string - this will cause socket errors!");
+            }
+        } else {
+            info!("[DEBUG] HOST environment variable not present (good)");
+        }
+
         let port = env_vars.get("PORT").cloned().unwrap_or_else(|| "0".to_string());
+        info!("[DEBUG] Native runtime using PORT={}", port);
         
         // Define GUMBALL_MODELS_DIR
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -158,7 +212,7 @@ impl Runtime for NativeRuntime {
                 let pid_file = state_dir.join(format!("{}.pid", request.workload_id));
                 std::fs::write(&pid_file, pid.to_string()).map_err(|e| RuntimeError::Io { path: pid_file.clone(), source: e })?;
 
-                if let Some(supervisor) = &self.process_supervisor {
+                if let Some(_supervisor) = &self.process_supervisor {
                     // TODO: Integrate with ProcessSupervisor if needed
                 }
                 

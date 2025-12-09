@@ -2,6 +2,7 @@
 name = "capsuled-engine"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.82"
 
 [lib]
 name = "capsuled_engine"
@@ -11,9 +12,6 @@ path = "src/lib.rs"
 name = "capsuled-engine"
 path = "src/main.rs"
 
-[[bin]]
-name = "status-reporter-driver"
-path = "src/bin/status_reporter_driver.rs"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -58,6 +56,8 @@ notify = "6"
 ed25519-dalek = { version = "2.1", features = ["rand_core", "pkcs8"] }
 rand = "0.8"
 hex = "0.4"
+hmac = "0.12"
+base64 = "0.22"
 
 # Metrics
 prometheus = "0.13"
@@ -66,30 +66,35 @@ prometheus = "0.13"
 # libadep-core = { path = "../../libadep/core" }
 libadep-core = { path = "../../libadep/core", features = ["toml-support"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
-hcl-rs = "0.19.4"
+hcl-rs = "0.17"
 async-stream = "0.3.6"
 futures = "0.3.31"
 serde_urlencoded = "0.7.1"
 sha2 = "0.10.9"
 
 bytes = "1.11.0"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.11", features = ["json", "stream"] }
 
 zip = "2.1"
 tar = "0.4"
 flate2 = "1.0"
 async-trait = "0.1.89"
 nix = { version = "0.30.1", features = ["signal"] }
+subtle = "2.6.1"
+rust_decimal = { version = "1.39.0", features = ["serde"] }
+rust_decimal_macros = "1.39.0"
 # lvm-sys2 = "0.2"
 # libcryptsetup-rs = "0.9"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nvml-wrapper = "0.9"
-cudarc = { version = "0.17", features = ["driver", "cuda-version-from-build-system"] }
+cudarc = { version = "0.17", features = ["driver", "cuda-version-from-build-system"], optional = true }
 
 [features]
 default = ["toml-support"]
 toml-support = ["libadep-core/toml-support"]
+cuda = ["dep:cudarc"]
+real-gpu = []
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -98,4 +103,5 @@ sysinfo = "0.30"
 
 [build-dependencies]
 tonic-build = "0.10"
+
 

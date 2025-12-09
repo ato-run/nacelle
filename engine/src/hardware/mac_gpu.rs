@@ -1,5 +1,4 @@
 use std::process::Command;
-use std::sync::Arc;
 use serde_json::Value;
 use super::gpu_detector::{GpuDetector, GpuDetectionError};
 use super::hardware_report::{GpuInfo, RigHardwareReport};

@@ -6,7 +6,6 @@ use axum::{
     response::IntoResponse,
     body::Body,
 };
-use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use sha2::{Sha256, Digest};
 use std::io::Write;

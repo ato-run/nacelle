@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/onescluster/coordinator/pkg/api"
 	"github.com/onescluster/coordinator/pkg/config"
 	"github.com/onescluster/coordinator/pkg/db"
 
@@ -192,20 +193,24 @@ func main() {
 	}
 
 	// Start reconciliation loop to detect drift between desired and actual workload state
-	reconcileStore := reconcile.NewRQLiteStore(rqliteClient)
 	reconcileInterval := cfg.Cluster.GetHeartbeatInterval() * 2
 	if reconcileInterval <= 0 {
 		reconcileInterval = 30 * time.Second
 	}
-	reconciler := reconcile.New(reconcileStore, reconcileInterval)
+	reconciler := reconcile.NewWithStateManager(stateManager, reconcileInterval)
 	stopReconciler := reconciler.Start(rootCtx)
 	defer stopReconciler()
 
 	// Start HTTP API server for coordinator UI and health checks
 	log.Println("Starting HTTP API server...")
 	httpAddr := ":8080" // Default address for coordinator UI
+	
+	// Initialize handlers
+	runtimeHandler := api.NewRuntimeHandler(stateManager)
+	
 	httpSrv := httpserver.NewServer(httpserver.Config{
 		Addr: httpAddr,
+		RuntimeHandler: runtimeHandler,
 	})
 
 	// Start HTTP server in background

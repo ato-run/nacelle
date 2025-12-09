@@ -3,10 +3,7 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, info, warn};
 
-use crate::adep::{
-    AdepManifest, AdepVolume, ComputeConfig as AdepComputeConfig,
-    GpuConstraints as AdepGpuConstraints, SchedulingConfig as AdepSchedulingConfig,
-};
+use crate::adep::AdepManifest;
 use crate::capsule_manager::CapsuleManager;
 use crate::oci::spec_builder::build_oci_spec;
 use crate::proto::onescluster::coordinator::v1::{
@@ -195,7 +192,7 @@ impl AgentServiceTrait for AgentService {
         info!("StopWorkload request: workload_id={}", req.workload_id);
 
         match self.capsule_manager.stop_capsule(&req.workload_id).await {
-            Ok(_) => {
+            Ok(_scrubbed) => {
                 info!("Workload {} stopped successfully", req.workload_id);
                 Ok(Response::new(StopWorkloadResponse {
                     workload_id: req.workload_id,

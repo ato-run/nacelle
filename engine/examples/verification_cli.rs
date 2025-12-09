@@ -1,6 +1,5 @@
 use capsuled_engine::proto::onescluster::coordinator::v1::agent_service_client::AgentServiceClient;
 use capsuled_engine::proto::onescluster::coordinator::v1::FetchModelRequest;
-use tonic::transport::Channel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

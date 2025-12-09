@@ -252,12 +252,14 @@ pub enum RuntimeError {
     },
 }
 
+#[allow(dead_code)]
 struct CommandOutput {
     stderr: String,
     exit_code: Option<i32>,
 }
 
 impl CommandOutput {
+    #[allow(dead_code)]
     fn into_error(self, operation: impl Into<String>) -> RuntimeError {
         RuntimeError::CommandFailure {
             operation: operation.into(),
@@ -287,9 +289,9 @@ mod tests {
     use oci_spec::runtime::{ProcessBuilder, RootBuilder, SpecBuilder};
 
     use std::path::PathBuf;
-    use tempfile::TempDir;
 
     /// Helper to create a minimal valid OCI spec for testing
+    #[allow(dead_code)]
     fn create_test_spec(root_path: &str) -> Spec {
         let root = RootBuilder::default()
             .path(root_path)

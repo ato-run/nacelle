@@ -32,7 +32,7 @@ impl DevRuntime {
 impl Runtime for DevRuntime {
     async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
         // Determine directory to serve
-        let mut serve_dir = std::env::current_dir().unwrap_or_default();
+        let serve_dir = std::env::current_dir().unwrap_or_default();
         
         let candidate_paths = vec![
             "examples/apps",
@@ -134,7 +134,7 @@ impl Runtime for DevRuntime {
                     }
                 }
 
-                if let Some(supervisor) = &self.process_supervisor {
+                if let Some(_supervisor) = &self.process_supervisor {
                     // Supervisor registration issue (tokio vs std Child)
                     // For now, we skip registration or need to fix Supervisor.
                     // The original code used std::process::Command so it got std::process::Child.

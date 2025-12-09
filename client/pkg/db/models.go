@@ -62,6 +62,7 @@ const (
 // Capsule represents a deployed capsule in the cluster
 type Capsule struct {
 	ID            string        `json:"id"`             // ULID
+	UserID        string        `json:"user_id"`        // Owner User ID
 	Name          string        `json:"name"`           // Human-readable name
 	NodeID        string        `json:"node_id"`        // Node where deployed
 	RuntimeName   string        `json:"runtime_name"`   // Runtime name (e.g. python, node)
@@ -94,6 +95,16 @@ type CapsuleResources struct {
 	CPURequest     int64  `json:"cpu_request"`     // Requested CPU in millicores
 	MemoryRequest  int64  `json:"memory_request"`  // Requested memory in bytes
 	StorageRequest int64  `json:"storage_request"` // Requested storage in bytes
+}
+
+// Runtime represents a runtime and its metadata
+type Runtime struct {
+	ID            string    `json:"id" db:"id"`
+	Name          string    `json:"name" db:"name"`
+	Type          string    `json:"type" db:"type"`
+	Description   string    `json:"description" db:"description"`
+	LatestVersion string    `json:"latest_version" db:"latest_version"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
 // ElectionReason represents why a master election occurred

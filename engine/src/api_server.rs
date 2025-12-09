@@ -9,10 +9,8 @@ use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio_stream::wrappers::IntervalStream;
-use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
-use tracing::{info, error, warn};
+use tracing::{info, error};
 
 use crate::auth::AuthManager;
 use crate::capsule_manager::CapsuleManager;
@@ -271,7 +269,7 @@ async fn destroy_handler(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match state.capsule_manager.stop_capsule(&id).await {
-        Ok(_) => Json(serde_json::json!({ "status": "destroyed", "id": id })),
+        Ok(scrubbed) => Json(serde_json::json!({ "status": "destroyed", "id": id, "vram_scrubbed": scrubbed })),
         Err(e) => Json(serde_json::json!({ "status": "error", "message": e.to_string() })),
     }
 }
@@ -312,9 +310,8 @@ async fn logs_handler(
                 }
             };
 
-            use tokio::io::{AsyncReadExt, AsyncSeekExt};
+            use tokio::io::AsyncReadExt;
             let mut buffer = [0; 1024];
-            let mut position = 0;
 
             loop {
                 match file.read(&mut buffer).await {
@@ -332,7 +329,6 @@ async fn logs_handler(
                                 yield Ok(axum::response::sse::Event::default().data(sanitized));
                             }
                         }
-                        position += n as u64;
                     }
                     Err(e) => {
                         let error_msg = format!("Error reading logs: {}", e).replace('\n', " ").replace('\r', " ");

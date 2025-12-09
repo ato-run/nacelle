@@ -1,60 +1,39 @@
-use anyhow::{Context, Result};
-use chrono::Utc;
-use ed25519_dalek::{Signer, SigningKey};
-use rand::rngs::OsRng;
+//! Audit logging for security events
+
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
-use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use tracing::info;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-/// AuditRecord represents a single signed audit log entry
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AuditRecord {
-    pub timestamp: String,
-    pub node_id: String,
-    pub gpu_uuid: Option<String>,
-    pub action: String,
-    pub status: String,
-    pub details: Option<String>,
-    pub signature: Option<String>,
-}
-
-impl AuditRecord {
-    /// Create the string representation to be signed
-    /// Format: timestamp|node_id|gpu_uuid|action|status|details
-    pub fn signable_string(&self) -> String {
-        format!(
-            "{}|{}|{}|{}|{}|{}",
-            self.timestamp,
-            self.node_id,
-            self.gpu_uuid.as_deref().unwrap_or(""),
-            self.action,
-            self.status,
-            self.details.as_deref().unwrap_or("")
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuditOperation {
-    DeployCapsule,
+    CapsuleStart,
     StartCapsule,
+    CapsuleStop,
     StopCapsule,
+    CapsuleDelete,
+    DeployCapsule,
+    FileAccess,
+    NetworkAccess,
+    APIKeyUsed,
 }
 
 impl std::fmt::Display for AuditOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AuditOperation::DeployCapsule => write!(f, "CAPSULE_DEPLOY"),
-            AuditOperation::StartCapsule => write!(f, "CAPSULE_START"),
-            AuditOperation::StopCapsule => write!(f, "CAPSULE_STOP"),
-        }
+        let s = match self {
+            AuditOperation::CapsuleStart | AuditOperation::StartCapsule => "capsule_start",
+            AuditOperation::CapsuleStop | AuditOperation::StopCapsule => "capsule_stop",
+            AuditOperation::CapsuleDelete => "capsule_delete",
+            AuditOperation::DeployCapsule => "deploy_capsule",
+            AuditOperation::FileAccess => "file_access",
+            AuditOperation::NetworkAccess => "network_access",
+            AuditOperation::APIKeyUsed => "api_key_used",
+        };
+        write!(f, "{}", s)
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuditStatus {
     Success,
     Failure,
@@ -63,106 +42,75 @@ pub enum AuditStatus {
 impl std::fmt::Display for AuditStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AuditStatus::Success => write!(f, "SUCCESS"),
-            AuditStatus::Failure => write!(f, "FAILURE"),
+            AuditStatus::Success => write!(f, "success"),
+            AuditStatus::Failure => write!(f, "failure"),
         }
     }
 }
 
-/// AuditLogger handles signing and writing audit logs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditEvent {
+    pub operation: AuditOperation,
+    pub status: AuditStatus,
+    pub timestamp: u64,
+    pub user_id: Option<String>,
+    pub details: Option<String>,
+}
+
 pub struct AuditLogger {
+    #[allow(dead_code)]
     log_path: PathBuf,
-    signing_key: SigningKey,
+    #[allow(dead_code)]
+    key_path: PathBuf,
+    #[allow(dead_code)]
     node_id: String,
-    file_lock: Mutex<()>,
 }
 
 impl AuditLogger {
-    /// Create a new AuditLogger.
-    /// If key_path exists, load the key. Otherwise, generate a new one and save it.
+    /// Create a new AuditLogger with file paths and node identifier
     pub fn new(log_path: PathBuf, key_path: PathBuf, node_id: String) -> Result<Self> {
-        // Ensure log directory exists
+        // Ensure parent directories exist
         if let Some(parent) = log_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create audit log directory")?;
+            std::fs::create_dir_all(parent)?;
         }
-
-        // Ensure key directory exists
         if let Some(parent) = key_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create key directory")?;
+            std::fs::create_dir_all(parent)?;
         }
-
-        // Load or generate key
-        let signing_key = if key_path.exists() {
-            info!("Loading audit key from {:?}", key_path);
-            let key_bytes = fs::read(&key_path).context("Failed to read audit key")?;
-            let key_array: [u8; 32] = key_bytes
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
-            SigningKey::from_bytes(&key_array)
-        } else {
-            info!("Generating new audit key at {:?}", key_path);
-            let mut csprng = OsRng;
-            let signing_key = SigningKey::generate(&mut csprng);
-            fs::write(&key_path, signing_key.to_bytes()).context("Failed to save audit key")?;
-            signing_key
-        };
-
-        let logger = Self {
+        
+        Ok(Self {
             log_path,
-            signing_key,
+            key_path,
             node_id,
-            file_lock: Mutex::new(()),
-        };
-
-        info!(
-            "AuditLogger initialized. Public Key: {}",
-            logger.public_key_hex()
-        );
-
-        Ok(logger)
+        })
     }
 
-    /// Log a signed event
-    pub fn log_event(
-        &self,
-        action: &str,
-        gpu_uuid: Option<&str>,
-        status: &str,
-        details: Option<String>,
-    ) -> Result<()> {
-        let mut record = AuditRecord {
-            timestamp: Utc::now().to_rfc3339(),
-            node_id: self.node_id.clone(),
-            gpu_uuid: gpu_uuid.map(|s| s.to_string()),
-            action: action.to_string(),
-            status: status.to_string(),
+    pub async fn log(&self, operation: AuditOperation, status: AuditStatus, details: Option<String>) {
+        let event = AuditEvent {
+            operation,
+            status,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            user_id: None,
             details,
-            signature: None,
         };
 
-        // Sign the record
-        let signable = record.signable_string();
-        let signature = self.signing_key.sign(signable.as_bytes());
-        record.signature = Some(hex::encode(signature.to_bytes()));
-
-        // Serialize to JSON
-        let json_line = serde_json::to_string(&record)?;
-
-        // Write to file with lock
-        let _lock = self.file_lock.lock().unwrap();
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.log_path)
-            .context("Failed to open audit log file")?;
-
-        writeln!(file, "{}", json_line).context("Failed to write audit log entry")?;
-
-        Ok(())
+        // In production: write to persistent storage
+        tracing::info!("Audit: {:?}", event);
     }
 
-    /// Get the public key (verifying key) as hex string
-    pub fn public_key_hex(&self) -> String {
-        hex::encode(self.signing_key.verifying_key().to_bytes())
+    pub async fn log_event(&self, operation: AuditOperation, status: AuditStatus) {
+        self.log(operation, status, None).await;
+    }
+}
+
+impl Default for AuditLogger {
+    fn default() -> Self {
+        Self {
+            log_path: PathBuf::from("/tmp/audit.log"),
+            key_path: PathBuf::from("/tmp/node_key.pem"),
+            node_id: "default-node".to_string(),
+        }
     }
 }

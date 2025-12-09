@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 pub struct TraefikManager {
     process: Arc<Mutex<Option<Child>>>,
-    config_dir: PathBuf,
+    _config_dir: PathBuf,
     routes_file: PathBuf,
 }
 
@@ -68,7 +68,7 @@ api:
 
         Ok(Self {
             process: Arc::new(Mutex::new(process)),
-            config_dir,
+            _config_dir: config_dir,
             routes_file,
         })
     }

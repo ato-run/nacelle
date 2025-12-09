@@ -94,7 +94,7 @@ output = "stdout"
 
 [metrics]
 # Enable Prometheus metrics endpoint
-enabled = false
+enabled = true
 
 # Metrics HTTP server address
 listen_addr = "0.0.0.0:9090"

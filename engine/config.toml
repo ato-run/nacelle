@@ -31,6 +31,16 @@ hook_retry_attempts = 3
 [security]
 allowed_host_paths = ["/opt/models", "/mnt/cache", "/tmp"]
 
+# Storage configuration (Phase 5)
+# Uncomment to enable persistent encrypted storage for capsules
+# [storage]
+# enabled = false
+# default_vg = "vg_capsules"
+# key_directory = "/etc/capsuled/keys"
+# enable_encryption = true
+# default_size_bytes = 10737418240  # 10GB
+# mount_base = "/var/lib/capsuled/mounts"
+
 [network]
 local_domain = "local"
 state_dir = "/tmp/capsuled/state"

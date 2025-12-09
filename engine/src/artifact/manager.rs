@@ -7,7 +7,7 @@ use thiserror::Error;
 use tracing::{info, warn};
 use futures::StreamExt;
 
-use crate::artifact::registry::{Registry, RuntimeDefinition, ArtifactVersion};
+use crate::artifact::registry::Registry;
 use crate::artifact::cache::{ArtifactCache, CachedRuntime};
 
 #[derive(Debug, Error)]

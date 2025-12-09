@@ -44,12 +44,17 @@ fn load_toml_manifest(text: &str) -> Result<(AdepManifest, Option<ResourceRequir
     {
         use libadep_core::capsule_manifest::CapsuleManifest;
         use libadep_core::utils::parse_memory_string;
+        use tracing::info;
 
         let capsule: CapsuleManifest = CapsuleManifest::from_toml_str(text)
             .map_err(|e| anyhow!("failed to parse TOML: {}", e))?;
 
+        info!("[DEBUG] Parsed TOML capsule: name={}, native={:?}", capsule.capsule.name, capsule.native);
+
         // Convert to AdepManifest and resource hints
         let manifest: AdepManifest = capsule.clone().into();
+        
+        info!("[DEBUG] Converted to AdepManifest: native={:?}", manifest.compute.native);
 
         // Build resource requirements
         let mut req = ResourceRequirements::default();
@@ -121,7 +126,31 @@ impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
             cloud: cloud_constraints,
         };
 
-        let (native, env) = if let Some(runtime) = c.runtime {
+        let (native, env) = if let Some(native_cfg) = c.native {
+            // HCL v3.0 native block takes priority
+            let native_config = Some(crate::adep::NativeConfig {
+                runtime: native_cfg.runtime,
+                args: native_cfg.args.unwrap_or_default(),
+            });
+
+            let mut env_vars = vec![];
+            if let Some(env_map) = native_cfg.env {
+                for (k, v) in env_map {
+                    if k == "HOST" && (v.is_empty() || v.trim().is_empty()) {
+                        continue;
+                    }
+                    env_vars.push(format!("{}={}", k, v));
+                }
+            }
+            // Add model as env var if present
+            if let Some(model) = native_cfg.model {
+                env_vars.push(format!("MLX_MODEL_ID={}", model));
+            }
+            if let Some(port) = native_cfg.port {
+                env_vars.push(format!("PORT={}", port));
+            }
+            (native_config, env_vars)
+        } else if let Some(runtime) = c.runtime {
             let native_config = if runtime.runtime_type == "native" {
                 Some(crate::adep::NativeConfig {
                     runtime: runtime.executable.unwrap_or_default(),
@@ -134,6 +163,9 @@ impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
             let mut env_vars = vec![];
             if let Some(env_map) = runtime.env {
                 for (k, v) in env_map {
+                    if k == "HOST" && (v.is_empty() || v.trim().is_empty()) {
+                        continue;
+                    }
                     env_vars.push(format!("{}={}", k, v));
                 }
             }

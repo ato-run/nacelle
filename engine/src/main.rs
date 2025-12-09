@@ -12,6 +12,7 @@ use capsuled_engine::security::audit::AuditLogger;
 use capsuled_engine::security::EgressProxy;
 use capsuled_engine::artifact::{ArtifactManager, manager::ArtifactConfig};
 use capsuled_engine::process_supervisor::ProcessSupervisor;
+use capsuled_engine::storage::StorageConfig;
 
 mod headscale;
 use headscale::{HeadscaleClient, HeadscaleConfig};
@@ -170,6 +171,13 @@ async fn main() -> anyhow::Result<()> {
 
     let artifact_manager = Arc::new(ArtifactManager::new(artifact_config).await.expect("Failed to initialize ArtifactManager"));
 
+    // Initialize UsageReporter
+    let coordinator_url = std::env::var("COORDINATOR_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let usage_reporter = Arc::new(capsuled_engine::billing::reporter::UsageReporter::new(coordinator_url));
+
+    // Load StorageConfig from config file if available
+    let storage_config = load_storage_config();
+
     // Initialize CapsuleManager
     let capsule_manager = Arc::new(CapsuleManager::new(
         audit_logger.clone(),
@@ -182,6 +190,8 @@ async fn main() -> anyhow::Result<()> {
         Some(process_supervisor.clone()),
         Some(proxy_port),
         None, // runtime_config
+        Some(usage_reporter),
+        storage_config,
     ).map_err(|e| anyhow::anyhow!("Failed to initialize CapsuleManager: {}", e))?);
 
     info!("CapsuleManager initialized");
@@ -285,4 +295,70 @@ fn load_headscale_config() -> anyhow::Result<HeadscaleConfig> {
         auth_key: std::env::var("GUMBALL_HEADSCALE_KEY").ok(),
         ..Default::default()
     })
+}
+
+/// Load storage configuration from config.toml or environment
+fn load_storage_config() -> Option<StorageConfig> {
+    // Try to load from config.toml
+    let config_paths = [
+        PathBuf::from("config.toml"),
+        PathBuf::from("/etc/capsuled/config.toml"),
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("config.toml")))
+            .unwrap_or_default(),
+    ];
+    
+    for path in &config_paths {
+        if path.exists() {
+            match std::fs::read_to_string(path) {
+                Ok(content) => {
+                    // Parse TOML to extract storage section
+                    if let Ok(table) = content.parse::<toml::Table>() {
+                        if let Some(storage_table) = table.get("storage") {
+                            match storage_table.clone().try_into::<StorageConfig>() {
+                                Ok(config) => {
+                                    if config.enabled {
+                                        info!("Storage configuration loaded from {:?}", path);
+                                        return Some(config);
+                                    } else {
+                                        info!("Storage is disabled in configuration");
+                                        return None;
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to parse storage config: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read config file {:?}: {}", path, e);
+                }
+            }
+        }
+    }
+    
+    // Check environment variable for enabling storage
+    if std::env::var("GUMBALL_STORAGE_ENABLED").map(|v| v == "true" || v == "1").unwrap_or(false) {
+        info!("Storage enabled via environment variable");
+        let mut config = StorageConfig::default();
+        config.enabled = true;
+        
+        // Override defaults from environment
+        if let Ok(vg) = std::env::var("GUMBALL_STORAGE_VG") {
+            config.default_vg = vg;
+        }
+        if let Ok(key_dir) = std::env::var("GUMBALL_STORAGE_KEY_DIR") {
+            config.key_directory = PathBuf::from(key_dir);
+        }
+        if let Ok(encrypt) = std::env::var("GUMBALL_STORAGE_ENCRYPT") {
+            config.enable_encryption = encrypt == "true" || encrypt == "1";
+        }
+        
+        return Some(config);
+    }
+    
+    None
 }

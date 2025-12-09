@@ -3,6 +3,7 @@ pub mod api_server;
 pub mod artifact;
 pub mod auth;
 pub mod capsule_manager;
+pub mod billing;
 pub mod cloud;
 pub mod config;
 pub mod coordinator_service;  // Enabled for Phase 2

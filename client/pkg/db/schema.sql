@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_nodes_tailnet_ip ON nodes(tailnet_ip);
 -- Capsules table - tracks all deployed capsules across the cluster
 CREATE TABLE IF NOT EXISTS capsules (
     id TEXT PRIMARY KEY,              -- Capsule unique identifier (ULID)
+    user_id TEXT,                     -- Owner User ID
     name TEXT NOT NULL,               -- Human-readable capsule name
     node_id TEXT NOT NULL,            -- Node where this capsule is deployed
     runtime_name TEXT,                -- Runtime name
@@ -116,6 +117,7 @@ CREATE TABLE IF NOT EXISTS cluster_metadata (
 );
 
 -- Insert initial cluster metadata
+INSERT OR IGNORE INTO cluster_metadata (key, value, updated_at) VALUES
     ('cluster_version', '1.0.0', strftime('%s', 'now')),
     ('cluster_name', 'capsuled-cluster', strftime('%s', 'now')),
     ('initialized_at', strftime('%s', 'now'), strftime('%s', 'now'));
@@ -129,3 +131,22 @@ CREATE TABLE IF NOT EXISTS cluster_metadata (
 -- Add tailnet_ip column if not exists (requires application logic to handle "if not exists" or just ignore error)
 -- ALTER TABLE nodes ADD COLUMN tailnet_ip TEXT;
 -- CREATE INDEX IF NOT EXISTS idx_nodes_tailnet_ip ON nodes(tailnet_ip);
+
+-- Runtimes table - tracks available runtimes and their versions
+CREATE TABLE IF NOT EXISTS runtimes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL CHECK(type IN ('native', 'docker', 'wasm')),
+    description TEXT,
+    latest_version TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS runtime_versions (
+    runtime_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    download_url TEXT NOT NULL,
+    PRIMARY KEY (runtime_id, version),
+    FOREIGN KEY (runtime_id) REFERENCES runtimes(id)
+);

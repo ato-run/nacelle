@@ -121,7 +121,7 @@ func (sm *StateManager) loadNodes() error {
 
 // loadCapsules loads all capsules from rqlite into memory
 func (sm *StateManager) loadCapsules() error {
-	result, err := sm.client.Query("SELECT id, name, node_id, manifest, status, storage_path, bundle_path, network_config, created_at, updated_at FROM capsules")
+	result, err := sm.client.Query("SELECT id, user_id, name, node_id, manifest, status, storage_path, bundle_path, network_config, created_at, updated_at FROM capsules")
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (sm *StateManager) loadCapsules() error {
 		var capsule Capsule
 		var createdAtUnix, updatedAtUnix int64
 
-		err := result.Scan(&capsule.ID, &capsule.Name, &capsule.NodeID, &capsule.Manifest,
+		err := result.Scan(&capsule.ID, &capsule.UserID, &capsule.Name, &capsule.NodeID, &capsule.Manifest,
 			&capsule.Status, &capsule.StoragePath, &capsule.BundlePath, &capsule.NetworkConfig,
 			&createdAtUnix, &updatedAtUnix)
 		if err != nil {
@@ -372,6 +372,20 @@ func (sm *StateManager) GetCapsulesByNode(nodeID string) []*Capsule {
 	}
 
 	return capsules
+}
+
+// GetActiveCapsuleCount returns the number of active capsules for a user
+func (sm *StateManager) GetActiveCapsuleCount(userID string) int {
+	sm.capsulesMu.RLock()
+	defer sm.capsulesMu.RUnlock()
+
+	count := 0
+	for _, capsule := range sm.capsules {
+		if capsule.UserID == userID && (capsule.Status == CapsuleStatusPending || capsule.Status == CapsuleStatusRunning) {
+			count++
+		}
+	}
+	return count
 }
 
 // GetNodeResources retrieves resource information for a node

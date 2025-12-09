@@ -256,7 +256,7 @@ mod tests {
         // Remove metrics
         collector.remove_capsule_metrics("capsule-999");
 
-        let metrics = collector.gather().unwrap();
+        let _metrics = collector.gather().unwrap();
         // The metrics may still be present but with no values
         // This is expected behavior in Prometheus
     }

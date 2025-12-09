@@ -11,6 +11,13 @@ target/
 
 # Logs
 *.log
+notebook-output.log
+
+# Runtime pids
+*.pid
+
+# Local test artifacts
+coverage-go.out
 
 # Capsule build artifacts
 bin/

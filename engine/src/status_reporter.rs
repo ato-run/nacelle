@@ -445,7 +445,9 @@ mod tests {
             None, 
             None, 
             None, 
-            Some(runtime_config)
+            Some(runtime_config),
+            None, // usage_reporter
+            None, // storage_config
         ).unwrap()
     }
 

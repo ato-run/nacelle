@@ -113,9 +113,9 @@ func (sm *StateManager) CreateCapsule(capsule *Capsule) error {
 	capsule.UpdatedAt = now
 
 	query := fmt.Sprintf(`
-		INSERT INTO capsules (id, name, node_id, manifest, status, storage_path, bundle_path, network_config, created_at, updated_at)
-		VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d)
-	`, escapeSQLString(capsule.ID), escapeSQLString(capsule.Name), escapeSQLString(capsule.NodeID), escapeSQLString(capsule.Manifest), escapeSQLString(string(capsule.Status)),
+		INSERT INTO capsules (id, user_id, name, node_id, manifest, status, storage_path, bundle_path, network_config, created_at, updated_at)
+		VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d)
+	`, escapeSQLString(capsule.ID), escapeSQLString(capsule.UserID), escapeSQLString(capsule.Name), escapeSQLString(capsule.NodeID), escapeSQLString(capsule.Manifest), escapeSQLString(string(capsule.Status)),
 		escapeSQLString(capsule.StoragePath), escapeSQLString(capsule.BundlePath), escapeSQLString(capsule.NetworkConfig),
 		capsule.CreatedAt.Unix(), capsule.UpdatedAt.Unix())
 
