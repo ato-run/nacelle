@@ -15,6 +15,9 @@ fn validate_mounts(volumes: &[AdepVolume], allowed_paths: &[String]) -> Result<(
     Ok(())
 }
 
+use crate::security::egress_policy::{
+    build_egress_cleanup_script, build_egress_enforcement_script,
+};
 /// Build a complete OCI runtime specification from adep.json configuration
 ///
 /// This function is the core of Week 3's Agent implementation. It translates
@@ -53,6 +56,7 @@ pub fn build_oci_spec(
     gpu_uuids: Option<&[String]>,
     allowed_host_paths: &[String],
     resources: Option<&ResourceRequirements>,
+    egress_allowlist: Option<&[String]>,
 ) -> Result<Spec, String> {
     // --- 1. Build Process Configuration ---
     let mut process_envs = compute.env.clone();
@@ -78,27 +82,69 @@ pub fn build_oci_spec(
         .build()
         .map_err(|e| format!("Failed to build process config: {}", e))?;
 
-    // --- 2. Build Hooks (GPU passthrough) ---
-    let hooks = if gpu_uuids.is_some() && !gpu_uuids.unwrap().is_empty() {
-        // Create NVIDIA Container Toolkit prestart hook
-        // This hook runs before the container starts and configures GPU devices
-        let nvidia_hook = HookBuilder::default()
-            .path(PathBuf::from("/usr/bin/nvidia-container-runtime-hook"))
+    // --- 2. Build Hooks (GPU passthrough + egress policy) ---
+    let mut prestart_hooks = vec![];
+    let mut poststop_hooks = vec![];
+
+    if let Some(uuids) = gpu_uuids {
+        if !uuids.is_empty() {
+            let nvidia_hook = HookBuilder::default()
+                .path(PathBuf::from("/usr/bin/nvidia-container-runtime-hook"))
+                .args(vec![
+                    "nvidia-container-runtime-hook".to_string(),
+                    "prestart".to_string(),
+                ])
+                .build()
+                .map_err(|e| format!("Failed to build NVIDIA hook: {}", e))?;
+
+            prestart_hooks.push(nvidia_hook);
+        }
+    }
+
+    if let Some(allowlist) = egress_allowlist {
+        let enforce_script = build_egress_enforcement_script(allowlist);
+        let egress_hook = HookBuilder::default()
+            .path(PathBuf::from("/bin/sh"))
+            .args(vec!["sh".to_string(), "-c".to_string(), enforce_script])
+            .build()
+            .map_err(|e| format!("Failed to build egress hook: {}", e))?;
+        prestart_hooks.push(egress_hook);
+
+        let cleanup_hook = HookBuilder::default()
+            .path(PathBuf::from("/bin/sh"))
             .args(vec![
-                "nvidia-container-runtime-hook".to_string(),
-                "prestart".to_string(),
+                "sh".to_string(),
+                "-c".to_string(),
+                build_egress_cleanup_script(),
             ])
             .build()
-            .map_err(|e| format!("Failed to build NVIDIA hook: {}", e))?;
+            .map_err(|e| format!("Failed to build egress cleanup hook: {}", e))?;
+        poststop_hooks.push(cleanup_hook);
+    }
 
-        Some(
-            HooksBuilder::default()
-                .prestart(vec![nvidia_hook])
-                .build()
-                .map_err(|e| format!("Failed to build hooks: {}", e))?,
-        )
-    } else {
-        None
+    let hooks = {
+        let mut builder = HooksBuilder::default();
+        let mut has_hooks = false;
+
+        if !prestart_hooks.is_empty() {
+            builder = builder.prestart(prestart_hooks);
+            has_hooks = true;
+        }
+
+        if !poststop_hooks.is_empty() {
+            builder = builder.poststop(poststop_hooks);
+            has_hooks = true;
+        }
+
+        if has_hooks {
+            Some(
+                builder
+                    .build()
+                    .map_err(|e| format!("Failed to build hooks: {}", e))?,
+            )
+        } else {
+            None
+        }
     };
 
     // --- 3. Build Mounts (default + volumes) ---
@@ -359,6 +405,7 @@ mod tests {
             None,
             &allowed_paths,
             None,
+            None,
         )
         .unwrap();
 
@@ -406,6 +453,7 @@ mod tests {
             Some(&empty_gpus),
             &allowed_paths,
             None,
+            None,
         )
         .unwrap();
 
@@ -441,6 +489,7 @@ mod tests {
             &volumes,
             Some(&gpu_uuids),
             &allowed_paths,
+            None,
             None,
         )
         .unwrap();
@@ -480,6 +529,39 @@ mod tests {
     }
 
     #[test]
+    fn test_spec_builder_with_egress_policy_hook() {
+        let compute = ComputeConfig {
+            image: "hello-world".to_string(),
+            args: vec![],
+            env: vec![],
+            native: None,
+        };
+        let volumes = vec![];
+        let allowed_paths = vec![];
+        let allowlist = vec!["example.com".to_string()];
+
+        let spec = build_oci_spec(
+            Path::new("/tmp/rootfs"),
+            &compute,
+            &volumes,
+            None,
+            &allowed_paths,
+            None,
+            Some(&allowlist),
+        )
+        .unwrap();
+
+        let hooks = spec.hooks().as_ref().expect("hooks should be present");
+        let prestart = hooks.prestart().as_ref().expect("prestart hook expected");
+        assert!(prestart.iter().any(|h| h.path() == Path::new("/bin/sh")));
+        let args = prestart[prestart.len() - 1].args().as_ref().unwrap();
+        assert!(args.last().unwrap().contains("example.com"));
+
+        let poststop = hooks.poststop().as_ref().expect("poststop hook expected");
+        assert!(!poststop.is_empty());
+    }
+
+    #[test]
     fn test_spec_builder_with_volumes() {
         let rootfs = PathBuf::from("/tmp/rootfs");
         let compute = ComputeConfig {
@@ -496,7 +578,16 @@ mod tests {
         }];
         let allowed_paths = vec!["/opt/models".to_string()];
 
-        let spec = build_oci_spec(&rootfs, &compute, &volumes, None, &allowed_paths, None).unwrap();
+        let spec = build_oci_spec(
+            &rootfs,
+            &compute,
+            &volumes,
+            None,
+            &allowed_paths,
+            None,
+            None,
+        )
+        .unwrap();
         let mounts = spec.mounts().as_ref().unwrap();
 
         // Check if our volume is present

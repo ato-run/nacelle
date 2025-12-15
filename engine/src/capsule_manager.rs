@@ -384,6 +384,8 @@ impl CapsuleManager {
         // Prepare ComputeConfig with injected env vars
         let mut compute_config = manifest.compute.clone();
 
+        let mut egress_allowlist: Option<Vec<String>> = None;
+
         if let Some(p) = port {
             let has_port_env = compute_config
                 .env
@@ -399,9 +401,11 @@ impl CapsuleManager {
         if let Some(value) = manifest
             .metadata
             .get(crate::security::META_KEY_EGRESS_ALLOWLIST)
+            .or_else(|| manifest.metadata.get(crate::security::egress_policy::META_KEY_EGRESS_ID_ALLOW))
         {
             let allowlist = crate::security::egress_policy::parse_allowlist_csv(value);
             if !allowlist.is_empty() {
+                egress_allowlist = Some(allowlist.clone());
                 let token = uuid::Uuid::new_v4().to_string();
                 crate::security::EgressPolicyRegistry::global().register(
                     &capsule_id,
@@ -461,6 +465,7 @@ impl CapsuleManager {
             gpu_uuids.as_deref(),
             &allowed_paths,
             None, // resources
+            egress_allowlist.as_deref(),
         ).map_err(|e| anyhow!("Failed to build OCI spec: {}", e))?;
 
         let launch_request = LaunchRequest {
