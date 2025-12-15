@@ -73,6 +73,7 @@ make test-go-coverage
 ```
 
 **Manual Go test commands:**
+
 ```bash
 cd client
 
@@ -106,7 +107,8 @@ make test-rust-coverage
 ```
 
 **Manual Rust test commands:**
-```bash
+
+````bash
 cd engine
 
 # Run all tests
@@ -118,12 +120,27 @@ cargo test --lib
 # Run specific test
 cargo test test_is_valid_volume_name
 
+## Proto regeneration guard
+
+Generated gRPC/Proto files must stay in sync:
+
+```bash
+cd capsuled
+make proto
+git diff --exit-code  # should be clean; if not, commit regenerated files
+````
+
+Add the above to CI when possible so drift is caught automatically.
+
 # Run with output visible
+
 cargo test -- --nocapture
 
 # Run integration tests (requires root/LVM setup)
+
 cargo test --test storage_integration -- --ignored
-```
+
+````
 
 ## Test Network Topology
 
@@ -138,13 +155,13 @@ const (
     // Local addresses for coordinator/server components
     testLocalAddr    = "127.0.0.1:8080"     // Primary local coordinator
     testLocalAddrAlt = "192.168.1.100:8080" // Alternative for multi-node tests
-    
+
     // Distributed node addresses for GPU scheduling tests
     testNodeAddr1    = "192.168.1.10:50051" // Node 1 (various VRAM configs)
     testNodeAddr2    = "192.168.1.20:50051" // Node 2 (various VRAM configs)
     testNodeAddr3    = "192.168.1.30:50051" // Node 3 (various VRAM configs)
 )
-```
+````
 
 ### Test Network Segments
 
@@ -157,6 +174,7 @@ const (
 ### E2E Test Configurations
 
 **GPU Simulation Tests** (`client/e2e/gpu_simulation_test.go`):
+
 - Uses dynamic port allocation (`:0`) for local testing
 - Simulates 3 GPU rigs with different VRAM configurations:
   - Rig A (192.168.1.10): 2x RTX 4090 GPUs
@@ -164,6 +182,7 @@ const (
   - Rig C (192.168.1.12): 4x A100 GPUs
 
 **Integration Tests** (`tests/integration/`):
+
 - Uses standard node addresses for distributed scheduling tests
 - Tests coordinator clustering and master election scenarios
 - Simulates varying VRAM capacities and utilization patterns
@@ -171,12 +190,14 @@ const (
 ### Modifying Test Networks
 
 When adding new tests:
+
 1. Use existing constants when possible for consistency
 2. Add new constants at the package level if needed
 3. Document the purpose of each address in comments
 4. Follow the network segmentation scheme above
 
 Example:
+
 ```go
 const (
     testNodeAddr4 = "192.168.1.40:50051" // Node 4: High-memory node
@@ -188,12 +209,14 @@ const (
 ### Unit Tests
 
 **Go Unit Tests:**
+
 - Located in `client/pkg/` alongside source files
 - Named `*_test.go`
 - Use `testing` package and `testify` for assertions
 - Mock external dependencies (database, gRPC, etc.)
 
 Example:
+
 ```go
 func TestElectMaster(t *testing.T) {
     tests := []struct {
@@ -209,7 +232,7 @@ func TestElectMaster(t *testing.T) {
             expectedMaster: "node1",
         },
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             // Test implementation
@@ -219,11 +242,13 @@ func TestElectMaster(t *testing.T) {
 ```
 
 **Rust Unit Tests:**
+
 - Located in the same file as the code being tested
 - Inside `#[cfg(test)] mod tests { ... }`
 - Use Rust's built-in test framework
 
 Example:
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -240,11 +265,13 @@ mod tests {
 ### Integration Tests
 
 **Go Integration Tests:**
+
 - Located in `tests/integration/`
 - Require external services (rqlite, etc.)
 - Use build tag: `// +build integration`
 
 Setup rqlite for integration tests:
+
 ```bash
 # Using Docker
 docker run -d -p 4001:4001 rqlite/rqlite
@@ -254,11 +281,13 @@ make test-go-integration
 ```
 
 **Rust Integration Tests:**
+
 - Located in `engine/tests/`
 - Storage tests require root privileges and LVM setup
 - Marked with `#[ignore]` to prevent accidental execution
 
 Setup for storage integration tests:
+
 ```bash
 # Create test volume group
 sudo truncate -s 1G /tmp/test_vg.img
@@ -286,6 +315,7 @@ End-to-end tests verify complete workflows:
 - Require building Rust components
 
 Example E2E test flow:
+
 1. Start gRPC coordinator server
 2. Build and run Rust status reporter
 3. Verify data flows from Rust → gRPC → Go database
@@ -312,6 +342,7 @@ go tool cover -html=coverage-go.out
 ```
 
 **Coverage targets:**
+
 - Core logic: ≥80%
 - Public APIs: 100%
 - Error paths: Must be tested
@@ -327,6 +358,7 @@ open coverage-rust/index.html
 ```
 
 Install cargo-tarpaulin:
+
 ```bash
 cargo install cargo-tarpaulin
 ```
@@ -334,6 +366,7 @@ cargo install cargo-tarpaulin
 ## Continuous Integration
 
 Tests run automatically in GitHub Actions on:
+
 - Every push to `main` or `develop`
 - Every pull request
 - Tag pushes (releases)
@@ -355,6 +388,7 @@ See `.github/workflows/ci.yml` for CI configuration.
 Follow the Red-Green-Refactor cycle:
 
 1. **Red**: Write a failing test
+
 ```go
 func TestNewFeature(t *testing.T) {
     result := NewFeature()
@@ -363,6 +397,7 @@ func TestNewFeature(t *testing.T) {
 ```
 
 2. **Green**: Write minimal code to pass
+
 ```go
 func NewFeature() string {
     return "expected"
@@ -374,6 +409,7 @@ func NewFeature() string {
 ### Best Practices
 
 **Go Tests:**
+
 - Use table-driven tests for multiple scenarios
 - Use `testify/require` for critical assertions (stop on failure)
 - Use `testify/assert` for non-critical assertions (continue on failure)
@@ -382,6 +418,7 @@ func NewFeature() string {
 - Use `t.TempDir()` for temporary files/directories
 
 **Rust Tests:**
+
 - One test per logical scenario
 - Use descriptive test names: `test_valid_volume_name_accepts_alphanumeric`
 - Use `#[should_panic]` for tests expecting panics
@@ -391,6 +428,7 @@ func NewFeature() string {
 ### Common Patterns
 
 **Mocking in Go:**
+
 ```go
 type mockStateManager struct {
     masterID string
@@ -407,6 +445,7 @@ func (m *mockStateManager) SetMaster(masterID string) error {
 ```
 
 **Rust Test Helpers:**
+
 ```rust
 fn is_root() -> bool {
     std::env::var("USER").unwrap_or_default() == "root"
@@ -429,19 +468,23 @@ fn test_requires_root() {
 ### Common Issues
 
 **Go tests fail with "no such file or directory":**
+
 - Make sure you're running from the correct directory
 - Use `cd client` before running Go tests
 
 **Rust tests fail with "no LVM tools":**
+
 - Storage integration tests require LVM tools installed
 - Run `sudo apt-get install lvm2` on Ubuntu/Debian
 - These tests are marked `#[ignore]` by default
 
 **Integration tests timeout:**
+
 - Check that required services (rqlite, etc.) are running
 - Increase timeout values in test code if needed
 
 **E2E tests fail to build Rust components:**
+
 - Ensure Rust toolchain is installed
 - Run `make engine` first to verify Rust builds correctly
 
@@ -458,6 +501,7 @@ cargo test -- --nocapture
 ```
 
 Enable race detector (Go):
+
 ```bash
 go test -race ./pkg/...
 ```

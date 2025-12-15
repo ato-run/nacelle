@@ -1,9 +1,8 @@
-# Gumball Full Stack - Local Development
-# Usage: docker-compose up --build
+# Gumball - Production Deployment
+# Usage: docker-compose -f docker-compose.prod.yml up -d
 #
-# All four components: Caddy + Coordinator + Engine + Web in Docker
-# Run from: capsuled/ directory
-# Note: Mac Docker Desktop compatibility - no network_mode:host
+# For end users who want to run Gumball without building from source.
+# All images are pre-built and pulled from GitHub Container Registry.
 
 version: "3.8"
 
@@ -12,7 +11,7 @@ services:
   # rqlite - Distributed SQLite for state
   # ========================================
   rqlite:
-    image: rqlite/rqlite:latest
+    image: rqlite/rqlite:${RQLITE_VERSION:-latest}
     container_name: gumball-rqlite
     command:
       - "-http-addr"
@@ -39,9 +38,9 @@ services:
     image: caddy:2-alpine
     container_name: gumball-caddy
     ports:
-      - "80:80" # HTTP for capsule proxying
-      - "443:443" # HTTPS (if needed)
-      - "2019:2019" # Admin API
+      - "80:80"
+      - "443:443"
+      - "2019:2019"
     volumes:
       - ./client/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -59,42 +58,27 @@ services:
   # Engine - Capsule Runtime (Privileged)
   # ========================================
   engine:
-    build:
-      context: ../ # Workspace root to access libadep dependency
-      dockerfile: capsuled/engine/Dockerfile
+    image: ghcr.io/onescluster/gumball-engine:${VERSION:-latest}
     container_name: gumball-engine
-
-    # Mac Docker Desktop: use regular networking, not host mode
     ports:
-      - "50051:50051" # gRPC
-      - "4500:4500" # HTTP API
-      - "4501:4501" # Egress Proxy
-
-    # Still privileged for container operations
+      - "50051:50051"
+      - "4500:4500"
+      - "4501:4501"
     privileged: true
-
     volumes:
-      # Persistent storage for capsules
       - gumball_data:/var/lib/gumball
-      # Docker socket for container management (required for Docker runtime)
       - /var/run/docker.sock:/var/run/docker.sock
-      # Temporary files
       - engine_tmp:/tmp/capsuled
-
     environment:
       - RUST_LOG=info
-      # Force DockerCliRuntime instead of ContainerRuntime (for DooD pattern)
       - FORCE_DOCKER_CLI_RUNTIME=1
-
     restart: unless-stopped
-
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4500/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
-
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -102,27 +86,19 @@ services:
   # Coordinator - Orchestration Brain
   # ========================================
   coordinator:
-    platform: linux/amd64
-    build:
-      context: ./client
-      dockerfile: Dockerfile
+    image: ghcr.io/onescluster/gumball-coordinator:${VERSION:-latest}
     container_name: gumball-coordinator
     ports:
-      - "50050:50050" # gRPC
-      - "8081:8081" # HTTP
+      - "50050:50050"
+      - "8081:8081"
     volumes:
-      # SQLite database persistence
       - coordinator_data:/app/data
     environment:
       - CADDY_ADMIN_URL=http://caddy:2019
-      - GUMBALL_DOMAIN_SUFFIX=localhost
-      # Engine is in same Docker network
+      - GUMBALL_DOMAIN_SUFFIX=${DOMAIN_SUFFIX:-localhost}
       - ENGINE_ADDRESS=engine:50051
-      # Caddy proxies to host where Docker containers run
       - CADDY_UPSTREAM_HOST=host.docker.internal
-      # SQLite database path
       - GUMBALL_DB_PATH=/app/data/gumball.db
-      # rqlite endpoint for stateful coordinator
       - RQLITE_ADDR=http://rqlite:4001
     depends_on:
       caddy:
@@ -139,17 +115,11 @@ services:
   # Web UI - Next.js Frontend
   # ========================================
   web:
-    build:
-      context: ../web/frontend
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8081
-        - NPM_TOKEN=${NPM_TOKEN}
+    image: ghcr.io/onescluster/gumball-web:${VERSION:-latest}
     container_name: gumball-web
     ports:
       - "3000:3000"
     environment:
-      # Connect to Coordinator gRPC
       - COORDINATOR_ADDRESS=coordinator:50050
       - ENGINE_ADDRESS=engine:50051
       - NODE_ENV=production

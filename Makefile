@@ -15,13 +15,16 @@ proto:
 # Wasm ビルド
 wasm:
 	@echo "Building Wasm..."
-	cd adep-logic && \
-	cargo build --release --target wasm32-unknown-unknown
-	@mkdir -p wasm
-	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/
-	@mkdir -p client/pkg/wasm
-	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm client/pkg/wasm/
-	@cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/
+	@if [ -d adep-logic ]; then \
+		cd adep-logic && cargo build --release --target wasm32-unknown-unknown; \
+		mkdir -p wasm; \
+		cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/; \
+		mkdir -p client/pkg/wasm; \
+		cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm client/pkg/wasm/; \
+		cp adep-logic/target/wasm32-unknown-unknown/release/adep_logic.wasm wasm/; \
+	else \
+		echo "⚠️  adep-logic directory not found; skipping wasm build"; \
+	fi
 
 # Client ビルド (Coordinator server)
 client: proto wasm
@@ -75,7 +78,11 @@ test-rust: test-rust-unit
 test-rust-unit:
 	@echo "Running Rust unit tests..."
 	cd engine && cargo test --lib
-	cd adep-logic && cargo test
+	@if [ -d adep-logic ]; then \
+		cd adep-logic && cargo test; \
+	else \
+		echo "⚠️  adep-logic directory not found; skipping adep-logic tests"; \
+	fi
 
 test-rust-integration:
 	@echo "Running Rust integration tests..."
