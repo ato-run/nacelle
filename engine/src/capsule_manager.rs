@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
-use crate::adep::AdepManifest;
+use crate::adep::{AdepManifest, AdepVolume};
 use crate::hardware::GpuDetector;
 use crate::runtime::{
     ContainerRuntime, DevRuntime, DockerCliRuntime, LaunchRequest, LaunchResult, NativeRuntime, Runtime,
@@ -185,11 +185,41 @@ impl CapsuleManager {
         info!("Deploying capsule {}", capsule_id);
 
         // Parse manifest to check resources
-        let manifest: AdepManifest = serde_json::from_slice(&adep_json)
+        let mut manifest: AdepManifest = serde_json::from_slice(&adep_json)
             .map_err(|e| anyhow!("Failed to parse adep_json: {}", e))?;
         
-        // Manifest JSON string for passing to runtimes
-        let manifest_json_str = std::str::from_utf8(&adep_json).unwrap_or("{}");
+        // Manifest JSON string for passing to runtimes (will be updated if mutated)
+        let mut manifest_json_str = std::str::from_utf8(&adep_json).unwrap_or("{}").to_string();
+
+        // Provision persistent storage if configured
+        if let Some(storage_manager) = &self.storage_manager {
+            if storage_manager.is_enabled() {
+                match storage_manager.provision_capsule_storage(&capsule_id, None, None) {
+                    Ok(storage) => {
+                        if let Some(mount_point) = storage.mount_point {
+                            let mount_str = mount_point.to_string_lossy().to_string();
+                            manifest.metadata.insert("storage_path".to_string(), mount_str.clone());
+                            if !manifest.compute.env.iter().any(|e| e.starts_with("CAPSULE_STORAGE_PATH=")) {
+                                manifest.compute.env.push(format!("CAPSULE_STORAGE_PATH={}", mount_str));
+                            }
+                            if !manifest.volumes.iter().any(|v| v.source == mount_str) {
+                                manifest.volumes.push(AdepVolume {
+                                    r#type: "bind".to_string(),
+                                    source: mount_str.clone(),
+                                    destination: "/capsule/storage".to_string(),
+                                    readonly: false,
+                                });
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        return Err(anyhow!("Failed to provision storage: {}", e));
+                    }
+                }
+            }
+        }
+
+        manifest_json_str = serde_json::to_string(&manifest).unwrap_or(manifest_json_str.clone());
 
         // Placement Logic
         let mut assigned_gpu_index = None;
@@ -249,7 +279,7 @@ impl CapsuleManager {
                             self.capsules.write().unwrap().insert(capsule_id.clone(), capsule);
 
                             // 2. Deploy
-                            match client.deploy(manifest_json_str).await {
+                            match client.deploy(&manifest_json_str).await {
                                 Ok(cluster_name) => {
                                     // 3. Update to Running with URL
                                     let url = format!("https://{}.ts.net", cluster_name);
@@ -436,7 +466,7 @@ impl CapsuleManager {
         let launch_request = LaunchRequest {
             workload_id: &capsule_id,
             spec: &spec,
-            manifest_json: Some(manifest_json_str),
+            manifest_json: Some(&manifest_json_str),
         };
 
         // Determine which runtime to use
@@ -498,7 +528,7 @@ impl CapsuleManager {
         self.record_runtime_launch(
             &capsule_id,
             &manifest,
-            manifest_json_str,
+            &manifest_json_str,
             &launch_result,
             0, // TODO: Track reserved VRAM
         )?;
