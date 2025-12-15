@@ -1,0 +1,81 @@
+name: Build & Push Images
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: onescluster # Override via repository or env if needed
+
+concurrency:
+  group: build-push-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          OWNER="${IMAGE_OWNER:-${GITHUB_REPOSITORY_OWNER}}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "coordinator_tags=${REGISTRY}/${OWNER}/gumball-coordinator:latest,${REGISTRY}/${OWNER}/gumball-coordinator:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "edge_router_tags=${REGISTRY}/${OWNER}/gumball-edge-router:latest,${REGISTRY}/${OWNER}/gumball-edge-router:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "engine_tags=${REGISTRY}/${OWNER}/gumball-engine:latest,${REGISTRY}/${OWNER}/gumball-engine:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push Coordinator image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./capsuled/client
+          file: ./capsuled/client/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.coordinator_tags }}
+          cache-from: type=gha,scope=coordinator
+          cache-to: type=gha,scope=coordinator,mode=max
+
+      - name: Build & push Edge Router image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./capsuled/client
+          file: ./capsuled/client/Dockerfile.edge-router
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.edge_router_tags }}
+          cache-from: type=gha,scope=edge-router
+          cache-to: type=gha,scope=edge-router,mode=max
+
+      - name: Build & push Engine image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./capsuled/engine
+          file: ./capsuled/engine/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.engine_tags }}
+          cache-from: type=gha,scope=engine
+          cache-to: type=gha,scope=engine,mode=max

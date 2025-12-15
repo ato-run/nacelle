@@ -277,85 +277,12 @@ The Engine provides similar health check endpoints for monitoring.
 
 ---
 
-## Kubernetes Integration
+## Kubernetes Integration (DEPRECATED)
 
-### Deployment Configuration
+Gumball/capsuled は配布戦略として **Docker Compose を採用**しており、Kubernetes マニフェストの提供は行いません。
+（K3s / Kubernetes への依存は避ける方針）
 
-Example Kubernetes deployment with health checks and metrics:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: capsuled-client
-spec:
-  replicas: 3
-  template:
-    spec:
-      containers:
-      - name: client
-        image: capsuled/client:latest
-        ports:
-        - name: http
-          containerPort: 8080
-        livenessProbe:
-          httpGet:
-            path: /live
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: capsuled-engine
-spec:
-  template:
-    spec:
-      containers:
-      - name: engine
-        image: capsuled/engine:latest
-        ports:
-        - name: grpc
-          containerPort: 50051
-        - name: metrics
-          containerPort: 9090
-        livenessProbe:
-          httpGet:
-            path: /live
-            port: 9090
-          initialDelaySeconds: 10
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 9090
-          initialDelaySeconds: 5
-          periodSeconds: 10
-```
-
-### ServiceMonitor for Prometheus Operator
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: capsuled-engine
-spec:
-  selector:
-    matchLabels:
-      app: capsuled-engine
-  endpoints:
-  - port: metrics
-    interval: 30s
-    path: /metrics
-```
+Kubernetes 上での運用例は本ドキュメントから削除しました。必要になった場合は、方針（ADR/README）を更新した上で再検討してください。
 
 ---
 

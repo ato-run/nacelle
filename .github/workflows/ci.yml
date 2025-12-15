@@ -76,6 +76,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler
 
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: Verify protobufs are up to date
+        run: |
+          make proto
+          git diff --exit-code
+
       - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
