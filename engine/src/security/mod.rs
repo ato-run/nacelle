@@ -14,7 +14,7 @@ pub use egress_proxy::EgressProxy;
 
 pub mod egress_policy;
 
-pub use egress_policy::{EgressPolicyRegistry, ENV_KEY_EGRESS_TOKEN, META_KEY_EGRESS_ALLOWLIST};
+pub use egress_policy::{EgressPolicyRegistry, ENV_KEY_EGRESS_TOKEN, META_KEY_EGRESS_ALLOWLIST, META_KEY_EGRESS_ID_ALLOW};
 
 pub mod path;
 pub mod vram_scrubber;

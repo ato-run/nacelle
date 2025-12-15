@@ -94,6 +94,86 @@ mod cuda_backend {
     }
 }
 
+/// NVIDIA backend using nvidia-smi reset when CUDA driver is unavailable
+#[cfg(all(target_os = "linux", not(feature = "cuda")))]
+mod nvidia_smi_backend {
+    use super::VramBackend;
+    use anyhow::{anyhow, Result};
+    use std::process::Command;
+
+    pub struct NvidiaSmiBackend {
+        index: usize,
+    }
+
+    impl NvidiaSmiBackend {
+        pub fn new(index: usize) -> Result<Self> {
+            // Ensure we can query memory; will error if command unavailable
+            let _ = Self::query_memory(index)?;
+            Ok(Self { index })
+        }
+
+        fn query_memory(index: usize) -> Result<(u64, u64)> {
+            let output = Command::new("nvidia-smi")
+                .args(["--query-gpu=memory.total,memory.free", "--format=csv,noheader,nounits", "-i", &index.to_string()])
+                .output()
+                .map_err(|e| anyhow!("failed to execute nvidia-smi: {}", e))?;
+
+            if !output.status.success() {
+                return Err(anyhow!("nvidia-smi query failed: {}", String::from_utf8_lossy(&output.stderr)));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let line = stdout.lines().next().ok_or_else(|| anyhow!("no output from nvidia-smi"))?;
+            let mut parts = line.split(',').map(|s| s.trim());
+
+            let total_mb: u64 = parts
+                .next()
+                .ok_or_else(|| anyhow!("missing total memory from nvidia-smi"))?
+                .parse()
+                .map_err(|e| anyhow!("failed to parse total memory: {}", e))?;
+            let free_mb: u64 = parts
+                .next()
+                .ok_or_else(|| anyhow!("missing free memory from nvidia-smi"))?
+                .parse()
+                .map_err(|e| anyhow!("failed to parse free memory: {}", e))?;
+
+            // Convert MB to bytes
+            Ok((total_mb * 1024 * 1024, free_mb * 1024 * 1024))
+        }
+    }
+
+    impl VramBackend for NvidiaSmiBackend {
+        fn gpu_index(&self) -> usize {
+            self.index
+        }
+
+        fn total_bytes(&self) -> Result<u64> {
+            Self::query_memory(self.index).map(|(total, _)| total)
+        }
+
+        fn free_bytes(&self) -> Result<u64> {
+            Self::query_memory(self.index).map(|(_, free)| free)
+        }
+
+        fn zero_chunk(&self, _bytes: usize) -> Result<()> {
+            let output = Command::new("nvidia-smi")
+                .args(["--gpu-reset", "-i", &self.index.to_string()])
+                .output()
+                .map_err(|e| anyhow!("failed to execute nvidia-smi reset: {}", e))?;
+
+            if output.status.success() {
+                Ok(())
+            } else {
+                Err(anyhow!("gpu-reset failed: {}", String::from_utf8_lossy(&output.stderr)))
+            }
+        }
+    }
+
+    pub fn new_backend(index: usize) -> Result<Box<dyn VramBackend>> {
+        Ok(Box::new(NvidiaSmiBackend::new(index)?))
+    }
+}
+
 /// No-op backend for unsupported platforms
 mod noop_backend {
     use super::{Result, VramBackend};
@@ -142,13 +222,17 @@ impl VramScrubber {
             });
         }
 
-        #[cfg(not(all(target_os = "linux", feature = "cuda")))]
+        #[cfg(all(target_os = "linux", not(feature = "cuda")))]
         {
-            warn!("VRAM scrubbing backend not available on this platform; using no-op");
-            return Ok(Self {
-                backend: crate::security::vram_scrubber::noop_backend::new_backend(gpu_index)?,
-            });
+            if let Ok(backend) = crate::security::vram_scrubber::nvidia_smi_backend::new_backend(gpu_index) {
+                return Ok(Self { backend });
+            }
         }
+
+        warn!("VRAM scrubbing backend not available on this platform; using no-op");
+        Ok(Self {
+            backend: crate::security::vram_scrubber::noop_backend::new_backend(gpu_index)?,
+        })
     }
 
     /// Scrub VRAM by allocating and zeroing in chunks until free memory is exhausted
