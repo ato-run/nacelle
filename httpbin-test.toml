@@ -1,0 +1,9 @@
+# Test capsule 2 - HTTPBin
+schema_version = "1.0"
+name = "httpbin-test"
+version = "0.1.0"
+
+[execution]
+runtime = "docker"
+entrypoint = "kennethreitz/httpbin"
+port = 80

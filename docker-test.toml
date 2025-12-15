@@ -1,0 +1,9 @@
+# Docker-based capsule for testing DockerCliRuntime
+schema_version = "1.0"
+name = "docker-test"
+version = "0.1.0"
+
+[execution]
+runtime = "docker"
+entrypoint = "containous/whoami"
+port = 80

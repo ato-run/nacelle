@@ -1,0 +1,8 @@
+schema_version = "1.0"
+name = "test-a"
+version = "0.1.0"
+
+[execution]
+runtime = "docker"
+entrypoint = "traefik/whoami:latest"
+port = 80

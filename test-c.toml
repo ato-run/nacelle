@@ -1,0 +1,9 @@
+schema_version = "1.0"
+name = "test-c"
+version = "0.1.0"
+
+[execution]
+runtime = "docker"
+entrypoint = "hashicorp/http-echo"
+port = 5678
+args = ["-text=Hello from test-c"]

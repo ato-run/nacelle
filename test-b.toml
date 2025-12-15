@@ -1,0 +1,8 @@
+schema_version = "1.0"
+name = "test-b"
+version = "0.1.0"
+
+[execution]
+runtime = "docker"
+entrypoint = "nginx:alpine"
+port = 80

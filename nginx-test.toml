@@ -1,0 +1,9 @@
+# Test capsule 1 - Nginx
+schema_version = "1.0"
+name = "nginx-test"
+version = "0.1.0"
+
+[execution]
+runtime = "docker"
+entrypoint = "nginx:alpine"
+port = 80
