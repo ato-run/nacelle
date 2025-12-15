@@ -3,6 +3,8 @@ package onescluster.engine.v1;
 
 option go_package = "github.com/onescluster/coordinator/pkg/proto;proto";
 
+import "common.proto";
+
 service Engine {
   rpc DeployCapsule(DeployRequest) returns (DeployResponse);
   rpc StopCapsule(StopRequest) returns (StopResponse);
@@ -35,8 +37,9 @@ message GetSystemStatusRequest {
 message DeployRequest {
   string capsule_id = 1;
   oneof manifest {
-    bytes adep_json = 2;      // Legacy JSON support
-    string toml_content = 5;  // TOML manifest content
+    bytes adep_json = 2 [deprecated = true];      // Legacy JSON support
+    string toml_content = 5 [deprecated = true];  // TOML manifest content
+    onescluster.common.v1.RunPlan run_plan = 6;   // Normalized execution plan (preferred)
   }
   string oci_image = 3;  // Optional, can be derived from manifest
   string digest = 4;     // Optional

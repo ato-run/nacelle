@@ -220,6 +220,7 @@ type DeployRequest struct {
 	//
 	//	*DeployRequest_AdepJson
 	//	*DeployRequest_TomlContent
+	//	*DeployRequest_RunPlan
 	Manifest      isDeployRequest_Manifest `protobuf_oneof:"manifest"`
 	OciImage      string                   `protobuf:"bytes,3,opt,name=oci_image,json=ociImage,proto3" json:"oci_image,omitempty"` // Optional, can be derived from manifest
 	Digest        string                   `protobuf:"bytes,4,opt,name=digest,proto3" json:"digest,omitempty"`                     // Optional
@@ -271,6 +272,7 @@ func (x *DeployRequest) GetManifest() isDeployRequest_Manifest {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in engine.proto.
 func (x *DeployRequest) GetAdepJson() []byte {
 	if x != nil {
 		if x, ok := x.Manifest.(*DeployRequest_AdepJson); ok {
@@ -280,6 +282,7 @@ func (x *DeployRequest) GetAdepJson() []byte {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in engine.proto.
 func (x *DeployRequest) GetTomlContent() string {
 	if x != nil {
 		if x, ok := x.Manifest.(*DeployRequest_TomlContent); ok {
@@ -287,6 +290,15 @@ func (x *DeployRequest) GetTomlContent() string {
 		}
 	}
 	return ""
+}
+
+func (x *DeployRequest) GetRunPlan() *RunPlan {
+	if x != nil {
+		if x, ok := x.Manifest.(*DeployRequest_RunPlan); ok {
+			return x.RunPlan
+		}
+	}
+	return nil
 }
 
 func (x *DeployRequest) GetOciImage() string {
@@ -308,16 +320,24 @@ type isDeployRequest_Manifest interface {
 }
 
 type DeployRequest_AdepJson struct {
+	// Deprecated: Marked as deprecated in engine.proto.
 	AdepJson []byte `protobuf:"bytes,2,opt,name=adep_json,json=adepJson,proto3,oneof"` // Legacy JSON support
 }
 
 type DeployRequest_TomlContent struct {
+	// Deprecated: Marked as deprecated in engine.proto.
 	TomlContent string `protobuf:"bytes,5,opt,name=toml_content,json=tomlContent,proto3,oneof"` // TOML manifest content
+}
+
+type DeployRequest_RunPlan struct {
+	RunPlan *RunPlan `protobuf:"bytes,6,opt,name=run_plan,json=runPlan,proto3,oneof"` // Normalized execution plan (preferred)
 }
 
 func (*DeployRequest_AdepJson) isDeployRequest_Manifest() {}
 
 func (*DeployRequest_TomlContent) isDeployRequest_Manifest() {}
+
+func (*DeployRequest_RunPlan) isDeployRequest_Manifest() {}
 
 type DeployResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -887,7 +907,7 @@ var File_engine_proto protoreflect.FileDescriptor
 
 const file_engine_proto_rawDesc = "" +
 	"\n" +
-	"\fengine.proto\x12\x15onescluster.engine.v1\"b\n" +
+	"\fengine.proto\x12\x15onescluster.engine.v1\x1a\fcommon.proto\"b\n" +
 	"\n" +
 	"LogRequest\x12\x1d\n" +
 	"\n" +
@@ -900,12 +920,13 @@ const file_engine_proto_rawDesc = "" +
 	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12\x16\n" +
 	"\x06source\x18\x03 \x01(\tR\x06source\"\x15\n" +
 	"\x13GetResourcesRequest\"\x18\n" +
-	"\x16GetSystemStatusRequest\"\xb3\x01\n" +
+	"\x16GetSystemStatusRequest\"\xf8\x01\n" +
 	"\rDeployRequest\x12\x1d\n" +
 	"\n" +
-	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12\x1d\n" +
-	"\tadep_json\x18\x02 \x01(\fH\x00R\badepJson\x12#\n" +
-	"\ftoml_content\x18\x05 \x01(\tH\x00R\vtomlContent\x12\x1b\n" +
+	"capsule_id\x18\x01 \x01(\tR\tcapsuleId\x12!\n" +
+	"\tadep_json\x18\x02 \x01(\fB\x02\x18\x01H\x00R\badepJson\x12'\n" +
+	"\ftoml_content\x18\x05 \x01(\tB\x02\x18\x01H\x00R\vtomlContent\x12;\n" +
+	"\brun_plan\x18\x06 \x01(\v2\x1e.onescluster.common.v1.RunPlanH\x00R\arunPlan\x12\x1b\n" +
 	"\toci_image\x18\x03 \x01(\tR\bociImage\x12\x16\n" +
 	"\x06digest\x18\x04 \x01(\tR\x06digestB\n" +
 	"\n" +
@@ -994,28 +1015,30 @@ var file_engine_proto_goTypes = []any{
 	(*CapsuleInfo)(nil),            // 12: onescluster.engine.v1.CapsuleInfo
 	(*ResourceUsage)(nil),          // 13: onescluster.engine.v1.ResourceUsage
 	nil,                            // 14: onescluster.engine.v1.ResourceInfo.LocalServicesEntry
+	(*RunPlan)(nil),                // 15: onescluster.common.v1.RunPlan
 }
 var file_engine_proto_depIdxs = []int32{
-	14, // 0: onescluster.engine.v1.ResourceInfo.local_services:type_name -> onescluster.engine.v1.ResourceInfo.LocalServicesEntry
-	12, // 1: onescluster.engine.v1.SystemStatus.capsules:type_name -> onescluster.engine.v1.CapsuleInfo
-	13, // 2: onescluster.engine.v1.SystemStatus.resources:type_name -> onescluster.engine.v1.ResourceUsage
-	4,  // 3: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
-	6,  // 4: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
-	2,  // 5: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
-	9,  // 6: onescluster.engine.v1.Engine.ValidateManifest:input_type -> onescluster.engine.v1.ValidateRequest
-	3,  // 7: onescluster.engine.v1.Engine.GetSystemStatus:input_type -> onescluster.engine.v1.GetSystemStatusRequest
-	0,  // 8: onescluster.engine.v1.Engine.StreamLogs:input_type -> onescluster.engine.v1.LogRequest
-	5,  // 9: onescluster.engine.v1.Engine.DeployCapsule:output_type -> onescluster.engine.v1.DeployResponse
-	7,  // 10: onescluster.engine.v1.Engine.StopCapsule:output_type -> onescluster.engine.v1.StopResponse
-	8,  // 11: onescluster.engine.v1.Engine.GetResources:output_type -> onescluster.engine.v1.ResourceInfo
-	10, // 12: onescluster.engine.v1.Engine.ValidateManifest:output_type -> onescluster.engine.v1.ValidationResult
-	11, // 13: onescluster.engine.v1.Engine.GetSystemStatus:output_type -> onescluster.engine.v1.SystemStatus
-	1,  // 14: onescluster.engine.v1.Engine.StreamLogs:output_type -> onescluster.engine.v1.EngineLogEntry
-	9,  // [9:15] is the sub-list for method output_type
-	3,  // [3:9] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	15, // 0: onescluster.engine.v1.DeployRequest.run_plan:type_name -> onescluster.common.v1.RunPlan
+	14, // 1: onescluster.engine.v1.ResourceInfo.local_services:type_name -> onescluster.engine.v1.ResourceInfo.LocalServicesEntry
+	12, // 2: onescluster.engine.v1.SystemStatus.capsules:type_name -> onescluster.engine.v1.CapsuleInfo
+	13, // 3: onescluster.engine.v1.SystemStatus.resources:type_name -> onescluster.engine.v1.ResourceUsage
+	4,  // 4: onescluster.engine.v1.Engine.DeployCapsule:input_type -> onescluster.engine.v1.DeployRequest
+	6,  // 5: onescluster.engine.v1.Engine.StopCapsule:input_type -> onescluster.engine.v1.StopRequest
+	2,  // 6: onescluster.engine.v1.Engine.GetResources:input_type -> onescluster.engine.v1.GetResourcesRequest
+	9,  // 7: onescluster.engine.v1.Engine.ValidateManifest:input_type -> onescluster.engine.v1.ValidateRequest
+	3,  // 8: onescluster.engine.v1.Engine.GetSystemStatus:input_type -> onescluster.engine.v1.GetSystemStatusRequest
+	0,  // 9: onescluster.engine.v1.Engine.StreamLogs:input_type -> onescluster.engine.v1.LogRequest
+	5,  // 10: onescluster.engine.v1.Engine.DeployCapsule:output_type -> onescluster.engine.v1.DeployResponse
+	7,  // 11: onescluster.engine.v1.Engine.StopCapsule:output_type -> onescluster.engine.v1.StopResponse
+	8,  // 12: onescluster.engine.v1.Engine.GetResources:output_type -> onescluster.engine.v1.ResourceInfo
+	10, // 13: onescluster.engine.v1.Engine.ValidateManifest:output_type -> onescluster.engine.v1.ValidationResult
+	11, // 14: onescluster.engine.v1.Engine.GetSystemStatus:output_type -> onescluster.engine.v1.SystemStatus
+	1,  // 15: onescluster.engine.v1.Engine.StreamLogs:output_type -> onescluster.engine.v1.EngineLogEntry
+	10, // [10:16] is the sub-list for method output_type
+	4,  // [4:10] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_engine_proto_init() }
@@ -1023,9 +1046,11 @@ func file_engine_proto_init() {
 	if File_engine_proto != nil {
 		return
 	}
+	file_common_proto_init()
 	file_engine_proto_msgTypes[4].OneofWrappers = []any{
 		(*DeployRequest_AdepJson)(nil),
 		(*DeployRequest_TomlContent)(nil),
+		(*DeployRequest_RunPlan)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

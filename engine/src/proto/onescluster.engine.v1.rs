@@ -42,7 +42,7 @@ pub struct DeployRequest {
     /// Optional
     #[prost(string, tag = "4")]
     pub digest: ::prost::alloc::string::String,
-    #[prost(oneof = "deploy_request::Manifest", tags = "2, 5")]
+    #[prost(oneof = "deploy_request::Manifest", tags = "2, 5, 6")]
     pub manifest: ::core::option::Option<deploy_request::Manifest>,
 }
 /// Nested message and enum types in `DeployRequest`.
@@ -56,6 +56,9 @@ pub mod deploy_request {
         /// TOML manifest content
         #[prost(string, tag = "5")]
         TomlContent(::prost::alloc::string::String),
+        /// Normalized execution plan (preferred)
+        #[prost(message, tag = "6")]
+        RunPlan(super::super::super::common::v1::RunPlan),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

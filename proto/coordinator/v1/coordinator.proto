@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package onescluster.coordinator.v1;
+
+option go_package = "github.com/onescluster/coordinator/pkg/proto/coordinator/v1;coordinatorv1";
+
+service CoordinatorService {
+    rpc DeployCapsule(DeployRequest) returns (DeployResponse);
+    rpc ListCapsules(ListRequest) returns (ListResponse);
+    rpc StopCapsule(StopRequest) returns (StopResponse);
+}
+
+message DeployRequest {
+    // The raw TOML content from capsule.toml
+    bytes toml_content = 1;
+}
+
+message DeployResponse {
+    string capsule_id = 1;
+    // URL where the capsule is accessible (e.g. http://myapp.gumball.local)
+    string url = 2;
+}
+
+message ListRequest {
+}
+
+message ListResponse {
+    repeated CapsuleInfo capsules = 1;
+}
+
+message StopRequest {
+    string capsule_id = 1;
+}
+
+message StopResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message CapsuleInfo {
+    string capsule_id = 1;
+    string name = 2;
+    string status = 3;
+    string url = 4;
+}

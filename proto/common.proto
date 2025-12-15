@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package onescluster.common.v1;
+
+option go_package = "github.com/onescluster/coordinator/pkg/proto;proto";
+
+// RunPlan v0: normalized execution plan (Phase 2)
+// Shared between coordinator.proto and engine.proto
+message RunPlan {
+    // Traceability
+    string capsule_id = 1;
+    string name = 2;
+    string version = 3;
+
+    // Runtime selection
+    oneof runtime {
+        DockerRuntime docker = 10;
+        NativeRuntime native = 11;
+        PythonUvRuntime python_uv = 12; // Optional: enable only if supported
+    }
+
+    // Resources
+    uint32 cpu_cores = 20;          // optional
+    uint64 memory_bytes = 21;       // optional
+    string gpu_profile = 22;        // optional, e.g., "none" | "cuda:L4:1"
+
+    // Network
+    repeated string egress_allowlist = 30; // optional CIDR/host list
+}
+
+message DockerRuntime {
+    string image = 1;
+    string digest = 2;                     // optional
+    repeated string command = 3;           // entrypoint/command
+    map<string, string> env = 4;
+    string working_dir = 5;                // optional
+    string user = 6;                       // optional
+    repeated Port ports = 7;
+    repeated Mount mounts = 8;
+}
+
+message NativeRuntime {
+    string binary_path = 1;
+    repeated string args = 2;
+    map<string, string> env = 3;
+    string working_dir = 4;
+}
+
+message PythonUvRuntime {
+    string entrypoint = 1;
+    repeated string args = 2;
+    map<string, string> env = 3;
+    string working_dir = 4;
+    repeated Port ports = 5;
+}
+
+message Port {
+    uint32 container_port = 1;
+    uint32 host_port = 2; // optional
+    string protocol = 3;  // optional
+}
+
+message Mount {
+    string source = 1;
+    string target = 2;
+    bool readonly = 3;
+}

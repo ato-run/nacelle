@@ -70,3 +70,7 @@ node_modules/
 *.pem
 *.srl
 .agent-log/
+client/runplan
+client/capsule-cli
+client/coordinator
+proto/rust/target
