@@ -109,14 +109,23 @@ impl CapsuleManager {
                 .map_err(|e| anyhow!("Manifest signature verification failed: {}", e));
         }
 
-        let canonical: CapsuleManifestV1 = serde_json::from_str(manifest_str)
-            .map_err(|e| anyhow!("Failed to parse manifest for signature verification: {}", e))?;
-        canonical
-            .validate()
-            .map_err(|e| anyhow!("Manifest validation failed: {}", e))?;
-        canonical
-            .verify_signature()
-            .map_err(|e| anyhow!("Manifest signature verification failed: {}", e))
+        if let Ok(canonical) = serde_json::from_str::<CapsuleManifestV1>(manifest_str) {
+            canonical
+                .validate()
+                .map_err(|e| anyhow!("Manifest validation failed: {}", e))?;
+            return canonical
+                .verify_signature()
+                .map_err(|e| anyhow!("Manifest signature verification failed: {}", e));
+        }
+
+        // If the payload looks like a capsule_v1 manifest but failed to parse, fail closed.
+        if manifest_str.contains("schema_version") {
+            return Err(anyhow!(
+                "Failed to parse capsule_v1 manifest for signature verification"
+            ));
+        }
+
+        Ok(())
     }
 
     #[cfg(not(feature = "toml-support"))]
