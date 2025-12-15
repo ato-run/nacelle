@@ -1,0 +1,8 @@
+[capsule]
+name = "whoami"
+version = "0.0.1"
+
+[runtime]
+type = "native"
+executable = "dummy"
+args = []

@@ -1,0 +1,136 @@
+# Gumball Full Stack - Local Development
+# Usage: docker-compose up --build
+#
+# All three components: Caddy + Coordinator + Engine in Docker
+# Note: Mac Docker Desktop compatibility - no network_mode:host
+
+version: "3.8"
+
+services:
+  # ========================================
+  # Caddy - Reverse Proxy (Gateway)
+  # ========================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: gumball-caddy
+    ports:
+      - "80:80" # HTTP for capsule proxying
+      - "443:443" # HTTPS (if needed)
+      - "2019:2019" # Admin API
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ========================================
+  # Engine - Capsule Runtime (Privileged)
+  # ========================================
+  engine:
+    build:
+      context: ../../ # Workspace root for build context
+      dockerfile: capsuled/engine/Dockerfile
+    container_name: gumball-engine
+
+    # Mac Docker Desktop: use regular networking, not host mode
+    ports:
+      - "50051:50051" # gRPC
+      - "4500:4500" # HTTP API
+      - "4501:4501" # Egress Proxy
+
+    # Still privileged for container operations
+    privileged: true
+
+    volumes:
+      # Persistent storage for capsules
+      - gumball_data:/var/lib/gumball
+      # Docker socket for container management (required for Docker runtime)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Temporary files
+      - engine_tmp:/tmp/capsuled
+
+    environment:
+      - RUST_LOG=info
+      # Force DockerCliRuntime instead of ContainerRuntime (for DooD pattern)
+      - FORCE_DOCKER_CLI_RUNTIME=1
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4500/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ========================================
+  # Coordinator - Orchestration Brain
+  # ========================================
+  coordinator:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gumball-coordinator
+    ports:
+      - "50050:50050" # gRPC
+      - "8081:8081" # HTTP
+    volumes:
+      # SQLite database persistence
+      - coordinator_data:/app/data
+    environment:
+      - CADDY_ADMIN_URL=http://caddy:2019
+      - GUMBALL_DOMAIN_SUFFIX=localhost
+      # Engine is in same Docker network
+      - ENGINE_ADDRESS=engine:50051
+      # Caddy proxies to host where Docker containers run
+      - CADDY_UPSTREAM_HOST=host.docker.internal
+      # SQLite database path
+      - GUMBALL_DB_PATH=/app/data/gumball.db
+    depends_on:
+      caddy:
+        condition: service_healthy
+      engine:
+        condition: service_started
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ========================================
+  # Web UI - Next.js Frontend
+  # ========================================
+  web:
+    build:
+      context: ../../web/frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8081
+    container_name: gumball-web
+    ports:
+      - "3000:3000"
+    environment:
+      # Connect to Coordinator gRPC
+      - COORDINATOR_ADDRESS=coordinator:50050
+      - ENGINE_ADDRESS=engine:50051
+      - NODE_ENV=production
+    depends_on:
+      coordinator:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+  gumball_data:
+  engine_tmp:
+  coordinator_data:

@@ -44,9 +44,9 @@ type LogEntry struct {
 func (h *LogsHandler) StreamLogsHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract capsule ID from URL path
 	// Expected format: /api/v1/capsules/{id}/logs
-	capsuleID := extractCapsuleIDFromPath(r.URL.Path)
-	if capsuleID == "" {
-		http.Error(w, "Invalid capsule ID", http.StatusBadRequest)
+	capsuleID, err := extractCapsuleIDFromPath(r.URL.Path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid capsule ID: %v", err), http.StatusBadRequest)
 		return
 	}
 
@@ -147,33 +147,4 @@ func (h *LogsHandler) getHistoricalLogs(capsuleID string, tail int) []LogEntry {
 	}
 
 	return entries
-}
-
-// extractCapsuleIDFromPath extracts the capsule ID from the URL path
-// Expected format: /api/v1/capsules/{id}/logs
-func extractCapsuleIDFromPath(path string) string {
-	// Simple path parsing - in production, use a proper router
-	// Expected: /api/v1/capsules/{id}/logs
-	// Remove /api/v1/capsules/ prefix and /logs suffix
-	const prefix = "/api/v1/capsules/"
-	const suffix = "/logs"
-
-	if len(path) < len(prefix)+len(suffix) {
-		return ""
-	}
-
-	if path[:len(prefix)] != prefix {
-		return ""
-	}
-
-	remaining := path[len(prefix):]
-	if len(remaining) < len(suffix) {
-		return ""
-	}
-
-	if remaining[len(remaining)-len(suffix):] != suffix {
-		return ""
-	}
-
-	return remaining[:len(remaining)-len(suffix)]
 }

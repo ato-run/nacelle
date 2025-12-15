@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
@@ -17,12 +18,14 @@ type StateManager struct {
 	capsules  map[string]*Capsule         // Key: capsule ID
 	resources map[string]*NodeResources   // Key: node ID
 	metadata  map[string]*ClusterMetadata // Key: metadata key
+	apps      map[string]*App             // Key: app ID
 
 	// Mutexes for thread-safe access
 	nodesMu     sync.RWMutex
 	capsulesMu  sync.RWMutex
 	resourcesMu sync.RWMutex
 	metadataMu  sync.RWMutex
+	appsMu      sync.RWMutex
 }
 
 // NewStateManager creates a new state manager with the given rqlite client
@@ -33,6 +36,7 @@ func NewStateManager(client *Client) *StateManager {
 		capsules:  make(map[string]*Capsule),
 		resources: make(map[string]*NodeResources),
 		metadata:  make(map[string]*ClusterMetadata),
+		apps:      make(map[string]*App),
 	}
 }
 
@@ -60,6 +64,10 @@ func (sm *StateManager) Initialize() error {
 		return fmt.Errorf("failed to load metadata: %w", err)
 	}
 
+	if err := sm.loadApps(); err != nil {
+		return fmt.Errorf("failed to load apps: %w", err)
+	}
+
 	log.Printf("State manager initialized: %d nodes, %d capsules, %d resource entries",
 		len(sm.nodes), len(sm.capsules), len(sm.resources))
 
@@ -68,6 +76,9 @@ func (sm *StateManager) Initialize() error {
 
 // loadNodes loads all nodes from rqlite into memory
 func (sm *StateManager) loadNodes() error {
+	if sm.client == nil {
+		return fmt.Errorf("state manager client is nil")
+	}
 	result, err := sm.client.Query("SELECT id, address, headscale_name, status, is_master, last_seen, created_at, updated_at FROM nodes")
 	if err != nil {
 		return err
@@ -265,9 +276,56 @@ func (sm *StateManager) loadMetadata() error {
 	return nil
 }
 
+// loadApps loads all apps from the DB into the cache
+func (sm *StateManager) loadApps() error {
+	if sm.client == nil {
+		return fmt.Errorf("state manager client is nil")
+	}
+
+	rows, err := sm.client.Query("SELECT id, name, description, image, version, category, icon_url, created_at, updated_at FROM apps")
+	if err != nil {
+		return fmt.Errorf("failed to list apps: %w", err)
+	}
+
+	sm.appsMu.Lock()
+	defer sm.appsMu.Unlock()
+
+	// Clear existing cache
+	sm.apps = make(map[string]*App)
+
+	for rows.Next() {
+		var app App
+		// Assuming App struct fields match the query order and types
+		if err := rows.Scan(&app.ID, &app.Name, &app.Description, &app.Image, &app.Version, &app.Category, &app.IconURL, &app.CreatedAt, &app.UpdatedAt); err != nil {
+			return fmt.Errorf("failed to scan app: %w", err)
+		}
+		sm.apps[app.ID] = &app
+	}
+
+	return nil
+}
+
 // Refresh reloads the entire state from rqlite
 func (sm *StateManager) Refresh() error {
 	return sm.Initialize()
+}
+
+// GetAllApps returns all cached apps
+func (sm *StateManager) GetAllApps() []*App {
+	sm.appsMu.RLock()
+	defer sm.appsMu.RUnlock()
+
+	apps := make([]*App, 0, len(sm.apps))
+	for _, app := range sm.apps {
+		apps = append(apps, app)
+	}
+	
+	// Sort by name
+	sort.Slice(apps, func(i, j int) bool {
+		return apps[i].Name < apps[j].Name
+	})
+
+	return apps
 }
 
 // GetNode retrieves a node by ID from the cache
@@ -342,6 +400,18 @@ func (sm *StateManager) GetCapsule(id string) (*Capsule, bool) {
 
 	capsuleCopy := *capsule
 	return &capsuleCopy, true
+}
+
+// SetCapsuleInCache inserts/updates a capsule in the in-memory cache.
+// This is useful for tests and for components that already have the latest capsule state.
+func (sm *StateManager) SetCapsuleInCache(capsule *Capsule) {
+	sm.capsulesMu.Lock()
+	defer sm.capsulesMu.Unlock()
+
+	if sm.capsules == nil {
+		sm.capsules = make(map[string]*Capsule)
+	}
+	sm.capsules[capsule.ID] = capsule
 }
 
 // GetAllCapsules returns all capsules from the cache

@@ -1,27 +1,28 @@
 package capsule
 
 import (
-"encoding/json"
-"errors"
-"fmt"
-"os"
-"path/filepath"
-"regexp"
-"runtime"
-"strconv"
-"strings"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
 
-"github.com/BurntSushi/toml"
+	"github.com/BurntSushi/toml"
 )
 
 // Parsing errors
 var (
-ErrInvalidSchemaVersion = errors.New("invalid schema_version, expected '1.0'")
-ErrInvalidName          = errors.New("invalid name, must be kebab-case")
-ErrInvalidVersion       = errors.New("invalid version, must be semver")
-ErrMissingCapabilities  = errors.New("inference Capsule must have capabilities defined")
-ErrMissingModelConfig   = errors.New("inference Capsule must have model config defined")
-ErrInvalidPort          = errors.New("invalid port number")
+	ErrInvalidSchemaVersion = errors.New("invalid schema_version, expected '1.0'")
+	ErrInvalidName          = errors.New("invalid name, must be kebab-case")
+	ErrInvalidVersion       = errors.New("invalid version, must be semver")
+	ErrMissingCapabilities  = errors.New("inference Capsule must have capabilities defined")
+	ErrMissingModelConfig   = errors.New("inference Capsule must have model config defined")
+	ErrInvalidPort          = errors.New("invalid port number")
+	ErrInvalidRuntime       = errors.New("invalid runtime")
 )
 
 // kebabCaseRegex matches valid kebab-case identifiers
@@ -109,8 +110,38 @@ func (m *CapsuleManifest) Validate() error {
 	}
 
 	// Port validation
-	if m.Execution.Port > 65535 {
-		errs = append(errs, ErrInvalidPort)
+	// Note: port is uint16 in the schema, so it cannot exceed 65535.
+	// We treat 0 as "unset" (allowed) for backward compatibility.
+
+	// Storage validation (minimal): docker-only, absolute mount paths, unique volume names.
+	if m.Storage != nil && len(m.Storage.Volumes) > 0 {
+		if m.Execution.Runtime != RuntimeDocker {
+			errs = append(errs, errors.New("storage volumes are only supported for runtime=docker"))
+		} else {
+			seen := map[string]struct{}{}
+			for _, vol := range m.Storage.Volumes {
+				name := strings.TrimSpace(vol.Name)
+				if name == "" {
+					errs = append(errs, errors.New("storage.volumes[].name is required"))
+					continue
+				}
+				if _, ok := seen[name]; ok {
+					errs = append(errs, fmt.Errorf("duplicate storage volume name: %q", name))
+					continue
+				}
+				seen[name] = struct{}{}
+				mountPath := strings.TrimSpace(vol.MountPath)
+				if mountPath == "" {
+					errs = append(errs, fmt.Errorf("storage.volumes[%s].mount_path is required", name))
+					continue
+				}
+				clean := filepath.Clean(mountPath)
+				if !strings.HasPrefix(clean, "/") || strings.Contains(clean, "..") {
+					errs = append(errs, fmt.Errorf("invalid storage.volumes[%s].mount_path: %q", name, mountPath))
+					continue
+				}
+			}
+		}
 	}
 
 	if len(errs) > 0 {
@@ -196,10 +227,10 @@ func (m *CapsuleManifest) DiskBytes() (int64, error) {
 // parseMemoryString parses a memory string like "6GB" or "512MB" into bytes
 func parseMemoryString(s string) (int64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
-	
+
 	var multiplier int64 = 1
 	var numStr string
-	
+
 	switch {
 	case strings.HasSuffix(s, "TB"):
 		multiplier = 1024 * 1024 * 1024 * 1024
@@ -218,19 +249,19 @@ func parseMemoryString(s string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("invalid memory string format: %s", s)
 	}
-	
+
 	numStr = strings.TrimSpace(numStr)
-	
+
 	// Try parsing as float first (for values like "6.5GB")
 	if f, err := strconv.ParseFloat(numStr, 64); err == nil {
 		return int64(f * float64(multiplier)), nil
 	}
-	
+
 	// Fallback to int
 	n, err := strconv.ParseInt(numStr, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid number in memory string: %s", s)
 	}
-	
+
 	return n * multiplier, nil
 }

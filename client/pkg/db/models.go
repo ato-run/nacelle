@@ -107,6 +107,19 @@ type Runtime struct {
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
+// App represents an application template in the catalog
+type App struct {
+	ID          string    `json:"id" db:"id"`
+	Name        string    `json:"name" db:"name"`
+	Description string    `json:"description" db:"description"`
+	Image       string    `json:"image" db:"image"`
+	Version     string    `json:"version" db:"version"`
+	Category    string    `json:"category" db:"category"`
+	IconURL     string    `json:"icon_url" db:"icon_url"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
 // ElectionReason represents why a master election occurred
 type ElectionReason string
 

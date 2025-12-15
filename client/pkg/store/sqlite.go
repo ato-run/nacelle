@@ -18,6 +18,9 @@ var migration001SQL string
 //go:embed migrations/002_cluster_state.sql
 var migration002SQL string
 
+//go:embed migrations/003_deployed_capsules.sql
+var migration003SQL string
+
 // SQLiteStore implements Store using SQLite
 type SQLiteStore struct {
 	db     *sql.DB
@@ -61,7 +64,7 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 // Initialize runs database migrations
 func (s *SQLiteStore) Initialize() error {
 	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL}
+	migrations := []string{migration001SQL, migration002SQL, migration003SQL}
 	for i, migration := range migrations {
 		_, err := s.db.Exec(migration)
 		if err != nil {
@@ -492,3 +495,109 @@ func (s *SQLiteStore) SetLocalNode(ctx context.Context, cfg *LocalNodeConfig) er
 	return nil
 }
 
+// =============================================================================
+// Deployed Capsules (Phase 4-C)
+// =============================================================================
+
+// DeployedCapsule represents a capsule deployed via the Coordinator
+type DeployedCapsule struct {
+	ID        string
+	Name      string
+	URL       string
+	Status    string
+	Port      int
+	CreatedAt time.Time
+}
+
+// SaveDeployedCapsule persists a deployed capsule (insert or update)
+func (s *SQLiteStore) SaveDeployedCapsule(ctx context.Context, capsule *DeployedCapsule) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO deployed_capsules (id, name, url, status, port, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			name = excluded.name,
+			url = excluded.url,
+			status = excluded.status,
+			port = excluded.port
+	`, capsule.ID, capsule.Name, capsule.URL, capsule.Status, capsule.Port, capsule.CreatedAt.Unix())
+
+	if err != nil {
+		return fmt.Errorf("failed to save deployed capsule: %w", err)
+	}
+	return nil
+}
+
+// GetDeployedCapsule retrieves a deployed capsule by ID
+func (s *SQLiteStore) GetDeployedCapsule(ctx context.Context, id string) (*DeployedCapsule, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, name, url, status, port, created_at
+		FROM deployed_capsules WHERE id = ?
+	`, id)
+
+	var c DeployedCapsule
+	var createdAtUnix int64
+	var port sql.NullInt64
+
+	err := row.Scan(&c.ID, &c.Name, &c.URL, &c.Status, &port, &createdAtUnix)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployed capsule: %w", err)
+	}
+
+	if port.Valid {
+		c.Port = int(port.Int64)
+	}
+	c.CreatedAt = time.Unix(createdAtUnix, 0)
+
+	return &c, nil
+}
+
+// ListDeployedCapsules returns all deployed capsules
+func (s *SQLiteStore) ListDeployedCapsules(ctx context.Context) ([]*DeployedCapsule, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, url, status, port, created_at
+		FROM deployed_capsules ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deployed capsules: %w", err)
+	}
+	defer rows.Close()
+
+	var capsules []*DeployedCapsule
+	for rows.Next() {
+		var c DeployedCapsule
+		var createdAtUnix int64
+		var port sql.NullInt64
+
+		if err := rows.Scan(&c.ID, &c.Name, &c.URL, &c.Status, &port, &createdAtUnix); err != nil {
+			return nil, err
+		}
+
+		if port.Valid {
+			c.Port = int(port.Int64)
+		}
+		c.CreatedAt = time.Unix(createdAtUnix, 0)
+		capsules = append(capsules, &c)
+	}
+
+	return capsules, nil
+}
+
+// DeleteDeployedCapsule removes a deployed capsule by ID
+func (s *SQLiteStore) DeleteDeployedCapsule(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM deployed_capsules WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete deployed capsule: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("deployed capsule not found: %s", id)
+	}
+	return nil
+}

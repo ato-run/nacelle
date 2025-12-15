@@ -1,0 +1,13 @@
+[capsule]
+name = "phase2-verify"
+version = "0.1.0"
+description = "Phase 2 final verification (legacy manifest schema)"
+
+[runtime]
+type = "docker"
+executable = "alpine:latest"
+args = ["/bin/sh", "-c", "echo 'Phase 2 Complete!' && sleep 5"]
+
+[resources]
+cpu_cores = 1
+memory = "64Mi"

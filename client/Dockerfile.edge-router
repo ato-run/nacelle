@@ -1,0 +1,25 @@
+# Gumball Edge Router - Production Dockerfile
+# Builds a minimal image for the store-mode edge router.
+
+FROM golang:1.24-bookworm AS builder
+WORKDIR /app
+
+# Cache dependencies
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
+
+# Copy source and build
+COPY . .
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /bin/edge-router ./cmd/edge-router
+
+FROM debian:bookworm-slim AS runtime
+WORKDIR /app
+
+# Minimal runtime deps for sqlite (modernc) and networking
+RUN apt-get update -y && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /bin/edge-router /usr/local/bin/edge-router
+
+EXPOSE 8082
+
+ENTRYPOINT ["/usr/local/bin/edge-router"]

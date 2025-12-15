@@ -32,6 +32,7 @@ type CoordinatorConfig struct {
 	NodeID        string `yaml:"node_id"`
 	Address       string `yaml:"address"`
 	HeadscaleName string `yaml:"headscale_name"`
+	BackendMode   string `yaml:"backend_mode"`
 }
 
 // RQLiteConfig contains rqlite connection settings
@@ -139,6 +140,9 @@ func (c *Config) applyDefaults() {
 	// Coordinator defaults
 	if c.Coordinator.Address == "" {
 		c.Coordinator.Address = "0.0.0.0:8080"
+	}
+	if c.Coordinator.BackendMode == "" {
+		c.Coordinator.BackendMode = "native"
 	}
 }
 

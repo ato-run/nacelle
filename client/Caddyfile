@@ -1,0 +1,29 @@
+# Caddy configuration for Gumball Local Development
+# Dynamic routes are added via Admin API by the Coordinator
+
+{
+    # Enable Admin API on localhost:2019
+    admin :2019
+    
+    # Disable auto-HTTPS for local dev (we'll use HTTP)
+    auto_https off
+    
+    # Debug logging
+    debug
+}
+
+# Base HTTP server on port 8080 (non-privileged)
+# Dynamic routes for capsules are prepended via Admin API
+http://:8090 {
+    # Health check endpoint (doesn't conflict with capsule routes)
+    handle /.gumball/health {
+        respond "OK" 200
+    }
+    
+    # Default 404 for unmatched subdomains
+    # This MUST have a host matcher to avoid catching capsule routes
+    @unmatched not host *.localhost
+    handle @unmatched {
+        respond "Not Found" 404
+    }
+}

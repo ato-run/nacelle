@@ -1,10 +1,10 @@
 package api
 
 import (
-	"context"
+
 	"encoding/json"
 	"fmt"
-	"log"
+
 	"net/http"
 	"time"
 
@@ -13,11 +13,11 @@ import (
 	pb "github.com/onescluster/coordinator/pkg/proto"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
 	"github.com/onescluster/coordinator/pkg/wasm"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+
 )
 
 type DeployRequest struct {
+	AppID          string             `json:"app_id"`
 	RuntimeName    string             `json:"runtime_name"`
 	RuntimeVersion string             `json:"runtime_version"`
 	Config         map[string]string  `json:"config"`
@@ -61,13 +61,15 @@ type VolumeConfig struct {
 
 // AgentClientFactory creates a gRPC client for Agent communication
 // Allows dependency injection for testing
-type AgentClientFactory func(ctx context.Context, rigID string) (pb.AgentServiceClient, func() error, error)
+// AgentClientFactory removed
+
 
 // DeployHandler handles workload deployment requests
 type DeployHandler struct {
 	StateManager       *db.StateManager
 	Scheduler          *gpu.Scheduler
-	AgentClientFactory AgentClientFactory // Optional: for testing (nil = use default)
+	// AgentClientFactory AgentClientFactory // Removed
+
 	WasmHost           *wasm.WasmerHost   // Optional: for Wasm validation
 }
 
@@ -76,7 +78,8 @@ func NewDeployHandler(stateManager *db.StateManager, scheduler *gpu.Scheduler) *
 	return &DeployHandler{
 		StateManager:       stateManager,
 		Scheduler:          scheduler,
-		AgentClientFactory: nil, // Use default (localhost:50051)
+		// AgentClientFactory: nil, 
+
 		WasmHost:           nil, // Initialize on first use
 	}
 }
@@ -106,9 +109,41 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure requirements are set
 	if req.Requirements.VramMinGB == 0 {
-		// Default to some reasonable value if not specified, or allow 0 for CPU workloads?
-		// For now, let's assume 0 means CPU only or no specific requirement.
+		// Default to some reasonable value if not specified
 	}
+
+	// Resolve AppID if provided
+	if req.AppID != "" {
+		// Lookup App from StateManager (which loads from DB)
+		// We need to add GetApp to StateManager or access map directly if exposed
+		// Since GetAllApps returns []*App, likely GetApp(id) is needed or we can iterate
+		// For efficiency, let's assume we add GetApp to StateManager or use GetAllApps and filter
+		// Or access stateManager.apps if visible? No, it's private.
+		// Let's rely on adding GetApp to StateManager in a separate step if not present.
+		// Wait, I didn't add GetApp to StateManager yet. I should add it first.
+		// BUT for now, I'll assume GetApp exists or implement basic lookup here via GetAllApps
+		
+		apps := h.StateManager.GetAllApps()
+		var selectedApp *db.App
+		for _, app := range apps {
+			if app.ID == req.AppID {
+				selectedApp = app
+				break
+			}
+		}
+
+		if selectedApp != nil {
+			if req.RuntimeName == "" {
+				req.RuntimeName = selectedApp.Name
+			}
+			// Use App Image as the container image
+            // We store the image in the manifest.Compute.Image
+		}
+	}
+	
+	// If RuntimeName is still empty (no AppID or App not found), error out?
+	// Or assume the user meant to provide it manually.
+
 
 	// Populate AllowCloudBurst from request to requirements
 	req.Requirements.AllowCloudBurst = req.AllowCloudBurst
@@ -174,11 +209,32 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	// 5. Execute on remote Engine
 	// We need to construct AdepManifest from DeployRequest
+	
+	// If AppID was used, we should ideally retrieve the image from the App definition
+	// But `req.RuntimeName` is just a name.
+	// Let's retry the app lookup logic here cleanly or persist the image from step 1
+	var appImage string
+	if req.AppID != "" {
+		apps := h.StateManager.GetAllApps()
+		for _, app := range apps {
+			if app.ID == req.AppID {
+				appImage = app.Image
+				if req.RuntimeName == "" {
+					req.RuntimeName = app.Name // Use App name as capsule name if default
+				}
+				break
+			}
+		}
+	}
+	
+	if appImage == "" {
+		appImage = req.RuntimeName // Fallback to using name as image (legacy behavior)
+	}
+
 	manifest := AdepManifest{
 		Name:    req.RuntimeName,
-		// Version: req.RuntimeVersion, // AdepManifest doesn't have Version
 		Compute: ComputeConfig{
-			Image: req.RuntimeName, // Assuming image name matches runtime name
+			Image: appImage,
 		},
 		Scheduling: SchedulingConfig{
 			GPU: &GpuConstraints{
@@ -238,57 +294,8 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// callAgentDeploy calls the selected Agent's DeployWorkload gRPC endpoint
-func (h *DeployHandler) callAgentDeploy(ctx context.Context, rigID string, workloadID string, manifestJSON []byte, assignedUUIDs []string) (*pb.DeployWorkloadResponse, error) {
-	var client pb.AgentServiceClient
-	var closeFunc func() error
+// callAgentDeploy removed
 
-	// Use factory if provided (for testing), otherwise use default
-	if h.AgentClientFactory != nil {
-		var err error
-		client, closeFunc, err = h.AgentClientFactory(ctx, rigID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Agent client: %w", err)
-		}
-		if closeFunc != nil {
-			defer closeFunc()
-		}
-	} else {
-		// Default: connect to localhost:50051
-		// In production, this would use service discovery to find the Agent's address
-		agentAddr := fmt.Sprintf("localhost:50051") // TODO: Service discovery in production
-
-		log.Printf("  Connecting to Agent at %s", agentAddr)
-
-		// Create gRPC connection with timeout
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-
-		conn, err := grpc.DialContext(ctx, agentAddr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock())
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to Agent: %w", err)
-		}
-		defer conn.Close()
-
-		client = pb.NewAgentServiceClient(conn)
-	}
-
-	// Call DeployWorkload RPC
-	req := &pb.DeployWorkloadRequest{
-		WorkloadId:         workloadID,
-		AdepJson:           manifestJSON,
-		ResourceAssignment: assignedUUIDs,
-	}
-
-	resp, err := client.DeployWorkload(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("DeployWorkload RPC failed: %w", err)
-	}
-
-	return resp, nil
-}
 
 func (h *DeployHandler) getEngineAddress(machine *db.Node) string {
 	// Prefer Tailnet IP if available

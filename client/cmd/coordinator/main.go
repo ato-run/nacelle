@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/onescluster/coordinator/pkg/api"
@@ -21,20 +23,49 @@ import (
 	"github.com/onescluster/coordinator/pkg/billing"
 	"github.com/onescluster/coordinator/pkg/db"
 	grpcMiddleware "github.com/onescluster/coordinator/pkg/middleware"
+	"github.com/onescluster/coordinator/pkg/networking/caddy"
+	"github.com/onescluster/coordinator/pkg/networking/port"
 	pb "github.com/onescluster/coordinator/pkg/proto"
+	coordinatorv1 "github.com/onescluster/coordinator/pkg/proto/coordinator/v1"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
 	"github.com/onescluster/coordinator/pkg/service"
+	"github.com/onescluster/coordinator/pkg/store"
 	"github.com/onescluster/coordinator/pkg/supabase"
 )
 
+// corsMiddleware adds CORS headers for frontend access
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow requests from localhost frontend
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+
+		// Handle preflight
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 var (
-	port = flag.Int("port", 50052, "The server port")
+	serverPort = flag.Int("port", 50050, "The server port")
+	engineAddr = flag.String("engine", "localhost:50051", "Engine gRPC address")
 )
 
 func main() {
 	flag.Parse()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *serverPort))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -50,11 +81,16 @@ func main() {
 	supabaseKey := os.Getenv("SUPABASE_ANON_KEY")
 	supabaseClient := supabase.NewClient(supabaseURL, supabaseKey)
 
-	authInterceptor := grpcMiddleware.NewAuthInterceptor(jwtSecret)
+	// Interceptors
+	// authInterceptor := grpcMiddleware.NewAuthInterceptor(jwtSecret)
 
-	s := grpc.NewServer(
-		grpc.UnaryInterceptor(authInterceptor.Unary()),
-	)
+	// Server options
+	// opts := []grpc.ServerOption{
+	// 	grpc.UnaryInterceptor(authInterceptor.Unary()),
+	// 	grpc.StreamInterceptor(authInterceptor.Stream()), // Assuming StreamInterceptor would be here if used
+	// }
+
+	s := grpc.NewServer()
 
 	// Initialize Store (rqlite)
 	rqliteAddr := os.Getenv("RQLITE_ADDR")
@@ -68,28 +104,71 @@ func main() {
 
 	dbClient, err := db.NewClient(dbConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to rqlite: %v", err)
+		log.Printf("Warning: Failed to connect to rqlite: %v. Running in Stateless Mode.", err)
 	}
 
 	// Initialize schema (creates tables if they don't exist)
-	if err := db.InitSchema(dbClient); err != nil {
-		log.Printf("Warning: failed to initialize schema: %v (continuing anyway)", err)
-	}
+	if dbClient != nil {
+		if err := db.InitSchema(dbClient); err != nil {
+			log.Printf("Warning: failed to initialize schema: %v (continuing anyway)", err)
+		}
 
-	// Apply migrations
-	if err := db.ApplyMigrations(dbClient); err != nil {
-		log.Printf("Warning: failed to apply migrations: %v", err)
+		// Apply migrations
+		if err := db.ApplyMigrations(dbClient); err != nil {
+			log.Printf("Warning: failed to apply migrations: %v", err)
+		}
 	}
 
 	stateManager := db.NewStateManager(dbClient)
 	// Try to initialize state from DB (load cache)
-	if err := stateManager.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize state manager: %v", err)
+	if dbClient != nil {
+		if err := stateManager.Initialize(); err != nil {
+			log.Printf("Warning: Failed to initialize state manager: %v", err)
+		}
+	} else {
+		log.Println("Warning: Running with nil dbClient. State persistence is disabled.")
 	}
 
-	// Initialize Service
-	coordinatorService := service.NewCoordinatorService(stateManager)
-	pb.RegisterCoordinatorServiceServer(s, coordinatorService)
+	// Initialize Networking
+	caddyClient := caddy.NewClient(os.Getenv("CADDY_ADMIN_URL"))
+	if err := caddyClient.EnsureBaseConfig(); err != nil {
+		log.Printf("Warning: Failed to ensure Caddy base config: %v. Is Caddy running?", err)
+	} else {
+		log.Println("Caddy base configuration verified.")
+	}
+
+	portAllocator := port.NewAllocator()
+
+	// Initialize SQLite Store for capsule state persistence
+	dbPath := os.Getenv("GUMBALL_DB_PATH")
+	if dbPath == "" {
+		dbPath = "gumball.db"
+	}
+	capsuleStore, err := store.NewSQLiteStore(dbPath)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize SQLite store at %s: %v. State persistence is disabled.", dbPath, err)
+	} else {
+		log.Printf("SQLite store initialized: %s", dbPath)
+	}
+
+	// Connect to Engine
+	engineAddr := os.Getenv("ENGINE_ADDRESS")
+	if engineAddr == "" {
+		engineAddr = "localhost:50051" // Default for native dev
+	}
+	log.Printf("Connecting to Engine at: %s", engineAddr)
+	engineConn, err := grpc.NewClient(engineAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var engineClient pb.EngineClient
+	if err != nil {
+		log.Printf("Warning: did not connect to engine: %v", err)
+	} else {
+		defer engineConn.Close()
+		engineClient = pb.NewEngineClient(engineConn)
+	}
+
+	// Register Services
+	coordinatorService := service.NewCoordinatorService(dbClient, stateManager, caddyClient, portAllocator, engineClient, capsuleStore)
+	coordinatorv1.RegisterCoordinatorServiceServer(s, coordinatorService)
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
@@ -100,13 +179,16 @@ func main() {
 	// Initialize Handlers
 	deployHandler := api.NewDeployHandler(stateManager, scheduler)
 	nodeHandler := api.NewNodeHandler(stateManager)
-	capsuleHandler := api.NewCapsuleHandler(stateManager, supabaseClient)
+	capsuleHandler := api.NewCapsuleHandler(stateManager, supabaseClient, coordinatorService)
 
-	// Initialize Billing
-	stripeClient := billing.NewStripeClient()
-	meteredBilling := billing.NewMeteredBillingService(stripeClient, supabaseClient)
-	billingHandler := api.NewBillingHandler(stripeClient, supabaseClient)
-	webhookHandler := billing.NewWebhookHandler(stripeClient, supabaseClient)
+	// Initialize Billing (Polar)
+	polarToken := os.Getenv("POLAR_ACCESS_TOKEN")
+	polarSandbox := os.Getenv("POLAR_SANDBOX") == "true"
+	polarClient := billing.NewClient(polarToken, polarSandbox)
+	meteredBilling := billing.NewMeteredBillingService(supabaseClient)
+	billingHandler := api.NewBillingHandler(polarClient, supabaseClient)
+	webhookSecret := os.Getenv("POLAR_WEBHOOK_SECRET")
+	webhookHandler := billing.NewWebhookHandler(polarClient, supabaseClient, webhookSecret)
 	usageHandler := api.NewUsageHandler(supabaseClient, meteredBilling)
 
 	// Initialize HTTP Middleware
@@ -123,13 +205,29 @@ func main() {
 
 	// Start HTTP server
 	go func() {
-		// Public endpoints (if any)
-		// http.HandleFunc("/health", healthHandler.HandleHealth)
+		// Public endpoints
+		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+
+		// Apps (Catalog) - Mock for now
+		http.HandleFunc("/api/v1/apps", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			
+			// Get apps from StateManager (loaded from DB)
+			apps := stateManager.GetAllApps()
+			
+			json.NewEncoder(w).Encode(apps)
+		})
 
 		// Metrics
 		http.Handle("/metrics", promhttp.Handler())
 
 		// Webhooks (Public)
+		http.HandleFunc("/webhook/polar", webhookHandler.HandleWebhook)
+		// Temporary: keep legacy path for compatibility
 		http.HandleFunc("/webhook/stripe", webhookHandler.HandleWebhook)
 
 		// Protected endpoints
@@ -145,6 +243,14 @@ func main() {
 		http.Handle("/api/v1/capsules/", jwtMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/logs") {
 				capsuleHandler.StreamLogs(w, r)
+				return
+			}
+			if strings.HasSuffix(r.URL.Path, "/stop") {
+				capsuleHandler.HandleStopCapsule(w, r)
+				return
+			}
+			if strings.HasSuffix(r.URL.Path, "/start") {
+				capsuleHandler.HandleStartCapsule(w, r)
 				return
 			}
 			if r.Method == http.MethodDelete {
@@ -164,11 +270,11 @@ func main() {
 		// Usage Reporting (Machine Auth TODO)
 		http.HandleFunc("/api/v1/usage/report", usageHandler.HandleReportUsage)
 
-		log.Println("HTTP server listening at :8080")
+		log.Println("HTTP server listening at :8081")
 		// Use MetricsMiddleware for all requests (we might want to exclude /metrics itself if we used a mux that supported it easily,
 		// but for DefaultServeMux we can just wrap the listener or individual handlers.
 		// For simplicity, let's wrap the DefaultServeMux.
-		if err := http.ListenAndServe(":8080", grpcMiddleware.MetricsMiddleware(http.DefaultServeMux)); err != nil {
+		if err := http.ListenAndServe(":8081", corsMiddleware(grpcMiddleware.MetricsMiddleware(http.DefaultServeMux))); err != nil {
 			log.Fatalf("failed to serve HTTP: %v", err)
 		}
 	}()

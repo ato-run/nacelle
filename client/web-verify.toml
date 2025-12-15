@@ -1,0 +1,14 @@
+[package]
+name = "web-verify"
+version = "0.1.0"
+
+[run]
+image = "containous/whoami"
+# whoami listens on port 80 by default.
+# We rely on Coordinator to allocate a host port and map it.
+# The mocked Coordinator uses this 'args' field for the command.
+cmd = ["/whoami"] 
+
+[network]
+http_port = 80 # Container internal port
+public = true  # Request ingress

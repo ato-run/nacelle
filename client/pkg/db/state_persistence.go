@@ -183,6 +183,10 @@ func (sm *StateManager) UpdateCapsuleStatus(capsuleID string, status CapsuleStat
 
 // DeleteCapsule deletes a capsule from rqlite and the cache
 func (sm *StateManager) DeleteCapsule(capsuleID string) error {
+	if sm.client == nil {
+		return fmt.Errorf("state manager client not configured")
+	}
+
 	query := fmt.Sprintf("DELETE FROM capsules WHERE id = '%s'", escapeSQLString(capsuleID))
 
 	if err := sm.client.Execute(query); err != nil {

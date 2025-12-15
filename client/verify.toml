@@ -1,0 +1,12 @@
+[package]
+name = "phase2-verify"
+version = "0.1.0"
+
+[run]
+image = "alpine:latest"
+cmd = ["/bin/sh", "-c", "echo 'Phase 2 Complete!' && sleep 5"]
+
+[resources]
+cpu = "100m"
+memory = "64Mi"
+gpu = "none"

@@ -1,5 +1,4 @@
 package registry
-package registry
 
 import (
 	"context"

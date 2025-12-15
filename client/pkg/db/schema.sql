@@ -150,3 +150,16 @@ CREATE TABLE IF NOT EXISTS runtime_versions (
     PRIMARY KEY (runtime_id, version),
     FOREIGN KEY (runtime_id) REFERENCES runtimes(id)
 );
+
+-- Apps catalog table
+CREATE TABLE IF NOT EXISTS apps (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    image TEXT NOT NULL,
+    version TEXT NOT NULL,
+    category TEXT,
+    icon_url TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

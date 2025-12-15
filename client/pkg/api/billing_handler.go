@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/onescluster/coordinator/pkg/billing"
 	"github.com/onescluster/coordinator/pkg/middleware"
@@ -10,14 +11,20 @@ import (
 )
 
 type BillingHandler struct {
-	stripe   *billing.StripeClient
-	supabase *supabase.Client
+	polar      *billing.Client
+	supabase   *supabase.Client
+	productIDs map[string]string
 }
 
-func NewBillingHandler(sc *billing.StripeClient, supabase *supabase.Client) *BillingHandler {
+func NewBillingHandler(client *billing.Client, supabase *supabase.Client) *BillingHandler {
 	return &BillingHandler{
-		stripe:   sc,
+		polar:    client,
 		supabase: supabase,
+		productIDs: map[string]string{
+			"everyday": os.Getenv("POLAR_PRODUCT_EVERYDAY"),
+			"fast":     os.Getenv("POLAR_PRODUCT_FAST"),
+			"studio":   os.Getenv("POLAR_PRODUCT_STUDIO"),
+		},
 	}
 }
 
@@ -33,92 +40,65 @@ type CreateCheckoutResponse struct {
 
 // POST /api/v1/billing/checkout
 func (h *BillingHandler) CreateCheckout(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUser(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    user, ok := middleware.GetUser(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	var req CreateCheckoutRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+    var req CreateCheckoutRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	// Validate tier
-	validTiers := map[string]bool{"everyday": true, "fast": true, "studio": true}
-	if !validTiers[req.Tier] {
-		http.Error(w, "Invalid tier", http.StatusBadRequest)
-		return
-	}
+    productID, ok := h.productIDs[req.Tier]
+    if !ok || productID == "" {
+        http.Error(w, "Invalid tier", http.StatusBadRequest)
+        return
+    }
 
-	// Get or create Stripe customer
-	profile, err := h.supabase.GetProfile(r.Context(), user.ID)
-	if err != nil {
-		http.Error(w, "Failed to get profile", http.StatusInternalServerError)
-		return
-	}
+    metadata := map[string]string{
+        "user_id": user.ID,
+        "tier":    req.Tier,
+    }
 
-	customerID := profile.StripeCustomerID
-	if customerID == "" {
-		// Create new Stripe customer
-		cust, err := h.stripe.CreateCustomer(r.Context(), user.ID, user.Email, profile.DisplayName)
-		if err != nil {
-			http.Error(w, "Failed to create customer", http.StatusInternalServerError)
-			return
-		}
-		customerID = cust.ID
+    checkoutURL, err := h.polar.CreateCheckoutSession(productID, req.SuccessURL, metadata)
+    if err != nil {
+        http.Error(w, "Failed to create checkout session", http.StatusInternalServerError)
+        return
+    }
 
-		// Save customer ID to Supabase
-		h.supabase.UpdateStripeCustomerID(r.Context(), user.ID, customerID)
-	}
-
-	// Create checkout session
-	session, err := h.stripe.CreateCheckoutSession(
-		r.Context(),
-		customerID,
-		req.Tier,
-		req.SuccessURL,
-		req.CancelURL,
-	)
-	if err != nil {
-		http.Error(w, "Failed to create checkout session", http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(CreateCheckoutResponse{
-		URL: session.URL,
-	})
+    json.NewEncoder(w).Encode(CreateCheckoutResponse{URL: checkoutURL})
 }
 
 // POST /api/v1/billing/portal
 func (h *BillingHandler) CreatePortalSession(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUser(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    user, ok := middleware.GetUser(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	profile, err := h.supabase.GetProfile(r.Context(), user.ID)
-	if err != nil || profile.StripeCustomerID == "" {
-		http.Error(w, "No billing account found", http.StatusNotFound)
-		return
-	}
+    var req struct {
+        ReturnURL string `json:"return_url"`
+    }
+    _ = json.NewDecoder(r.Body).Decode(&req)
 
-	var req struct {
-		ReturnURL string `json:"return_url"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
+    // Polar portal currently redirects to purchases dashboard.
+    url, err := h.polar.GetCustomerPortalURL("")
+    if err != nil {
+        http.Error(w, "Failed to create portal session", http.StatusInternalServerError)
+        return
+    }
 
-	session, err := h.stripe.CreatePortalSession(r.Context(), profile.StripeCustomerID, req.ReturnURL)
-	if err != nil {
-		http.Error(w, "Failed to create portal session", http.StatusInternalServerError)
-		return
-	}
+    // Ensure profile exists to keep consistent error surface.
+    if _, err := h.supabase.GetProfile(r.Context(), user.ID); err != nil {
+        http.Error(w, "No billing account found", http.StatusNotFound)
+        return
+    }
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"url": session.URL,
-	})
+    json.NewEncoder(w).Encode(map[string]string{"url": url})
 }
 
 // GET /api/v1/billing/subscription
