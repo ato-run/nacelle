@@ -4,6 +4,8 @@ use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
 use crate::adep::AdepManifest;
+#[cfg(feature = "toml-support")]
+use libadep_core::capsule_v1::CapsuleManifestV1;
 use crate::hardware::GpuDetector;
 use crate::runtime::{
     ContainerRuntime, DevRuntime, DockerCliRuntime, LaunchRequest, LaunchResult, NativeRuntime, Runtime,
@@ -92,6 +94,35 @@ pub struct CapsuleManager {
 }
 
 impl CapsuleManager {
+
+    #[cfg(feature = "toml-support")]
+    fn enforce_manifest_signature(&self, adep_json: &[u8]) -> Result<()> {
+        let manifest_str = std::str::from_utf8(adep_json)
+            .map_err(|e| anyhow!("Manifest is not valid UTF-8: {}", e))?;
+
+        if let Ok(canonical) = CapsuleManifestV1::from_toml(manifest_str) {
+            canonical
+                .validate()
+                .map_err(|e| anyhow!("Manifest validation failed: {}", e))?;
+            return canonical
+                .verify_signature()
+                .map_err(|e| anyhow!("Manifest signature verification failed: {}", e));
+        }
+
+        let canonical: CapsuleManifestV1 = serde_json::from_str(manifest_str)
+            .map_err(|e| anyhow!("Failed to parse manifest for signature verification: {}", e))?;
+        canonical
+            .validate()
+            .map_err(|e| anyhow!("Manifest validation failed: {}", e))?;
+        canonical
+            .verify_signature()
+            .map_err(|e| anyhow!("Manifest signature verification failed: {}", e))
+    }
+
+    #[cfg(not(feature = "toml-support"))]
+    fn enforce_manifest_signature(&self, _adep_json: &[u8]) -> Result<()> {
+        Ok(())
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         audit_logger: Arc<AuditLogger>,
@@ -183,6 +214,13 @@ impl CapsuleManager {
         digest: String,
     ) -> Result<String> {
         info!("Deploying capsule {}", capsule_id);
+
+        // Enforce libadep signature verification before proceeding
+        self.enforce_manifest_signature(&adep_json)
+            .map_err(|e| {
+                warn!("Manifest signature verification failed for {}: {}", capsule_id, e);
+                e
+            })?;
 
         // Parse manifest to check resources
         let manifest: AdepManifest = serde_json::from_slice(&adep_json)

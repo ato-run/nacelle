@@ -159,7 +159,7 @@ fn try_canonical_toml_to_adep_json(
     oci_image: &mut String,
     digest: &mut String,
 ) -> Result<Option<Vec<u8>>, Status> {
-    let plan = match try_canonical_toml_to_runplan_proto(toml_str) {
+    let plan = match try_canonical_toml_to_runplan_proto(toml_str)? {
         Some(p) => p,
         None => return Ok(None),
     };
@@ -179,11 +179,22 @@ fn try_canonical_toml_to_adep_json(
     Ok(Some(bytes))
 }
 
-fn try_canonical_toml_to_runplan_proto(toml_str: &str) -> Option<common::RunPlan> {
-    let canonical = CapsuleManifestV1::from_toml(toml_str).ok()?;
-    canonical.validate().ok()?;
-    let canonical_plan = canonical.to_run_plan().ok()?;
-    Some(canonical_runplan_to_proto(&canonical_plan))
+fn try_canonical_toml_to_runplan_proto(toml_str: &str) -> Result<Option<common::RunPlan>, Status> {
+    let canonical = match CapsuleManifestV1::from_toml(toml_str) {
+        Ok(c) => c,
+        Err(_) => return Ok(None),
+    };
+
+    canonical
+        .validate()
+        .map_err(|e| Status::invalid_argument(format!("capsule manifest validation failed: {}", e)))?;
+    canonical
+        .verify_signature()
+        .map_err(|e| Status::permission_denied(format!("capsule manifest signature verification failed: {}", e)))?;
+    let canonical_plan = canonical
+        .to_run_plan()
+        .map_err(|e| Status::invalid_argument(format!("failed to build run plan: {}", e)))?;
+    Ok(Some(canonical_runplan_to_proto(&canonical_plan)))
 }
 
 #[tonic::async_trait]
@@ -240,7 +251,8 @@ impl Engine for EngineService {
             Some(DeployManifest::TomlContent(toml_str)) => {
                 info!("  Parsing TOML manifest");
                 // Canonical-first: capsule_v1 -> validated -> normalized RunPlan v0 -> same path as DeployManifest::RunPlan
-                if let Some(plan) = try_canonical_toml_to_runplan_proto(&toml_str) {
+                let canonical_plan = try_canonical_toml_to_runplan_proto(&toml_str)?;
+                if let Some(plan) = canonical_plan {
                     if let Some(crate::proto::onescluster::common::v1::run_plan::Runtime::Docker(d)) =
                         plan.runtime.as_ref()
                     {
@@ -634,4 +646,27 @@ pub async fn start_grpc_server(
         .await?;
 
     Ok(())
+}
+
+
+#[cfg(all(test, feature = "toml-support"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_manifest_without_signature_is_rejected() {
+        let toml = r#"schema_version = "1.0"
+name = "unsigned"
+version = "0.1.0"
+type = "app"
+
+[execution]
+runtime = "docker"
+entrypoint = "ghcr.io/example/hello:latest"
+port = 8080
+"#;
+
+        let result = try_canonical_toml_to_runplan_proto(toml);
+        assert!(result.is_err());
+    }
 }
