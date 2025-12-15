@@ -13,6 +13,8 @@ pub struct CachedRuntime {
     pub size_bytes: u64,
 }
 
+/// Manages local cache of runtime artifacts.
+#[derive(Debug)]
 pub struct ArtifactCache {
     base_path: PathBuf,
 }

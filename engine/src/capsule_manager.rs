@@ -6,7 +6,7 @@ use tracing::{info, warn};
 use crate::adep::AdepManifest;
 use crate::hardware::GpuDetector;
 use crate::runtime::{
-    ContainerRuntime, DevRuntime, LaunchRequest, LaunchResult, NativeRuntime, Runtime,
+    ContainerRuntime, DevRuntime, DockerCliRuntime, LaunchRequest, LaunchResult, NativeRuntime, Runtime,
     RuntimeConfig, RuntimeError,
 };
 use crate::security::audit::{AuditLogger, AuditOperation, AuditStatus};
@@ -78,6 +78,7 @@ pub struct CapsuleManager {
     container_runtime: Arc<ContainerRuntime>,
     native_runtime: Arc<NativeRuntime>,
     dev_runtime: Arc<DevRuntime>,
+    docker_cli_runtime: Arc<DockerCliRuntime>,
     
     // Artifact Manager
     artifact_manager: Option<Arc<ArtifactManager>>,
@@ -114,7 +115,10 @@ impl CapsuleManager {
             match RuntimeConfig::from_section(None) {
                 Ok(c) => c,
                 Err(e) => {
-                    warn!("Failed to detect container runtime: {}. Container workloads will fail.", e);
+                    warn!(
+                        "External OCI runtime binary not detected: {}. Falling back to Mock ContainerRuntime (NativeRuntime may still work)",
+                        e
+                    );
                     // Fallback to dummy config to allow Engine to start (e.g. for NativeRuntime usage)
                     RuntimeConfig {
                         kind: crate::runtime::RuntimeKind::Mock,
@@ -128,7 +132,12 @@ impl CapsuleManager {
             }
         };
 
-        let container_runtime = Arc::new(ContainerRuntime::new(runtime_config));
+        let container_runtime = Arc::new(ContainerRuntime::new(
+            runtime_config,
+            artifact_manager.clone(),
+            process_supervisor.clone(),
+            egress_proxy_port,
+        ));
         let native_runtime = Arc::new(NativeRuntime::new(
             artifact_manager.clone(),
             process_supervisor.clone(),
@@ -138,6 +147,7 @@ impl CapsuleManager {
             process_supervisor.clone(),
             egress_proxy_port,
         ));
+        let docker_cli_runtime = Arc::new(DockerCliRuntime::new(egress_proxy_port));
 
         // Initialize StorageManager if config provided
         let storage_manager = storage_config.map(|config| {
@@ -156,6 +166,7 @@ impl CapsuleManager {
             container_runtime,
             native_runtime,
             dev_runtime,
+            docker_cli_runtime,
             artifact_manager,
             storage_manager,
             usage_tracker: Arc::new(UsageTracker::new()),
@@ -305,8 +316,26 @@ impl CapsuleManager {
             }
         }
 
-        // 1. Allocate Port (if registry available)
-        let port = if let Some(registry) = &self.service_registry {
+        // 1. Determine Port
+        // If the caller (e.g. Coordinator) already injected PORT, honor it so the returned
+        // URL maps to a real listener on the host.
+        let desired_port: Option<u16> = manifest
+            .compute
+            .env
+            .iter()
+            .find_map(|e| {
+                let (k, v) = e.split_once('=')?;
+                if k == "PORT" {
+                    v.parse::<u16>().ok()
+                } else {
+                    None
+                }
+            });
+
+        let port = if let Some(p) = desired_port {
+            info!("Using pre-injected PORT {} for capsule {}", p, capsule_id);
+            Some(p)
+        } else if let Some(registry) = &self.service_registry {
             match registry.allocate_port() {
                 Some(p) => {
                     info!("Allocated port {} for capsule {}", p, capsule_id);
@@ -324,9 +353,37 @@ impl CapsuleManager {
         // 2. Select Runtime and Launch
         // Prepare ComputeConfig with injected env vars
         let mut compute_config = manifest.compute.clone();
-        
+
         if let Some(p) = port {
-            compute_config.env.push(format!("PORT={}", p));
+            let has_port_env = compute_config
+                .env
+                .iter()
+                .any(|e| e.starts_with("PORT="));
+            if !has_port_env {
+                compute_config.env.push(format!("PORT={}", p));
+            }
+        }
+
+        // Egress policy: if the manifest declares an allowlist, mint a token and
+        // register it with the global proxy policy registry.
+        if let Some(value) = manifest
+            .metadata
+            .get(crate::security::META_KEY_EGRESS_ALLOWLIST)
+        {
+            let allowlist = crate::security::egress_policy::parse_allowlist_csv(value);
+            if !allowlist.is_empty() {
+                let token = uuid::Uuid::new_v4().to_string();
+                crate::security::EgressPolicyRegistry::global().register(
+                    &capsule_id,
+                    token.clone(),
+                    allowlist,
+                );
+
+                let token_kv = format!("{}={}", crate::security::ENV_KEY_EGRESS_TOKEN, token);
+                if !compute_config.env.iter().any(|e| e.starts_with(crate::security::ENV_KEY_EGRESS_TOKEN)) {
+                    compute_config.env.push(token_kv);
+                }
+            }
         }
         
         // GPU UUIDs for build_oci_spec
@@ -350,17 +407,22 @@ impl CapsuleManager {
 
         // Build the spec
         let allowed_paths = vec![]; 
-        // We need a rootfs path. For now use a dummy or configured one.
-        // `ContainerRuntime` prepares bundle, but `build_oci_spec` needs `rootfs_path` to build `root` config.
-        // `ContainerRuntime` uses `bundle_root`.
-        // We should probably use a placeholder here and let `ContainerRuntime` fix it?
-        // Or `ContainerRuntime` should build the spec?
-        // `ContainerRuntime::prepare_bundle` writes `config.json`.
-        // `LaunchRequest` passes `Spec`.
-        // So we need to build `Spec` here.
-        // We need a valid rootfs path for the spec.
-        // Let's use `rootfs` from config or temp.
-        let rootfs_path = std::path::PathBuf::from("/"); // Placeholder
+        // Resolve rootfs path.
+        // - Prefer explicit rootfs hint from manifest metadata (if present)
+        // - Then CAPSULED_DEFAULT_ROOTFS env
+        // - Finally, create a minimal temp rootfs (satisfies ContainerRuntime's existence check)
+        let rootfs_path = if let Some(rootfs) = manifest.metadata.get("rootfs_path") {
+            std::path::PathBuf::from(rootfs)
+        } else if let Ok(rootfs) = std::env::var("CAPSULED_DEFAULT_ROOTFS") {
+            std::path::PathBuf::from(rootfs)
+        } else {
+            std::env::temp_dir().join("capsuled").join("rootfs")
+        };
+
+        // Ensure the rootfs directory exists for runtimes that validate spec.root.path.
+        if let Err(e) = std::fs::create_dir_all(&rootfs_path) {
+            return Err(anyhow!("Failed to prepare rootfs directory {:?}: {}", rootfs_path, e));
+        }
 
         let spec = crate::oci::spec_builder::build_oci_spec(
             &rootfs_path,
@@ -378,27 +440,30 @@ impl CapsuleManager {
         };
 
         // Determine which runtime to use
-        info!("[DEBUG] Selecting runtime: native={:?}, oci_image={:?}", manifest.compute.native, oci_image);
+        // Check FORCE_DOCKER_CLI_RUNTIME env var for running in Docker container
+        let force_docker_cli = std::env::var("FORCE_DOCKER_CLI_RUNTIME").is_ok();
+        info!("[DEBUG] Selecting runtime: native={:?}, oci_image={:?}, force_docker_cli={}", manifest.compute.native, oci_image, force_docker_cli);
         let runtime: Arc<dyn Runtime> = if manifest.compute.native.is_some() {
-            // Check if we are on macOS
-            info!("[DEBUG] Native config exists, using NativeRuntime (macOS={})", cfg!(target_os = "macos"));
-            if cfg!(target_os = "macos") {
-                self.native_runtime.clone()
-            } else {
-                // Fallback to DevRuntime (Mock) if not macOS? 
-                // Or error? Original logic fell back to Mock if not native compatible?
-                // Original logic: if native config exists AND target_os=macos -> Native.
-                // Else -> Mock.
-                self.dev_runtime.clone()
-            }
+            self.native_runtime.clone()
         } else if !oci_image.is_empty() {
-             // If OCI image is specified, use ContainerRuntime
-             info!("[DEBUG] Using ContainerRuntime for OCI image");
-             self.container_runtime.clone()
+            // Unit tests use RuntimeKind::Mock and should never shell out to Docker.
+            if self.container_runtime.config().kind == crate::runtime::RuntimeKind::Mock {
+                info!("[DEBUG] Using ContainerRuntime (Mock) for tests");
+                self.container_runtime.clone()
+            } else
+            // On macOS or when FORCE_DOCKER_CLI_RUNTIME is set, use DockerCliRuntime
+            // This is needed when Engine runs in a Docker container (Linux) but needs to
+            // spawn containers via Docker socket
+            if cfg!(target_os = "macos") || force_docker_cli {
+                info!("[DEBUG] Using DockerCliRuntime for OCI image: {} (force={})", oci_image, force_docker_cli);
+                self.docker_cli_runtime.clone()
+            } else {
+                info!("[DEBUG] Using ContainerRuntime for OCI image");
+                self.container_runtime.clone()
+            }
         } else {
-             // Fallback to DevRuntime (Mock)
-             info!("[DEBUG] No native or OCI config, falling back to DevRuntime");
-             self.dev_runtime.clone()
+            info!("[DEBUG] No native or OCI config, falling back to DevRuntime");
+            self.dev_runtime.clone()
         };
 
         let launch_result = match runtime.launch(launch_request).await {
@@ -605,6 +670,9 @@ impl CapsuleManager {
     /// Stop and remove a capsule. Returns whether VRAM scrubbing was performed successfully.
     pub async fn stop_capsule(&self, capsule_id: &str) -> Result<bool> {
         info!("Stopping capsule {}", capsule_id);
+
+        // Remove any per-capsule egress policy.
+        crate::security::EgressPolicyRegistry::global().unregister(capsule_id);
 
         let adep_json = {
             let capsules = self.capsules.read().map_err(|e| anyhow!("Lock error: {}", e))?;

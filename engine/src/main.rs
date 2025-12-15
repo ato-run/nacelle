@@ -12,6 +12,7 @@ use capsuled_engine::security::audit::AuditLogger;
 use capsuled_engine::security::EgressProxy;
 use capsuled_engine::artifact::{ArtifactManager, manager::ArtifactConfig};
 use capsuled_engine::process_supervisor::ProcessSupervisor;
+use capsuled_engine::runtime::{ContainerRuntime, RuntimeConfig, RuntimeKind};
 use capsuled_engine::storage::StorageConfig;
 
 mod headscale;
@@ -54,6 +55,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+
+    // Phase 2: backend selection (Hybrid). Default to Native/DirectRuntime.
+    let backend_mode = std::env::var("CAPSULED_BACKEND_MODE").unwrap_or_else(|_| "native".to_string());
+    let backend_mode = if backend_mode.is_empty() { "native".to_string() } else { backend_mode };
+    info!("Backend Mode: {}", backend_mode);
 
     info!("=== Capsuled Engine v{} (Phase 1.5: HTTP API Only) ===", env!("CARGO_PKG_VERSION"));
     info!("HTTP API Port: {}", args.port);
@@ -178,6 +184,50 @@ async fn main() -> anyhow::Result<()> {
     // Load StorageConfig from config file if available
     let storage_config = load_storage_config();
 
+    // Initialize ContainerRuntime (external OCI runtime) config.
+    // In Native/DirectRuntime mode we intentionally skip binary detection to avoid noisy/misleading warnings.
+    let container_runtime_config = match backend_mode.as_str() {
+        "native" | "direct" => {
+            info!(
+                backend_mode = %backend_mode,
+                "Using internal NativeRuntime; skipping external OCI runtime binary detection"
+            );
+            RuntimeConfig {
+                kind: RuntimeKind::Native,
+                binary_path: std::path::PathBuf::from("/dev/null"),
+                bundle_root: std::env::temp_dir().join("capsuled").join("bundles"),
+                state_root: std::env::temp_dir().join("capsuled").join("state"),
+                log_dir: std::env::temp_dir().join("capsuled").join("logs"),
+                hook_retry_attempts: 1,
+            }
+        }
+        _ => match RuntimeConfig::from_section(None) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(
+                    backend_mode = %backend_mode,
+                    "Failed to detect external OCI runtime: {}. Falling back to Mock runtime",
+                    e
+                );
+                RuntimeConfig {
+                    kind: RuntimeKind::Mock,
+                    binary_path: std::path::PathBuf::from("/dev/null"),
+                    bundle_root: std::env::temp_dir().join("capsuled").join("bundles"),
+                    state_root: std::env::temp_dir().join("capsuled").join("state"),
+                    log_dir: std::env::temp_dir().join("capsuled").join("logs"),
+                    hook_retry_attempts: 1,
+                }
+            }
+        },
+    };
+
+    let runtime = Arc::new(ContainerRuntime::new(
+        container_runtime_config.clone(),
+        Some(artifact_manager.clone()),
+        Some(process_supervisor.clone()),
+        Some(proxy_port),
+    ));
+
     // Initialize CapsuleManager
     let capsule_manager = Arc::new(CapsuleManager::new(
         audit_logger.clone(),
@@ -189,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
         Some(artifact_manager.clone()),
         Some(process_supervisor.clone()),
         Some(proxy_port),
-        None, // runtime_config
+        Some(container_runtime_config),
         Some(usage_reporter),
         storage_config,
     ).map_err(|e| anyhow::anyhow!("Failed to initialize CapsuleManager: {}", e))?);
@@ -228,29 +278,10 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|e| panic!("Failed to initialize WasmHost: {}", e))
     );
 
-    // Initialize ContainerRuntime
-    let runtime_config = match capsuled_engine::runtime::RuntimeConfig::from_section(None) {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("Failed to detect container runtime: {}. Container workloads will fail.", e);
-            capsuled_engine::runtime::RuntimeConfig {
-                kind: capsuled_engine::runtime::RuntimeKind::Mock,
-                binary_path: std::path::PathBuf::from("/dev/null"),
-                bundle_root: std::env::temp_dir().join("capsuled").join("bundles"),
-                state_root: std::env::temp_dir().join("capsuled").join("state"),
-                log_dir: std::env::temp_dir().join("capsuled").join("logs"),
-                hook_retry_attempts: 1,
-            }
-        }
-    };
-    let runtime = Arc::new(capsuled_engine::runtime::ContainerRuntime::new(runtime_config));
-
     // Initialize TailscaleManager
     let tailscale_manager = Arc::new(capsuled_engine::network::tailscale::TailscaleManager::start(None, None, None));
 
     let allowed_host_paths = vec![];
-    let backend_mode = "native".to_string();
-
     // Start gRPC Server (Phase 2)
     let grpc_port = 50051;
     let grpc_addr = format!("0.0.0.0:{}", grpc_port);

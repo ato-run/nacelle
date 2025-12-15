@@ -1,8 +1,8 @@
 # Capsuled Engine - Production Dockerfile
 # Multi-stage build for minimal runtime image
 #
-# Build: docker build -t capsuled-engine:latest .
-# Run:   docker run -p 4500:4500 capsuled-engine:latest
+# Build context: workspace root (onescluster/)
+# Build: docker build -f capsuled/engine/Dockerfile -t capsuled-engine:latest .
 
 # ============================================
 # Stage 1: Build Stage (Rust)
@@ -16,16 +16,12 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy workspace files
-COPY Cargo.toml Cargo.lock ./
-COPY build.rs ./
-COPY src ./src
-COPY migrations ./migrations
+# Copy entire workspace for libadep dependency
+COPY . .
 
-# Copy libadep-core dependency
-COPY ../libadep /libadep
+WORKDIR /workspace/capsuled/engine
 
 # Build release binary
 RUN cargo build --release --bin capsuled-engine
@@ -35,12 +31,23 @@ RUN cargo build --release --bin capsuled-engine
 # ============================================
 FROM debian:bookworm-slim AS runtime
 
-# Install runtime dependencies
+# Install runtime dependencies + Docker CLI (for DooD pattern)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
     curl \
+    netcat-openbsd \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Add Docker's official GPG key and repository
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
+    chmod a+r /etc/apt/keyrings/docker.asc && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-get install -y docker-ce-cli && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN groupadd -r capsuled && useradd -r -g capsuled capsuled
@@ -50,23 +57,25 @@ RUN mkdir -p /var/lib/capsuled /var/log/capsuled /tmp/capsuled/logs /tmp/capsule
     && chown -R capsuled:capsuled /var/lib/capsuled /var/log/capsuled /tmp/capsuled
 
 # Copy binary from builder
-COPY --from=builder /app/target/release/capsuled-engine /usr/local/bin/
+COPY --from=builder /workspace/capsuled/engine/target/release/capsuled-engine /usr/local/bin/
 
 # Copy migrations
-COPY --from=builder /app/migrations /var/lib/capsuled/migrations
+COPY --from=builder /workspace/capsuled/engine/migrations /var/lib/capsuled/migrations
 
 # Set environment
 ENV RUST_LOG=info
 ENV CAPSULED_DATA_DIR=/var/lib/capsuled
 ENV CAPSULED_LOG_DIR=/var/log/capsuled
 
-# Switch to non-root user
-USER capsuled
+# NOTE: Running as root for Docker socket access (DooD pattern)
+# In production, use docker group or rootless Docker
+# USER capsuled
 
 # Expose ports
+# 50051: gRPC
 # 4500: HTTP API
-# 4501: gRPC (future)
-EXPOSE 4500 4501
+# 4501: Egress Proxy
+EXPOSE 50051 4500 4501
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

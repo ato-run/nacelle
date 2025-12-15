@@ -12,6 +12,10 @@ pub mod egress_proxy;
 
 pub use egress_proxy::EgressProxy;
 
+pub mod egress_policy;
+
+pub use egress_policy::{EgressPolicyRegistry, ENV_KEY_EGRESS_TOKEN, META_KEY_EGRESS_ALLOWLIST};
+
 pub mod path;
 pub mod vram_scrubber;
 

@@ -4,6 +4,18 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{info, warn, error, debug};
 
+use crate::security::egress_policy::EgressPolicyRegistry;
+use base64::Engine as _;
+
+fn host_matches_domain(host: &str, domain: &str) -> bool {
+    let host = host.trim().trim_end_matches('.').to_lowercase();
+    let domain = domain.trim().trim_end_matches('.').to_lowercase();
+    if host == domain {
+        return true;
+    }
+    host.ends_with(&format!(".{}", domain))
+}
+
 #[derive(Clone)]
 pub struct EgressProxy {
     port: u16,
@@ -14,13 +26,7 @@ impl EgressProxy {
     pub fn new(port: u16) -> Self {
         Self {
             port,
-            whitelist: Arc::new(RwLock::new(vec![
-                "huggingface.co".to_string(),
-                "github.com".to_string(),
-                "api.openai.com".to_string(),
-                "tailscale.com".to_string(),
-                // Add more default allowed domains
-            ])),
+            whitelist: Arc::new(RwLock::new(vec![])),
         }
     }
 
@@ -66,29 +72,26 @@ async fn handle_connection(mut client_socket: TcpStream, whitelist: Arc<RwLock<V
     }
 
     let request_str = String::from_utf8_lossy(&buf[..n]);
-    
-    // Check for CONNECT (HTTPS)
-    let target_host = if request_str.starts_with("CONNECT") {
-        // Parse "CONNECT host:port HTTP/1.1"
-        request_str.split_whitespace().nth(1).map(|s| s.split(':').next().unwrap_or(s))
-    } else {
-        // Assume HTTP, look for Host header
-        request_str.lines()
-            .find(|l| l.to_lowercase().starts_with("host:"))
-            .map(|l| l.split(':').nth(1).unwrap_or("").trim())
-    };
+
+    let target_host = extract_target_host(&request_str);
+    let auth = extract_basic_proxy_auth(&request_str);
 
     if let Some(host) = target_host {
-        let allowed = {
+        let allowed_by_default = {
             let wl = whitelist.read().unwrap();
-            wl.iter().any(|domain| host.ends_with(domain))
+            wl.iter().any(|domain| host_matches_domain(&host, domain))
         };
 
-        if !allowed {
-            warn!("Blocked outbound connection to: {}", host);
-            // Send 403 Forbidden
-            let response = "HTTP/1.1 403 Forbidden\r\n\r\nAccess Denied by Gumball Egress Filter";
-            client_socket.write_all(response.as_bytes()).await?;
+        let allowed_by_policy = auth
+            .as_ref()
+            .and_then(|(u, p)| EgressPolicyRegistry::global().allowlist_for_basic_auth(u, p))
+            .map(|allowlist| allowlist.iter().any(|domain| host_matches_domain(&host, domain)))
+            .unwrap_or(false);
+
+        if !(allowed_by_default || allowed_by_policy) {
+            warn!("[Egress Proxy] Blocked connection to '{}' (not in allowlist)", host);
+            let response = build_block_response(&host);
+            client_socket.write_all(&response).await?;
             return Ok(());
         }
 
@@ -151,4 +154,154 @@ async fn handle_connection(mut client_socket: TcpStream, whitelist: Arc<RwLock<V
     }
 
     Ok(())
+}
+
+fn extract_target_host(request_str: &str) -> Option<String> {
+    fn normalize_extracted_host(authority: &str) -> Option<String> {
+        let authority = authority.trim();
+        if authority.is_empty() {
+            return None;
+        }
+
+        let host = if authority.starts_with('[') {
+            // Bracketed IPv6: "[::1]:443" -> "[::1]"
+            let end = authority.find(']')?;
+            &authority[..=end]
+        } else if let Some((host, port)) = authority.rsplit_once(':') {
+            // Strip :port only if it looks like a numeric port.
+            if !host.is_empty() && !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) {
+                host
+            } else {
+                authority
+            }
+        } else {
+            authority
+        };
+
+        let host = host.trim().to_lowercase();
+        let host = host.trim_end_matches('.');
+        if host.is_empty() {
+            None
+        } else {
+            Some(host.to_string())
+        }
+    }
+
+    // Check for CONNECT (HTTPS)
+    if request_str.starts_with("CONNECT") {
+        // Parse "CONNECT host:port HTTP/1.1"
+        let host_port = request_str.split_whitespace().nth(1)?;
+        return normalize_extracted_host(host_port);
+    }
+
+    // Assume HTTP, look for Host header
+    request_str
+        .lines()
+        .find(|l| l.to_lowercase().starts_with("host:"))
+        .and_then(|l| l.splitn(2, ':').nth(1))
+        .and_then(normalize_extracted_host)
+}
+
+fn extract_basic_proxy_auth(request_str: &str) -> Option<(String, String)> {
+    let header_value = request_str
+        .lines()
+        .find(|l| l.to_lowercase().starts_with("proxy-authorization:"))?
+        .splitn(2, ':')
+        .nth(1)?
+        .trim();
+
+    let (scheme, b64) = header_value.split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("basic") {
+        return None;
+    }
+
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .ok()?;
+    let decoded = String::from_utf8(decoded).ok()?;
+    let (user, pass) = decoded.split_once(':')?;
+    Some((user.to_string(), pass.to_string()))
+}
+
+fn build_block_response(host: &str) -> Vec<u8> {
+    let body = format!(
+        "{{\"error\":\"egress_blocked\",\"host\":\"{}\",\"reason\":\"domain not in allowlist\"}}",
+        host
+    );
+    format!(
+        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )
+    .into_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_target_host_connect() {
+        let req = "CONNECT example.com:443 HTTP/1.1\r\n\r\n";
+        assert_eq!(extract_target_host(req), Some("example.com".to_string()));
+    }
+
+    #[test]
+    fn extract_target_host_http() {
+        let req = "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        assert_eq!(extract_target_host(req), Some("example.com".to_string()));
+    }
+
+    #[test]
+    fn extract_target_host_http_strips_port_and_trailing_dot() {
+        let req = "GET http://example.com/ HTTP/1.1\r\nHost: Example.COM.:8080\r\n\r\n";
+        assert_eq!(extract_target_host(req), Some("example.com".to_string()));
+    }
+
+    #[test]
+    fn extract_target_host_connect_ipv6_bracketed() {
+        let req = "CONNECT [::1]:443 HTTP/1.1\r\n\r\n";
+        assert_eq!(extract_target_host(req), Some("[::1]".to_string()));
+    }
+
+    #[test]
+    fn extract_target_host_http_ipv6_bracketed() {
+        let req = "GET http://[::1]/ HTTP/1.1\r\nHost: [::1]:8080\r\n\r\n";
+        assert_eq!(extract_target_host(req), Some("[::1]".to_string()));
+    }
+
+    #[test]
+    fn extract_basic_proxy_auth_parses_basic() {
+        // aladdin:opensesame -> YWxhZGRpbjpvcGVuc2VzYW1l
+        let req = "CONNECT example.com:443 HTTP/1.1\r\nProxy-Authorization: Basic YWxhZGRpbjpvcGVuc2VzYW1l\r\n\r\n";
+        assert_eq!(
+            extract_basic_proxy_auth(req),
+            Some(("aladdin".to_string(), "opensesame".to_string()))
+        );
+    }
+
+    #[test]
+    fn default_whitelist_is_empty() {
+        let proxy = EgressProxy::new(8080);
+        let wl = proxy.whitelist.read().expect("whitelist lock poisoned");
+        assert!(wl.is_empty(), "default whitelist must block external hosts by default");
+    }
+
+    #[test]
+    fn block_response_includes_host_and_json() {
+        let bytes = build_block_response("example.com");
+        let s = String::from_utf8(bytes).unwrap();
+        assert!(s.starts_with("HTTP/1.1 403"));
+        assert!(s.contains("Content-Type: application/json"));
+        assert!(s.contains("example.com"));
+        assert!(s.contains("egress_blocked"));
+    }
+
+    #[test]
+    fn host_matches_domain_requires_label_boundary() {
+        assert!(host_matches_domain("github.com", "github.com"));
+        assert!(host_matches_domain("api.github.com", "github.com"));
+        assert!(!host_matches_domain("evilgithub.com", "github.com"));
+        assert!(!host_matches_domain("github.com.evil", "github.com"));
+    }
 }

@@ -1,15 +1,9 @@
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{error, info, warn};
 
 use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
-use crate::proto::onescluster::coordinator::v1::engine_service_server::{EngineService as EngineServiceTrait, EngineServiceServer};
-use crate::proto::onescluster::coordinator::v1::{
-    EnsureRuntimeRequest, EnsureRuntimeResponse, ExecuteCapsuleRequest, ExecuteCapsuleResponse,
-    HardwareInfo, TerminateCapsuleRequest, TerminationResult,
-};
 use crate::proto::onescluster::engine::v1::{
     deploy_request::Manifest as DeployManifest,
     engine_server::{Engine, EngineServer},
@@ -18,10 +12,13 @@ use crate::proto::onescluster::engine::v1::{
     ValidateRequest, ValidationResult,
 };
 use crate::runtime::ContainerRuntime;
-use crate::security::vram_scrubber::VramScrubber;
+use crate::runplan;
 use crate::wasm_host::AdepLogicHost;
 use crate::workload;
 use crate::artifact::ArtifactManager;
+use crate::proto::onescluster::common::v1 as common;
+
+use libadep_core::capsule_v1::CapsuleManifestV1;
 
 /// EngineService implements the Engine gRPC service
 use crate::network::service_registry::ServiceRegistry;
@@ -38,6 +35,7 @@ pub struct EngineService {
     _allowed_host_paths: Vec<String>,
     gpu_detector: Arc<dyn GpuDetector>,
     artifact_manager: Arc<ArtifactManager>,
+    direct_runtime: Arc<crate::runtime::direct::DirectRuntime>,
 }
 
 impl EngineService {
@@ -62,255 +60,130 @@ impl EngineService {
             _allowed_host_paths: allowed_host_paths,
             gpu_detector,
             artifact_manager,
+            // Initialize DirectRuntime hardcoded for now as per instructions (or pass it in?)
+            // Passing it in would require changing main.rs.
+            // Let's initialize it here with default path "/var/lib/capsuled"
+            direct_runtime: Arc::new(crate::runtime::direct::DirectRuntime::new(std::path::PathBuf::from("/var/lib/capsuled"))),
         }
     }
 }
 
-#[tonic::async_trait]
-impl EngineServiceTrait for EngineService {
-    async fn execute_capsule(
-        &self,
-        request: Request<ExecuteCapsuleRequest>,
-    ) -> Result<Response<ExecuteCapsuleResponse>, Status> {
-        let req = request.into_inner();
-        info!("ExecuteCapsule request: capsule_id={}", req.capsule_id);
+fn canonical_runplan_to_proto(plan: &libadep_core::runplan::RunPlan) -> common::RunPlan {
+    use std::collections::HashMap;
 
-        // Parse manifest (TOML or JSON)
-        let manifest_bytes = match req.manifest {
-            Some(crate::proto::onescluster::coordinator::v1::execute_capsule_request::Manifest::TomlContent(toml_str)) => {
-                info!("  Parsing TOML manifest");
-                let (manifest, _) = workload::manifest_loader::load_manifest_str(None, &toml_str)
-                    .map_err(|e| Status::invalid_argument(format!("Failed to parse TOML: {}", e)))?;
-                
-                serde_json::to_vec(&manifest)
-                    .map_err(|e| Status::internal(format!("Failed to serialize manifest: {}", e)))?
-            }
-            Some(crate::proto::onescluster::coordinator::v1::execute_capsule_request::Manifest::AdepJson(json_bytes)) => {
-                info!("  Using JSON manifest");
-                json_bytes
-            }
-            None => {
-                return Err(Status::invalid_argument(
-                    "manifest is required (either toml_content or adep_json)",
-                ));
-            }
-        };
-
-        // TODO: Handle runtime_name and runtime_version from request
-        // For now, we assume the CapsuleManager handles runtime selection or it's embedded in the manifest/logic
-        // But actually, CapsuleManager might need to know about the requested runtime.
-        // The current CapsuleManager.deploy_capsule signature is:
-        // pub async fn deploy_capsule(&self, capsule_id: String, manifest_bytes: Vec<u8>, oci_image: Option<String>, digest: Option<String>)
-        
-        // We don't have oci_image/digest in ExecuteCapsuleRequest directly, but they might be in the manifest.
-        // Or we should extract them.
-        
-        match self.capsule_manager
-            .deploy_capsule(
-                req.capsule_id.clone(),
-                manifest_bytes,
-                "".to_string(), // oci_image - extracted from manifest if needed
-                "".to_string(), // digest
-            )
-            .await
-        {
-            Ok(_result) => {
-                // Get actual PID from CapsuleManager
-                let pid = self.capsule_manager.get_capsule_pid(&req.capsule_id).unwrap_or(0);
-
-                Ok(Response::new(ExecuteCapsuleResponse {
-                    pid: pid as i32,
-                    actual_port: 0, // TODO: Get actual port from service registry
-                }))
-            }
-            Err(e) => {
-                error!("Execution failed: {}", e);
-                Err(Status::internal(format!("Execution failed: {}", e)))
-            }
-        }
-    }
-
-    async fn terminate_capsule(
-        &self,
-        request: Request<TerminateCapsuleRequest>,
-    ) -> Result<Response<TerminationResult>, Status> {
-        let req = request.into_inner();
-        info!("TerminateCapsule request: capsule_id={}", req.capsule_id);
-
-        match self.capsule_manager.stop_capsule(&req.capsule_id).await {
-            Ok(scrubbed) => {
-                Ok(Response::new(TerminationResult {
-                    success: true,
-                    exit_code: 0,
-                    vram_scrubbed: scrubbed,
-                }))
-            }
-            Err(e) => {
-                error!("Failed to stop capsule {}: {}", req.capsule_id, e);
-                Ok(Response::new(TerminationResult {
-                    success: false,
-                    exit_code: -1,
-                    vram_scrubbed: false,
-                }))
-            }
-        }
-    }
-
-    async fn get_hardware_info(
-        &self,
-        _request: Request<()>,
-    ) -> Result<Response<HardwareInfo>, Status> {
-        // Use gpu_detector to get info
-        let report = self.gpu_detector.detect_gpus().unwrap_or_else(|_| {
-             crate::hardware::RigHardwareReport {
-                rig_id: "unknown".to_string(),
-                gpus: vec![],
-                system_cuda_version: None,
-                system_driver_version: None,
-                is_mock: false,
-            }
-        });
-
-        // Convert to proto GpuInfo
-        let gpus = report.gpus.iter().map(|g| {
-            crate::proto::onescluster::coordinator::v1::GpuInfo {
-                index: g.index as i32,
-                name: g.device_name.clone(),
-                driver_version: "unknown".to_string(),
-                vram_total_bytes: (g.vram_gb() * 1024.0 * 1024.0 * 1024.0) as u64,
-                vram_free_bytes: 0, // TODO
-                utilization_percent: 0.0,
-                temperature_celsius: 0.0,
-                supported_runtime: 0, // Unspecified
-            }
-        }).collect();
-
-        Ok(Response::new(HardwareInfo {
-            os: 0, // Unspecified
-            os_version: "unknown".to_string(),
-            hostname: "unknown".to_string(),
-            gpus,
-            total_ram_bytes: 0, // TODO
-            cpu_cores: num_cpus::get() as i32,
-            cpu_model: "unknown".to_string(),
-        }))
-    }
-
-    async fn ensure_runtime(
-        &self,
-        request: Request<EnsureRuntimeRequest>,
-    ) -> Result<Response<EnsureRuntimeResponse>, Status> {
-        let req = request.into_inner();
-        info!("EnsureRuntime request: name={}, version={}", req.runtime_name, req.version);
-
-        match self.artifact_manager.ensure_runtime(&req.runtime_name, &req.version, None).await {
-            Ok(path) => {
-                Ok(Response::new(EnsureRuntimeResponse {
-                    already_cached: true,
-                    local_path: path.to_string_lossy().to_string(),
-                    download_bytes: 0,
-                }))
-            }
-            Err(e) => {
-                error!("Failed to ensure runtime: {}", e);
-                Ok(Response::new(EnsureRuntimeResponse {
-                    already_cached: false,
-                    local_path: "".to_string(),
-                    download_bytes: 0,
-                }))
-            }
-        }
-    }
-
-
-    async fn scrub_vram(
-        &self,
-        request: Request<crate::proto::onescluster::coordinator::v1::ScrubVramRequest>,
-    ) -> Result<Response<crate::proto::onescluster::coordinator::v1::ScrubVramResponse>, Status> {
-        let req = request.into_inner();
-
-        // Determine GPU indices: empty -> all detected GPUs
-        let mut gpu_indices: Vec<usize> = if req.gpu_indices.is_empty() {
-            match self.gpu_detector.detect_gpus() {
-                Ok(report) => report.gpus.iter().map(|g| g.index as usize).collect(),
-                Err(e) => {
-                    return Ok(Response::new(
-                        crate::proto::onescluster::coordinator::v1::ScrubVramResponse {
-                            results: vec![crate::proto::onescluster::coordinator::v1::GpuScrubResult {
-                                gpu_index: -1,
-                                success: false,
-                                bytes_scrubbed: 0,
-                                duration_ms: 0,
-                                error_message: format!("GPU detection failed: {}", e),
-                            }],
-                        },
-                    ));
-                }
-            }
-        } else {
-            req.gpu_indices
+    let runtime = match &plan.runtime {
+        libadep_core::runplan::RunPlanRuntime::Docker(docker) => {
+            let env: HashMap<String, String> = docker
+                .env
                 .iter()
-                .filter_map(|i| if *i >= 0 { Some(*i as usize) } else { None })
-                .collect()
-        };
-
-        gpu_indices.sort_unstable();
-        gpu_indices.dedup();
-
-        if gpu_indices.is_empty() {
-            return Ok(Response::new(crate::proto::onescluster::coordinator::v1::ScrubVramResponse {
-                results: vec![],
-            }));
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            common::run_plan::Runtime::Docker(common::DockerRuntime {
+                image: docker.image.clone(),
+                digest: docker.digest.clone().unwrap_or_default(),
+                command: docker.command.clone(),
+                env,
+                working_dir: docker.working_dir.clone().unwrap_or_default(),
+                user: docker.user.clone().unwrap_or_default(),
+                ports: docker
+                    .ports
+                    .iter()
+                    .map(|p| common::Port {
+                        container_port: p.container_port,
+                        host_port: p.host_port.unwrap_or(0),
+                        protocol: p.protocol.clone().unwrap_or_default(),
+                    })
+                    .collect(),
+                mounts: docker
+                    .mounts
+                    .iter()
+                    .map(|m| common::Mount {
+                        source: m.source.clone(),
+                        target: m.target.clone(),
+                        readonly: m.readonly,
+                    })
+                    .collect(),
+            })
         }
-
-        let mut handles = Vec::new();
-        for idx in gpu_indices {
-            handles.push(tokio::task::spawn_blocking(move || {
-                let start = Instant::now();
-                let res = VramScrubber::new(idx).and_then(|s| s.scrub());
-                let duration_ms = start.elapsed().as_millis() as i64;
-                (idx, res, duration_ms)
-            }));
+        libadep_core::runplan::RunPlanRuntime::Native(native) => {
+            let env: HashMap<String, String> = native
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            common::run_plan::Runtime::Native(common::NativeRuntime {
+                binary_path: native.binary_path.clone(),
+                args: native.args.clone(),
+                env,
+                working_dir: native.working_dir.clone().unwrap_or_default(),
+            })
         }
-
-        let mut results = Vec::new();
-        for handle in handles {
-            match handle.await {
-                Ok((idx, Ok(stats), duration_ms)) => {
-                    let success = stats.message.is_none() && stats.bytes_scrubbed > 0;
-                    results.push(crate::proto::onescluster::coordinator::v1::GpuScrubResult {
-                        gpu_index: idx as i32,
-                        success,
-                        bytes_scrubbed: stats.bytes_scrubbed,
-                        duration_ms,
-                        error_message: stats.message.unwrap_or_default(),
-                    });
-                }
-                Ok((idx, Err(e), duration_ms)) => {
-                    results.push(crate::proto::onescluster::coordinator::v1::GpuScrubResult {
-                        gpu_index: idx as i32,
-                        success: false,
-                        bytes_scrubbed: 0,
-                        duration_ms,
-                        error_message: e.to_string(),
-                    });
-                }
-                Err(e) => {
-                    results.push(crate::proto::onescluster::coordinator::v1::GpuScrubResult {
-                        gpu_index: -1,
-                        success: false,
-                        bytes_scrubbed: 0,
-                        duration_ms: 0,
-                        error_message: format!("Join error: {}", e),
-                    });
-                }
-            }
+        libadep_core::runplan::RunPlanRuntime::PythonUv(py) => {
+            let env: HashMap<String, String> = py
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            common::run_plan::Runtime::PythonUv(common::PythonUvRuntime {
+                entrypoint: py.entrypoint.clone(),
+                args: py.args.clone(),
+                env,
+                working_dir: py.working_dir.clone().unwrap_or_default(),
+                ports: py
+                    .ports
+                    .iter()
+                    .map(|p| common::Port {
+                        container_port: p.container_port,
+                        host_port: p.host_port.unwrap_or(0),
+                        protocol: p.protocol.clone().unwrap_or_default(),
+                    })
+                    .collect(),
+            })
         }
+    };
 
-        Ok(Response::new(crate::proto::onescluster::coordinator::v1::ScrubVramResponse {
-            results,
-        }))
+    common::RunPlan {
+        capsule_id: plan.capsule_id.clone(),
+        name: plan.name.clone(),
+        version: plan.version.clone(),
+        runtime: Some(runtime),
+        cpu_cores: plan.cpu_cores.unwrap_or(0),
+        memory_bytes: plan.memory_bytes.unwrap_or(0),
+        gpu_profile: plan.gpu_profile.clone().unwrap_or_default(),
+        egress_allowlist: plan.egress_allowlist.clone(),
     }
+}
+
+fn try_canonical_toml_to_adep_json(
+    toml_str: &str,
+    oci_image: &mut String,
+    digest: &mut String,
+) -> Result<Option<Vec<u8>>, Status> {
+    let plan = match try_canonical_toml_to_runplan_proto(toml_str) {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+
+    info!("  Parsed canonical capsule_v1 TOML; normalizing to RunPlan");
+    let converted = runplan::from_engine(&plan);
+    if oci_image.is_empty() {
+        *oci_image = converted.oci_image;
+    }
+    if digest.is_empty() {
+        *digest = converted.digest;
+    }
+
+    let bytes = serde_json::to_vec(&converted.adep)
+        .map_err(|e| Status::internal(format!("Failed to serialize RunPlan: {}", e)))?;
+
+    Ok(Some(bytes))
+}
+
+fn try_canonical_toml_to_runplan_proto(toml_str: &str) -> Option<common::RunPlan> {
+    let canonical = CapsuleManifestV1::from_toml(toml_str).ok()?;
+    canonical.validate().ok()?;
+    let canonical_plan = canonical.to_run_plan().ok()?;
+    Some(canonical_runplan_to_proto(&canonical_plan))
 }
 
 #[tonic::async_trait]
@@ -323,16 +196,88 @@ impl Engine for EngineService {
         let req = request.into_inner();
         info!("DeployCapsule request: capsule_id={}", req.capsule_id);
 
-        // Parse manifest (TOML or JSON)
-        let manifest_bytes = match req.manifest {
+        // Parse manifest (RunPlan preferred, fallback to TOML/JSON)
+        let mut oci_image = req.oci_image.clone();
+        let mut digest = req.digest.clone();
+        let mut direct_command: Option<Vec<String>> = None;
+        let mut direct_mounts: Vec<crate::runtime::direct::HostMount> = Vec::new();
+
+        let _manifest_bytes = match req.manifest {
+            Some(DeployManifest::RunPlan(plan)) => {
+                info!("  Using RunPlan manifest");
+
+                // If the caller provided an explicit command (argv) for Docker, pass it to DirectRuntime.
+                if let Some(crate::proto::onescluster::common::v1::run_plan::Runtime::Docker(d)) =
+                    plan.runtime.as_ref()
+                {
+                    if !d.command.is_empty() {
+                        direct_command = Some(d.command.clone());
+                    }
+
+                    if !d.mounts.is_empty() {
+                        direct_mounts = d
+                            .mounts
+                            .iter()
+                            .map(|m| crate::runtime::direct::HostMount {
+                                source: m.source.clone(),
+                                target: m.target.clone(),
+                                readonly: m.readonly,
+                            })
+                            .collect();
+                    }
+                }
+
+                let converted = runplan::from_engine(&plan);
+                if oci_image.is_empty() {
+                    oci_image = converted.oci_image;
+                }
+                if digest.is_empty() {
+                    digest = converted.digest;
+                }
+                serde_json::to_vec(&converted.adep)
+                    .map_err(|e| Status::internal(format!("Failed to serialize RunPlan: {}", e)))?
+            }
             Some(DeployManifest::TomlContent(toml_str)) => {
                 info!("  Parsing TOML manifest");
-                // Convert TOML to JSON for CapsuleManager
-                let (manifest, _) = workload::manifest_loader::load_manifest_str(None, &toml_str)
-                    .map_err(|e| Status::invalid_argument(format!("Failed to parse TOML: {}", e)))?;
-                
-                serde_json::to_vec(&manifest)
-                    .map_err(|e| Status::internal(format!("Failed to serialize manifest: {}", e)))?
+                // Canonical-first: capsule_v1 -> validated -> normalized RunPlan v0 -> same path as DeployManifest::RunPlan
+                if let Some(plan) = try_canonical_toml_to_runplan_proto(&toml_str) {
+                    if let Some(crate::proto::onescluster::common::v1::run_plan::Runtime::Docker(d)) =
+                        plan.runtime.as_ref()
+                    {
+                        if direct_command.is_none() && !d.command.is_empty() {
+                            direct_command = Some(d.command.clone());
+                        }
+                        if direct_mounts.is_empty() && !d.mounts.is_empty() {
+                            direct_mounts = d
+                                .mounts
+                                .iter()
+                                .map(|m| crate::runtime::direct::HostMount {
+                                    source: m.source.clone(),
+                                    target: m.target.clone(),
+                                    readonly: m.readonly,
+                                })
+                                .collect();
+                        }
+                    }
+
+                    let converted = runplan::from_engine(&plan);
+                    if oci_image.is_empty() {
+                        oci_image = converted.oci_image;
+                    }
+                    if digest.is_empty() {
+                        digest = converted.digest;
+                    }
+
+                    serde_json::to_vec(&converted.adep)
+                        .map_err(|e| Status::internal(format!("Failed to serialize RunPlan: {}", e)))?
+                } else {
+                    // Legacy fallback: Convert TOML to JSON for CapsuleManager
+                    let (manifest, _) = workload::manifest_loader::load_manifest_str(None, &toml_str)
+                        .map_err(|e| Status::invalid_argument(format!("Failed to parse TOML: {}", e)))?;
+
+                    serde_json::to_vec(&manifest)
+                        .map_err(|e| Status::internal(format!("Failed to serialize manifest: {}", e)))?
+                }
             }
             Some(DeployManifest::AdepJson(json_bytes)) => {
                 info!("  Using JSON manifest");
@@ -340,64 +285,35 @@ impl Engine for EngineService {
             }
             None => {
                 return Err(Status::invalid_argument(
-                    "manifest is required (either toml_content or adep_json)",
+                    "manifest is required (run_plan, toml_content, or adep_json)",
                 ));
             }
         };
 
+        if !digest.is_empty() {
+            info!("  Using digest hint: {}", digest);
+        }
+
         info!("  Delegating to CapsuleManager (Cloud Bursting Logic)...");
 
-        // Delegate to CapsuleManager - this will handle:
-        // 1. VRAM checking
-        // 2. Local vs Cloud decision
-        // 3. Cloud bursting if needed
-        match self.capsule_manager
-            .deploy_capsule(
-                req.capsule_id.clone(),
-                manifest_bytes,
-                req.oci_image.clone(),
-                req.digest.clone(),
-            )
-            .await
-        {
-            Ok(result) => {
-                // Result can be:
-                // - "running" (local deployment)
-                // - "cloud-job-123" or similar (cloud deployment)
-                
-                if result.starts_with("job-") || result.starts_with("cloud") || result.starts_with("sky") {
-                    // Cloud deployment
-                    info!("☁️ Cloud deployment initiated: {}", result);
-                    Ok(Response::new(DeployResponse {
-                        capsule_id: req.capsule_id,
-                        status: result.clone(),
-                        local_url: format!("cloud:{}", result),
-                    }))
-                } else {
-                    // Local deployment
-                    info!("💻 Local deployment successful");
-                    
-                    // Get local URL from ServiceRegistry
-                    let local_url = self
-                        .service_registry
-                        .get_services()
-                        .iter()
-                        .find(|s| s.name == req.capsule_id)
-                        .map(|s| format!("http://localhost:{}", s.port))
-                        .unwrap_or_else(|| format!("http://localhost", ));
+        let capsule_id = req.capsule_id.clone();
+        let capsule_manager = self.capsule_manager.clone();
+        tokio::spawn(async move {
+            match capsule_manager
+                .deploy_capsule(capsule_id.clone(), _manifest_bytes, oci_image, digest)
+                .await
+            {
+                Ok(status) => info!("Capsule {} deploy completed: {}", capsule_id, status),
+                Err(e) => error!("Capsule {} deploy failed: {}", capsule_id, e),
+            }
+        });
 
-                    Ok(Response::new(DeployResponse {
-                        capsule_id: req.capsule_id,
-                        status: result,
-                        local_url,
-                    }))
-                }
-            }
-            Err(e) => {
-                error!("Deployment failed: {}", e);
-                Err(Status::internal(format!("Deployment failed: {}", e)))
-            }
-        }
+        Ok(Response::new(DeployResponse {
+            capsule_id: req.capsule_id,
+            status: "starting".to_string(),
+            local_url: String::new(),
+        }))
+
     }
 
     /// Stop a running capsule
@@ -434,6 +350,14 @@ impl Engine for EngineService {
         // For now, return mock data
         let mut resources = get_system_resources();
         resources.backend_mode = self.backend_mode.clone();
+
+        // Expose registered local service ports (capsule_id -> host port).
+        resources.local_services = self
+            .service_registry
+            .get_services()
+            .into_iter()
+            .map(|s| (s.name, s.port as u32))
+            .collect();
 
         info!(
             "Resources: cpu_cores={}, memory_bytes={}, disk_bytes={}, backend_mode={}",
@@ -495,7 +419,7 @@ impl Engine for EngineService {
                         .get_services()
                         .iter()
                         .find(|s| s.name == c.id)
-                        .map(|s| format!("http://{}.local:{}", c.id, s.port))
+                        .map(|s| format!("http://127.0.0.1:{}", s.port))
                         .unwrap_or_default();
 
                     CapsuleInfo {
@@ -702,22 +626,12 @@ pub async fn start_grpc_server(
         gpu_detector,
         artifact_manager,
     );
-    // AgentService removed
-
     info!("Engine gRPC server listening on {}", addr);
 
     Server::builder()
-        .add_service(EngineServer::new(engine_service.clone())) // EngineService now implements both traits? No, I need to clone or split?
-        // Wait, EngineService implements both Engine (old) and EngineServiceTrait (new).
-        // I can register both services using the same struct if it implements both traits.
-        // But I need to clone it if I want to pass it to both.
-        // EngineService struct contains Arcs so it should be cheap to clone if I derive Clone.
-        // AgentService removed (legacy/redundant)
-        .add_service(EngineServiceServer::new(engine_service.clone()))
+        .add_service(EngineServer::new(engine_service.clone()))
         .serve(addr)
         .await?;
 
     Ok(())
 }
-
-// I need to add #[derive(Clone)] to EngineService

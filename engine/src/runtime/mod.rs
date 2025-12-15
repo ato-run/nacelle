@@ -6,13 +6,16 @@ use tracing::info;
 
 use crate::config::RuntimeSection;
 
+pub mod direct;
 pub mod container;
 pub mod dev;
+pub mod docker_cli;
 pub mod native;
 pub mod traits;
 
 pub use container::ContainerRuntime;
 pub use dev::DevRuntime;
+pub use docker_cli::DockerCliRuntime;
 pub use native::NativeRuntime;
 pub use traits::Runtime;
 
@@ -24,6 +27,7 @@ pub enum RuntimeKind {
     Youki,
     Runc,
     Mock,
+    Native,
 }
 
 impl RuntimeKind {
@@ -32,6 +36,7 @@ impl RuntimeKind {
             "youki" => Some(RuntimeKind::Youki),
             "runc" => Some(RuntimeKind::Runc),
             "mock" => Some(RuntimeKind::Mock),
+            "native" => Some(RuntimeKind::Native),
             _ => None,
         }
     }
@@ -41,6 +46,7 @@ impl RuntimeKind {
             RuntimeKind::Youki => &["youki"],
             RuntimeKind::Runc => &["runc"],
             RuntimeKind::Mock => &["mock_runtime"],
+            RuntimeKind::Native => &[], // Internal
         }
     }
 }

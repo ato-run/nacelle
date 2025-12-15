@@ -12,6 +12,7 @@ use crate::runtime::traits::Runtime;
 use crate::runtime::{LaunchRequest, LaunchResult, RuntimeError};
 
 /// Native runtime that executes binaries directly on the host.
+#[derive(Debug)]
 pub struct NativeRuntime {
     artifact_manager: Option<Arc<ArtifactManager>>,
     process_supervisor: Option<Arc<ProcessSupervisor>>,
@@ -78,6 +79,10 @@ impl Runtime for NativeRuntime {
 
         // Special handling for built-in runtimes (mlx, llama, vllm)
         let binary_path = match runtime_id {
+            "mlx-mock" => {
+                info!("Using mock MLX runtime (shell pass-through)");
+                PathBuf::from("/usr/bin/env")
+            }
             "mlx" => {
                 // MLX runtime uses start.sh in ~/.gumball/runtimes/mlx
                 let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -190,7 +195,14 @@ impl Runtime for NativeRuntime {
            .envs(&env_vars); // Apply env vars from Spec
 
         if let Some(proxy_port) = self.egress_proxy_port {
-            let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
+            let proxy_url = if let Some(token) = env_vars.get(crate::security::ENV_KEY_EGRESS_TOKEN) {
+                format!(
+                    "http://{}:{}@127.0.0.1:{}",
+                    request.workload_id, token, proxy_port
+                )
+            } else {
+                format!("http://127.0.0.1:{}", proxy_port)
+            };
             cmd.env("HTTP_PROXY", &proxy_url)
                .env("HTTPS_PROXY", &proxy_url)
                .env("ALL_PROXY", &proxy_url);

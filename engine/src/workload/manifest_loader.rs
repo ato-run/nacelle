@@ -174,6 +174,24 @@ impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
             (None, vec![])
         };
 
+        let mut metadata = std::collections::HashMap::new();
+
+        if let Some(entries) = c.permissions.network_allow {
+            let mut domains: Vec<String> = entries
+                .into_iter()
+                .filter_map(|v| crate::security::egress_policy::normalize_allowlist_entry(&v))
+                .collect();
+            domains.sort();
+            domains.dedup();
+
+            if !domains.is_empty() {
+                metadata.insert(
+                    crate::security::META_KEY_EGRESS_ALLOWLIST.to_string(),
+                    domains.join(","),
+                );
+            }
+        }
+
         AdepManifest {
             name: c.capsule.name,
             scheduling,
@@ -184,7 +202,46 @@ impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
                 native,
             },
             volumes: vec![],
-            metadata: std::collections::HashMap::new(),
+            metadata,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capsule_manifest_network_allow_is_forwarded_to_metadata() {
+        let capsule = libadep_core::capsule_manifest::CapsuleManifest {
+            capsule: libadep_core::capsule_manifest::CapsuleMetadata {
+                name: "c".to_string(),
+                version: "1.0.0".to_string(),
+                description: None,
+            },
+            resources: Default::default(),
+            ai: Default::default(),
+            permissions: libadep_core::capsule_manifest::Permissions {
+                network_allow: Some(vec![
+                    "https://api.example.com/v1".to_string(),
+                    "example.com".to_string(),
+                ]),
+                ..Default::default()
+            },
+            routing: Default::default(),
+            ui: None,
+            rag: None,
+            runtime: None,
+            native: None,
+        };
+
+        let adep: AdepManifest = capsule.into();
+        let v = adep
+            .metadata
+            .get(crate::security::META_KEY_EGRESS_ALLOWLIST)
+            .cloned()
+            .unwrap();
+        assert!(v.contains("example.com"));
+        assert!(v.contains("api.example.com"));
     }
 }

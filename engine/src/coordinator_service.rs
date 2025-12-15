@@ -71,10 +71,11 @@ impl AgentServiceTrait for AgentService {
              ));
         }
 
+        // Parse manifest to extract basic info for arguments
         let manifest_str = String::from_utf8(req.adep_json.clone())
             .map_err(|e| Status::invalid_argument(format!("Invalid UTF-8 in adep_json: {}", e)))?;
 
-        let (manifest, resource_hints): (AdepManifest, Option<ResourceRequirements>) =
+        let (manifest, _): (AdepManifest, Option<ResourceRequirements>) =
             match load_manifest_str(None, &manifest_str) {
                 Ok((m, r)) => (m, r),
                 Err(e) => {
@@ -85,103 +86,44 @@ impl AgentServiceTrait for AgentService {
                 }
             };
 
-        info!("  Workload: {}", manifest.name);
-        info!("  Image: {}", manifest.compute.image);
-        info!("  Requires GPU: {}", manifest.requires_gpu());
-
-        let requires_gpu = manifest.requires_gpu();
-        let rootfs_path = resolve_rootfs_path(&manifest)?;
-
-        debug!(
-            workload_id = req.workload_id,
-            rootfs = %rootfs_path.display(),
-            "Resolved rootfs for workload"
-        );
-
-        // TODO: Handle resource_assignment from request if available, currently missing in proto
-        let resource_assignment = vec![]; 
-
-        let oci_spec = build_oci_spec(
-            &rootfs_path,
-            &manifest.compute,
-            &manifest.volumes,
-            if requires_gpu {
-                Some(&resource_assignment)
-            } else {
-                None
-            },
-            &self.allowed_host_paths,
-            resource_hints.as_ref(),
-        )
-        .map_err(|e| Status::internal(format!("Failed to build OCI spec: {}", e)))?;
-
-        let manifest_json_owned = String::from_utf8(req.adep_json).unwrap_or_default();
-
-        let launch_result = match self
-            .runtime
-            .launch(LaunchRequest {
-                workload_id: &req.workload_id,
-                spec: &oci_spec,
-                manifest_json: Some(&manifest_json_owned),
-            })
-            .await
-        {
-            Ok(result) => result,
-            Err(err) => {
-                if let Err(record_err) = self
-                    .capsule_manager
-                    .record_runtime_failure(&req.workload_id, &err)
-                {
-                    warn!(
-                        workload_id = req.workload_id,
-                        error = %record_err,
-                        "Failed to record runtime failure"
-                    );
-                }
-                return Err(runtime_error_to_status(&req.workload_id, err));
-            }
-        };
-
-        let reserved_vram_bytes = manifest.required_vram_bytes();
-        if let Err(err) = self.capsule_manager.record_runtime_launch(
-            &req.workload_id,
-            &manifest,
-            &manifest_json_owned,
-            &launch_result,
-            reserved_vram_bytes,
-        ) {
-            error!(
-                workload_id = req.workload_id,
-                error = %err,
-                "Failed to persist capsule metadata"
-            );
-            return Err(Status::internal(format!(
-                "Workload '{}' launched but metadata persistence failed: {}",
-                manifest.name, err
-            )));
-        }
+        let oci_image = manifest.compute.image.clone();
+        let digest = manifest.metadata.get("digest").cloned().unwrap_or_default();
 
         info!(
-            workload_id = req.workload_id,
-            pid = launch_result.pid,
-            bundle = %launch_result.bundle_path.display(),
-            "✅ Deployment successful"
+            "🚀 Delegating deployment to CapsuleManager: id={}, image={}",
+            req.workload_id, oci_image
         );
 
-        // Construct WorkloadStatus
-        let status = crate::proto::onescluster::coordinator::v1::WorkloadStatus {
-            workload_id: req.workload_id,
-            name: manifest.name,
-            reserved_vram_bytes,
-            phase: crate::proto::onescluster::coordinator::v1::WorkloadPhase::Running as i32,
-            pid: launch_result.pid as u64,
-            observed_vram_bytes: 0, // TODO
-        };
+        match self.capsule_manager.deploy_capsule(
+            req.workload_id.clone(),
+            req.adep_json.clone(),
+            oci_image,
+            digest
+        ).await {
+            Ok(status_str) => {
+                info!("✅ Deployment successful via CapsuleManager: status={}", status_str);
+                
+                // Construct WorkloadStatus (minimal)
+                let reserved_vram = manifest.required_vram_bytes();
+                let status = crate::proto::onescluster::coordinator::v1::WorkloadStatus {
+                    workload_id: req.workload_id.clone(),
+                    name: manifest.name,
+                    reserved_vram_bytes: reserved_vram,
+                    phase: crate::proto::onescluster::coordinator::v1::WorkloadPhase::Running as i32,
+                    pid: 0, // PIDs are managed internally now
+                    observed_vram_bytes: 0,
+                };
 
-        Ok(Response::new(DeployWorkloadResponse {
-            workload_id: status.workload_id.clone(),
-            status: Some(status),
-        }))
+                Ok(Response::new(DeployWorkloadResponse {
+                    workload_id: status.workload_id.clone(),
+                    status: Some(status),
+                }))
+            },
+            Err(e) => {
+                error!("❌ Deployment failed via CapsuleManager: {}", e);
+                Err(Status::internal(format!("Deployment failed: {}", e)))
+            }
+        }
     }
 
     async fn stop_workload(

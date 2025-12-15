@@ -26,11 +26,14 @@ pub enum ArtifactError {
     RegistryError(String),
 }
 
+#[derive(Clone, Debug)]
 pub struct ArtifactConfig {
     pub registry_url: String,
     pub cache_path: PathBuf,
 }
 
+/// Manages runtime artifacts and versions.
+#[derive(Debug)]
 pub struct ArtifactManager {
     config: ArtifactConfig,
     client: Client,

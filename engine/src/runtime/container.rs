@@ -12,16 +12,34 @@ use crate::runtime::traits::Runtime;
 use crate::runtime::{
     LaunchRequest, LaunchResult, RuntimeConfig, RuntimeError,
 };
+use crate::artifact::ArtifactManager;
+use crate::process_supervisor::ProcessSupervisor;
+use std::sync::Arc;
 
 /// Container runtime wrapper that launches workloads using runc/youki.
 #[derive(Debug, Clone)]
 pub struct ContainerRuntime {
     config: RuntimeConfig,
+    native_runtime: Option<std::sync::Arc<crate::runtime::NativeRuntime>>,
 }
 
 impl ContainerRuntime {
-    pub fn new(config: RuntimeConfig) -> Self {
-        Self { config }
+    pub fn new(
+        config: RuntimeConfig,
+        artifact_manager: Option<Arc<ArtifactManager>>,
+        process_supervisor: Option<Arc<ProcessSupervisor>>,
+        egress_proxy_port: Option<u16>,
+    ) -> Self {
+        let native_runtime = if config.kind == crate::runtime::RuntimeKind::Native {
+            Some(std::sync::Arc::new(crate::runtime::NativeRuntime::new(
+                artifact_manager,
+                process_supervisor,
+                egress_proxy_port,
+            )))
+        } else {
+            None
+        };
+        Self { config, native_runtime }
     }
 
     pub fn config(&self) -> &RuntimeConfig {
@@ -287,6 +305,10 @@ impl ContainerRuntime {
 #[async_trait]
 impl Runtime for ContainerRuntime {
     async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
+        if let Some(native) = &self.native_runtime {
+             return native.launch(request).await;
+        }
+
         let bundle_path = self
             .prepare_bundle(request.workload_id, request.spec)
             .await?;
@@ -365,6 +387,9 @@ impl Runtime for ContainerRuntime {
     }
 
     async fn stop(&self, workload_id: &str) -> Result<(), RuntimeError> {
+        if let Some(native) = &self.native_runtime {
+            return native.stop(workload_id).await;
+        }
         let mut cmd = Command::new(&self.config.binary_path);
         cmd.arg("delete")
             .arg("--force")
@@ -490,7 +515,7 @@ mod tests {
             hook_retry_attempts: 1,
         };
 
-        let runtime = ContainerRuntime::new(config.clone());
+        let runtime = ContainerRuntime::new(config.clone(), None, None, None);
         assert_eq!(runtime.config().kind, RuntimeKind::Runc);
         assert_eq!(runtime.config().hook_retry_attempts, 1);
     }
@@ -510,7 +535,7 @@ mod tests {
             hook_retry_attempts: 1,
         };
 
-        let runtime = ContainerRuntime::new(config);
+        let runtime = ContainerRuntime::new(config, None, None, None);
         let spec = create_test_spec(root_path.to_str().unwrap());
 
         let result = runtime.prepare_bundle("test-workload", &spec).await;
@@ -535,7 +560,7 @@ mod tests {
             hook_retry_attempts: 1,
         };
 
-        let runtime = ContainerRuntime::new(config);
+        let runtime = ContainerRuntime::new(config, None, None, None);
         let spec = create_test_spec(nonexistent_root.to_str().unwrap());
 
         let result = runtime.prepare_bundle("test-workload", &spec).await;
@@ -555,7 +580,7 @@ mod tests {
             hook_retry_attempts: 1,
         };
 
-        let runtime = ContainerRuntime::new(config);
+        let runtime = ContainerRuntime::new(config, None, None, None);
         let path = runtime.prepare_log_path("test-workload").await.unwrap();
         assert!(path.to_string_lossy().ends_with("test-workload.log"));
         assert!(path.parent().unwrap().exists());

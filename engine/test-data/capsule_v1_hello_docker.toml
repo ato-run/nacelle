@@ -1,0 +1,9 @@
+schema_version = "1.0"
+name = "hello-docker"
+version = "0.1.0"
+type = "app"
+
+[execution]
+runtime = "docker"
+entrypoint = "ghcr.io/example/hello:latest"
+port = 8080

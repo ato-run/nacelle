@@ -93,6 +93,33 @@ pub struct ImageManifest {
     pub layers: Vec<ManifestLayer>,
 }
 
+/// Manifest List for multi-arch images
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestList {
+    pub schema_version: i32,
+    #[serde(default)]
+    pub media_type: String,
+    pub manifests: Vec<ManifestPlatform>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestPlatform {
+    pub media_type: String,
+    pub size: u64,
+    pub digest: String,
+    pub platform: Platform,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Platform {
+    pub architecture: String,
+    pub os: String,
+    #[serde(default)]
+    pub variant: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManifestConfig {
@@ -192,12 +219,56 @@ impl RegistryClient {
         None
     }
     
-    /// Get image manifest
+    /// Get image manifest, handling manifest lists for multi-arch images
     pub async fn get_manifest(&self, image_ref: &ImageRef) -> RegistryResult<ImageManifest> {
+        // First, try to get the manifest (might be a list or direct manifest)
+        let body = self.fetch_manifest_raw(image_ref, &image_ref.tag).await?;
+        
+        // Try to parse as manifest list first
+        if let Ok(list) = serde_json::from_str::<ManifestList>(&body) {
+            // Check if it has manifests field (indicates manifest list)
+            if !list.manifests.is_empty() {
+                info!("Detected manifest list with {} platforms", list.manifests.len());
+                
+                // Prefer linux/arm64 platform for ARM-first edge targets
+                let target_arch = "arm64";
+                let target_os = "linux";
+                
+                let platform_manifest = list.manifests.iter()
+                    .find(|m| m.platform.architecture == target_arch && m.platform.os == target_os)
+                    .or_else(|| list.manifests.first()) // Fallback to first
+                    .ok_or_else(|| RegistryError::Parse("No suitable platform found".to_string()))?;
+                
+                info!("Selected platform: {}/{}", platform_manifest.platform.os, platform_manifest.platform.architecture);
+                
+                // Fetch the actual manifest by digest
+                let manifest_body = self.fetch_manifest_raw(image_ref, &platform_manifest.digest).await?;
+                let manifest: ImageManifest = serde_json::from_str(&manifest_body)
+                    .map_err(|e| RegistryError::Parse(format!("Failed to parse platform manifest: {}", e)))?;
+                
+                info!("Retrieved manifest with {} layers", manifest.layers.len());
+                return Ok(manifest);
+            }
+        }
+        
+        // Parse as direct image manifest
+        let manifest: ImageManifest = serde_json::from_str(&body)
+            .map_err(|e| RegistryError::Parse(e.to_string()))?;
+        
+        info!("Retrieved manifest with {} layers", manifest.layers.len());
+        Ok(manifest)
+    }
+    
+    /// Fetch raw manifest body by tag or digest
+    async fn fetch_manifest_raw(&self, image_ref: &ImageRef, reference: &str) -> RegistryResult<String> {
+        let url = format!("https://{}/v2/{}/manifests/{}", image_ref.registry, image_ref.repository, reference);
+        
         let mut request = self.client
-            .get(&image_ref.manifest_url())
+            .get(&url)
             .header("Accept", "application/vnd.oci.image.manifest.v1+json")
-            .header("Accept", "application/vnd.docker.distribution.manifest.v2+json");
+            .header("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+            .header("Accept", "application/vnd.oci.image.index.v1+json")
+            .header("Accept", "application/vnd.docker.distribution.manifest.list.v2+json");
         
         if let Some(token) = &self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
@@ -206,18 +277,17 @@ impl RegistryClient {
         let response = request.send().await?;
         
         if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Err(RegistryError::ManifestNotFound(format!("{}:{}", image_ref.repository, image_ref.tag)));
+            return Err(RegistryError::ManifestNotFound(format!("{}:{}", image_ref.repository, reference)));
         }
         
         if !response.status().is_success() {
             return Err(RegistryError::AuthFailed(format!("HTTP {}", response.status())));
         }
         
-        let manifest: ImageManifest = response.json().await
+        let body = response.text().await
             .map_err(|e| RegistryError::Parse(e.to_string()))?;
         
-        info!("Retrieved manifest with {} layers", manifest.layers.len());
-        Ok(manifest)
+        Ok(body)
     }
     
     /// Download a blob (layer) to a file

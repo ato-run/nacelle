@@ -107,7 +107,28 @@ impl Runtime for DevRuntime {
             .stderr(stderr);
 
         if let Some(proxy_port) = self.egress_proxy_port {
-            let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
+            let mut token: Option<String> = None;
+            if let Some(process) = request.spec.process() {
+                if let Some(env) = process.env() {
+                    for e in env {
+                        if let Some((k, v)) = e.split_once('=') {
+                            if k == crate::security::ENV_KEY_EGRESS_TOKEN {
+                                token = Some(v.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let proxy_url = if let Some(token) = token {
+                format!(
+                    "http://{}:{}@127.0.0.1:{}",
+                    request.workload_id, token, proxy_port
+                )
+            } else {
+                format!("http://127.0.0.1:{}", proxy_port)
+            };
             cmd.env("HTTP_PROXY", &proxy_url)
                .env("HTTPS_PROXY", &proxy_url)
                .env("ALL_PROXY", &proxy_url);

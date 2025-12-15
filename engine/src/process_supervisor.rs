@@ -3,6 +3,7 @@ use std::process::Child;
 use tracing::info;
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub struct ProcessSupervisor {
     children: Arc<Mutex<Vec<Child>>>,
 }

@@ -1,9 +1,18 @@
+#[cfg(not(feature = "phase2"))]
+fn main() {
+    eprintln!("This example requires Cargo feature `phase2`.");
+}
+
+#[cfg(feature = "phase2")]
 use capsuled_engine::proto::onescluster::coordinator::v1::engine_service_client::EngineServiceClient;
+#[cfg(feature = "phase2")]
 use capsuled_engine::proto::onescluster::coordinator::v1::{
     ExecuteCapsuleRequest, TerminateCapsuleRequest,
 };
+#[cfg(feature = "phase2")]
 use colored::*;
 
+#[cfg(feature = "phase2")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "http://127.0.0.1:50051";

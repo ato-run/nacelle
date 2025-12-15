@@ -64,8 +64,8 @@ prometheus = "0.13"
 
 # Storage and container management (optional, for future implementation)
 # libadep-core = { path = "../../libadep/core" }
-libadep-core = { path = "../../libadep/core", features = ["toml-support"] }
-tokio-stream = { version = "0.1.17", features = ["sync"] }
+libadep-core = { path = "../../libadep/core", features = ["toml-support", "capsuled-proto"] }
+tokio-stream = { version = "0.1.17", features = ["sync", "net"] }
 hcl-rs = "0.17"
 async-stream = "0.3.6"
 futures = "0.3.31"
@@ -86,20 +86,29 @@ rust_decimal_macros = "1.39.0"
 # lvm-sys2 = "0.2"
 # libcryptsetup-rs = "0.9"
 
+onescluster-capsuled-proto = { path = "../proto/rust" }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 nvml-wrapper = "0.9"
 cudarc = { version = "0.17", features = ["driver", "cuda-version-from-build-system"], optional = true }
+# Container Runtime (Youki/Libcontainer)
+libcontainer = { version = "0.4", default-features = false, features = ["systemd", "v2"] }
+cgroups-rs = "0.3.3"
+nix = "0.27"
+libc = "0.2"
 
 [features]
 default = ["toml-support"]
 toml-support = ["libadep-core/toml-support"]
 cuda = ["dep:cudarc"]
 real-gpu = []
+phase2 = []
 
 [dev-dependencies]
 tempfile = "3.8"
 colored = "2.1"
 sysinfo = "0.30"
+tower = { version = "0.4", features = ["util"] }
 
 [build-dependencies]
 tonic-build = "0.10"
