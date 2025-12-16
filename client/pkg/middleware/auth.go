@@ -29,9 +29,13 @@ type User struct {
 	Email string
 }
 
+type contextKey string
+
+const userContextKey contextKey = "user"
+
 // GetUser retrieves the user from the context
 func GetUser(ctx context.Context) (*User, bool) {
-	u, ok := ctx.Value("user").(*User)
+	u, ok := ctx.Value(userContextKey).(*User)
 	return u, ok
 }
 
@@ -51,7 +55,7 @@ func (i *AuthInterceptor) Unary() grpc.UnaryServerInterceptor {
 		}
 
 		// Add user to context
-		newCtx := context.WithValue(ctx, "user", user)
+		newCtx := context.WithValue(ctx, userContextKey, user)
 		return handler(newCtx, req)
 	}
 }

@@ -4,6 +4,7 @@ package capsule
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,13 +119,17 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	// Record start in store
 	if err := m.store.RecordStart(ctx, name, runningCapsule.Process.Pid); err != nil {
 		// Kill the process if we can't record it
-		runningCapsule.Process.Kill()
+		if kErr := runningCapsule.Process.Kill(); kErr != nil {
+			log.Printf("Failed to kill process after record failure: %v", kErr)
+		}
 		return fmt.Errorf("failed to record start: %w", err)
 	}
 
 	// Update store status
 	if err := m.store.UpdateStatus(ctx, name, store.StatusRunning); err != nil {
-		runningCapsule.Process.Kill()
+		if kErr := runningCapsule.Process.Kill(); kErr != nil {
+			log.Printf("Failed to kill process after status update failure: %v", kErr)
+		}
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
@@ -145,7 +150,9 @@ func (m *Manager) Stop(ctx context.Context, name string) error {
 	// Send interrupt signal
 	if err := running.Cmd.Process.Signal(os.Interrupt); err != nil {
 		// If interrupt fails, try kill
-		running.Cmd.Process.Kill()
+		if kErr := running.Cmd.Process.Kill(); kErr != nil {
+			log.Printf("Failed to kill process: %v", kErr)
+		}
 	}
 
 	// Wait for process to exit (with timeout)
@@ -159,7 +166,9 @@ func (m *Manager) Stop(ctx context.Context, name string) error {
 	// Process exited
 	case <-time.After(10 * time.Second):
 		// Force kill
-		running.Cmd.Process.Kill()
+		if kErr := running.Cmd.Process.Kill(); kErr != nil {
+			log.Printf("Failed to force kill process: %v", kErr)
+		}
 	}
 
 	// Record stop
@@ -385,7 +394,9 @@ func (m *Manager) Close() error {
 	m.mu.Unlock()
 
 	for _, name := range names {
-		m.Stop(ctx, name)
+		if err := m.Stop(ctx, name); err != nil {
+			log.Printf("Failed to stop capsule %s during shutdown: %v", name, err)
+		}
 	}
 	return nil
 }

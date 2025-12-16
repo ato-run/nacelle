@@ -59,7 +59,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 var (
 	serverPort = flag.Int("port", 50050, "The server port")
-	engineAddr = flag.String("engine", "localhost:50051", "Engine gRPC address")
 )
 
 func main() {

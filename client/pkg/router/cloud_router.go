@@ -29,7 +29,6 @@ type EndpointSelector interface {
 // CloudRouter extends Router with cloud execution capabilities.
 type CloudRouter struct {
 	*Router
-	cloudClient cloud.Client
 	endpoints   *EndpointPool
 }
 

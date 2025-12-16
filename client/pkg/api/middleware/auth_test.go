@@ -86,7 +86,9 @@ func TestAuthMiddleware_Authenticate(t *testing.T) {
 			// Create test handler
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				if _, err := w.Write([]byte("OK")); err != nil {
+					t.Logf("Failed to write response: %v", err)
+				}
 			})
 
 			// Wrap handler with auth middleware
@@ -179,7 +181,9 @@ func TestAuthMiddleware_OptionalAuthenticate(t *testing.T) {
 			// Create test handler
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				if _, err := w.Write([]byte("OK")); err != nil {
+					t.Logf("Failed to write response: %v", err)
+				}
 			})
 
 			// Wrap handler with optional auth middleware

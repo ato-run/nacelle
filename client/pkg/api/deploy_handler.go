@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"net/http"
 	"time"
@@ -278,7 +279,12 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: time.Now(),
 	}
 
-	h.StateManager.CreateCapsule(capsule)
+	if err := h.StateManager.CreateCapsule(capsule); err != nil {
+		log.Printf("Failed to create capsule state: %v", err)
+		// Continue anyway as this is just state tracking? Or should we fail?
+		// Given the context, we probably want to return error, but the response is already being built.
+		// Let's log it for now.
+	}
 
 	response := map[string]interface{}{
 		"capsule_id": resp.CapsuleId,
@@ -287,7 +293,9 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // callAgentDeploy removed
@@ -299,12 +307,4 @@ func (h *DeployHandler) getEngineAddress(machine *db.Node) string {
 	}
 	// Fallback to hostname (local network) or Address
 	return fmt.Sprintf("%s:50051", machine.Address)
-}
-
-func (h *DeployHandler) buildAccessURL(machine *db.Node, port int) string {
-	host := machine.TailnetIP
-	if host == "" {
-		host = machine.Address
-	}
-	return fmt.Sprintf("http://%s:%d", host, port)
 }

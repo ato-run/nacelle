@@ -112,7 +112,8 @@ func TestStreamLogsHandler_WebSocketUpgrade(t *testing.T) {
 	defer conn.Close()
 
 	// Set read deadline to avoid hanging
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	err = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	require.NoError(t, err)
 
 	// Read at least one message (historical logs)
 	_, message, err := conn.ReadMessage()

@@ -143,7 +143,9 @@ func (s *CoordinatorService) DeployCapsule(ctx context.Context, req *coordinator
 	if err != nil {
 		// Rollback Caddy
 		if s.routeManager != nil {
-			s.routeManager.RemoveRoute(capsuleID)
+			if rmErr := s.routeManager.RemoveRoute(capsuleID); rmErr != nil {
+				log.Printf("Failed to rollback route for %s: %v", capsuleID, rmErr)
+			}
 		}
 		return nil, fmt.Errorf("engine deployment failed: %w", err)
 	}

@@ -105,7 +105,11 @@ func TestNewManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Logf("Failed to shutdown manager: %v", err)
+		}
+	}()
 
 	if mgr.nodeID != cfg.NodeID {
 		t.Errorf("Expected nodeID %s, got %s", cfg.NodeID, mgr.nodeID)
@@ -138,7 +142,11 @@ func TestGetAliveNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Logf("Failed to shutdown manager: %v", err)
+		}
+	}()
 
 	aliveNodes := mgr.GetAliveNodes()
 

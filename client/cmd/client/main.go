@@ -165,7 +165,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to start gossip manager: %v", err)
 	}
-	defer gossipMgr.Shutdown()
+	defer func() {
+		if err := gossipMgr.Shutdown(); err != nil {
+			log.Printf("Failed to shutdown gossip manager: %v", err)
+		}
+	}()
 
 	log.Printf("Gossip protocol started, cluster has %d members", gossipMgr.GetMemberCount())
 

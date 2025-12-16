@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/onescluster/coordinator/pkg/db"
@@ -49,5 +50,7 @@ func (h *RuntimeHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(runtimes)
+	if err := json.NewEncoder(w).Encode(runtimes); err != nil {
+		log.Printf("Failed to encode runtimes: %v", err)
+	}
 }

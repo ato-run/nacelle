@@ -31,7 +31,6 @@ type Manager struct {
 	list           *memberlist.Memberlist
 	stateMgr       NodeStateStore
 	elector        MasterElector
-	heartbeatTimer *time.Timer
 	nodeTimeout    time.Duration
 	mu             sync.RWMutex
 	ctx            context.Context
