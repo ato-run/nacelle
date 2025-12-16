@@ -1,5 +1,10 @@
 name: CI
 
+# NOTE: This workflow is the "source of truth" for what we consider green in CI.
+# Prefer adding comments over changing behavior, because all jobs here are known-good.
+# If you must change versions (Rust/Go/actions), do it intentionally and update any
+# dependent Dockerfiles (they pin toolchain versions too).
+
 on:
   push:
     branches:
@@ -31,6 +36,9 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # protoc is required by crates/proto build steps.
+      # Keep this in sync with local dev docs; removing it can create confusing CI-only failures.
+
       - name: Install protoc
         run: |
           sudo apt-get update
@@ -44,6 +52,9 @@ jobs:
       - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
+          # `target` is cached for speed.
+          # NOTE: even though we `working-directory: engine`, the workspace target dir
+          # is typically at repo root (`target/`), so caching `target` here is correct.
           path: |
             ~/.cargo/registry
             ~/.cargo/git
@@ -68,6 +79,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: capsuled-engine-linux-x86_64
+          # Path is repo-root `target/...` (see note above about workspace target dir).
           path: target/release/capsuled-engine
           retention-days: 7
 
@@ -97,6 +109,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
+          # Pinned for reproducibility; bumping Go can change module resolution and CGO output.
           go-version: "1.24"
           cache-dependency-path: client/go.sum
 
@@ -112,6 +125,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
+          # Keep output names stable: release packaging expects these exact artifact names.
           go build -o capsuled-client-${{ matrix.name }} ./cmd/client
 
       - name: Upload client binary
@@ -157,6 +171,8 @@ jobs:
       - name: Generate coverage report
         working-directory: client
         run: |
+          # Coverage is for ./pkg/... only (fast + stable).
+          # If you expand the scope, expect slower CI and more frequent flakes.
           go test -coverprofile=coverage.out -covermode=atomic ./pkg/...
           echo "## Go Test Coverage" >> $GITHUB_STEP_SUMMARY
           go tool cover -func=coverage.out | grep total: >> $GITHUB_STEP_SUMMARY
@@ -198,6 +214,8 @@ jobs:
       - name: Install buf
         id: install-buf
         run: |
+          # Buf is best-effort in this job (non-blocking).
+          # Keep the version explicit to avoid supply-chain surprises.
           BUF_VERSION=1.28.1
           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
           chmod +x /usr/local/bin/buf
@@ -210,6 +228,7 @@ jobs:
       - name: Build Engine (release)
         working-directory: engine
         run: |
+          # Copy into ../bin so later steps (and local scripts) can find it consistently.
           cargo build --release
           mkdir -p ../bin
           cp ../target/release/capsuled-engine ../bin/
@@ -253,6 +272,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          # Artifact paths must match names from build jobs.
           files: |
             artifacts/capsuled-engine-linux-x86_64/capsuled-engine
             artifacts/capsuled-client-linux-x86_64/capsuled-client-linux-x86_64

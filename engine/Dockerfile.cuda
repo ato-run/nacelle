@@ -1,7 +1,10 @@
 # Capsuled Engine - CUDA-enabled Dockerfile
 # For GPU inference on Linux with NVIDIA GPUs
 #
-# Build: docker build -f Dockerfile.cuda -t capsuled-engine:cuda .
+# NOTE: This file is not built by the default CI workflow.
+# It is intended for GPU environments and may require a wider build context.
+# If you need `../libadep`, build from repo root instead:
+#   docker build -f engine/Dockerfile.cuda -t capsuled-engine:cuda .
 # Run:   docker run --gpus all -p 4500:4500 -p 8000:8000 capsuled-engine:cuda
 
 # ============================================
@@ -32,6 +35,9 @@ COPY migrations ./migrations
 
 # Copy libadep-core dependency
 COPY ../libadep /libadep
+
+# NOTE: Docker cannot `COPY` from outside the build context.
+# If this step fails, it means the build context is too narrow (common when running from engine/).
 
 # Build release binary with CUDA support
 RUN cargo build --release --bin capsuled-engine

@@ -3,6 +3,10 @@
 # Uses Debian Bookworm (glibc) for CGO compatibility
 # --------------------------------------------------------
 
+# NOTE: This Dockerfile is built by GitHub Actions (build-push workflow) with build context at repo root.
+# Do NOT change COPY paths (e.g. `COPY client/...`) unless you also change the build context accordingly.
+# This image is published as: ghcr.io/<owner>/gumball-coordinator:<tag>
+
 # 1. Builder Stage (Debian Bookworm with Go 1.24)
 FROM golang:1.24-bookworm AS builder
 
@@ -28,6 +32,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Copy source and build
 # wasmer-go v1.0.4 bundles its own libwasmer, no external install needed
 # Extract the bundled Wasmer shared library BEFORE build for linking
+# IMPORTANT: If you update wasmer-go, verify the packaged lib paths below.
+# A seemingly harmless dependency bump can break runtime linking if libwasmer moves.
 RUN set -eux; \
     WASMER_DIR="$(go list -f '{{.Dir}}' github.com/wasmerio/wasmer-go/wasmer)"; \
     GOARCH="$(go env GOARCH)"; \
@@ -51,6 +57,8 @@ FROM debian:bookworm-slim AS runtime
 
 # Install minimal runtime dependencies
 # Install minimal runtime dependencies + Caddy
+# NOTE: We install official Caddy packages for predictable behavior.
+# Avoid swapping to Alpine here unless you also validate glibc + libwasmer behavior.
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
@@ -87,6 +95,10 @@ COPY --from=builder /usr/lib/libwasmer.so /usr/local/lib/libwasmer.so
 ENV LD_LIBRARY_PATH=/usr/local/lib
 ENV XDG_DATA_HOME=/app/data
 ENV XDG_CONFIG_HOME=/etc/caddy
+
+# NOTE: If you change these env vars, also update:
+# - client/entrypoint.sh (expects writable XDG paths)
+# - docker-compose*.yml volume mounts (persist /app/data)
 
 # Expose gRPC (50050), HTTP (8081), and Caddy (80/443/2019)
 EXPOSE 50050 8081 80 443 2019

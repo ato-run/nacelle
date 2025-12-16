@@ -1,6 +1,10 @@
 # Gumball Edge Router - Production Dockerfile
 # Builds a minimal image for the store-mode edge router.
 
+# NOTE: Built in CI with build context at repo root.
+# Keep `COPY client/...` as-is unless you also adjust the build context.
+# Published as: ghcr.io/<owner>/gumball-edge-router:<tag>
+
 FROM golang:1.24-bookworm AS builder
 WORKDIR /app
 

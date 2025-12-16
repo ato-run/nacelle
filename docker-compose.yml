@@ -5,6 +5,11 @@
 # Run from: capsuled/ directory
 # Note: Mac Docker Desktop compatibility - no network_mode:host
 
+# NOTE: Service names + ports here are assumed by scripts and docs.
+# Avoid reformat-only edits and avoid changing ports/paths without updating:
+# - client/Caddyfile (proxy routes)
+# - .github/workflows/build-push.yml image names
+
 version: "3.8"
 
 services:

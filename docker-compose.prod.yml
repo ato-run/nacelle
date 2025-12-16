@@ -4,6 +4,9 @@
 # For end users who want to run Gumball without building from source.
 # All images are pre-built and pulled from GitHub Container Registry.
 
+# NOTE: Image names must match what CI publishes in .github/workflows/build-push.yml.
+# If you rename images/tags there, update this file at the same time.
+
 version: "3.8"
 
 services:

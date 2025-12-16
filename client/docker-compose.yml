@@ -4,6 +4,10 @@
 # All three components: Caddy + Coordinator + Engine in Docker
 # Note: Mac Docker Desktop compatibility - no network_mode:host
 
+# NOTE: Keep service names/ports stable unless you also update:
+# - Caddyfile routes (client/Caddyfile)
+# - .github/workflows/build-push.yml image build assumptions
+
 version: "3.8"
 
 services:

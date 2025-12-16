@@ -4,6 +4,10 @@
 # Build context: capsuled/ root
 # Build: docker build -f engine/Dockerfile -t capsuled-engine:latest .
 
+# NOTE: This Dockerfile is built by CI as ghcr.io/<owner>/gumball-engine:<tag>.
+# The build context is the repo root (.) so `COPY . .` includes workspace crates.
+# Avoid "optimizing" COPY patterns unless you re-validate workspace builds and migrations.
+
 # ============================================
 # Stage 1: Build Stage (Rust)
 # ============================================
@@ -70,6 +74,10 @@ ENV CAPSULED_LOG_DIR=/var/log/capsuled
 # NOTE: Running as root for Docker socket access (DooD pattern)
 # In production, use docker group or rootless Docker
 # USER capsuled
+
+# IMPORTANT: If you switch to non-root, you must also adjust runtime deployment:
+# - docker socket permissions (/var/run/docker.sock)
+# - container runtime strategy (DooD vs rootless)
 
 # Expose ports
 # 50051: gRPC

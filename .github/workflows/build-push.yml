@@ -1,5 +1,17 @@
 name: Build & Push Images
 
+# NOTE: This workflow is a "source of truth" for how images are built and tagged.
+# Add comments only unless you have a concrete reason to change behavior.
+#
+# Images pushed to GHCR (see tags in "Compute image metadata"):
+# - gumball-coordinator  (built from ./client/Dockerfile)
+# - gumball-edge-router  (built from ./client/Dockerfile.edge-router)
+# - gumball-engine       (built from ./engine/Dockerfile)
+#
+# IMPORTANT: The build context is intentionally the repository root (context: .).
+# Do NOT change it to ./client or ./engine casually: several Dockerfiles use
+# `COPY client/...` or workspace-relative paths that will break with a narrower context.
+
 on:
   push:
     branches:
@@ -9,6 +21,10 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: onescluster # Override via repository or env if needed
+
+# Concurrency prevents multiple pushes to the same tag racing.
+# `cancel-in-progress: false` is deliberate: canceling mid-push can leave caches
+# in a confusing state and may produce partially-updated tags.
 
 concurrency:
   group: build-push-${{ github.ref }}
@@ -27,6 +43,9 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      # Buildx is required for GH Actions cache exporter/importer and multi-platform builds.
+      # Even if currently building linux/amd64 only, keep this to preserve caching behavior.
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -40,6 +59,9 @@ jobs:
       - name: Compute image metadata
         id: meta
         run: |
+          # The tag format is consumed by docker/build-push-action.
+          # Keep `SHORT_SHA` at 7 chars for human readability and stable tag length.
+          # Tags are comma-separated (NOT space-separated).
           OWNER="${IMAGE_OWNER:-${GITHUB_REPOSITORY_OWNER}}"
           SHORT_SHA="${GITHUB_SHA::7}"
           echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
@@ -53,6 +75,9 @@ jobs:
           context: .
           file: ./client/Dockerfile
           push: true
+
+          # The project currently publishes linux/amd64 only.
+          # If you add arm64, validate wasmer-go bundled libs and CGO toolchain behavior.
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.coordinator_tags }}
           cache-from: type=gha,scope=coordinator
