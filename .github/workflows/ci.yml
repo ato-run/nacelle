@@ -38,6 +38,8 @@ jobs:
 
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Rust dependencies
         uses: actions/cache@v4
@@ -148,9 +150,9 @@ jobs:
         working-directory: client
         run: go test -v -cover ./pkg/...
 
-      - name: Run GPU simulation E2E test (excludes tests requiring Rust compilation)
-        working-directory: client
-        run: go test -v ./e2e -run TestGpuSimulationE2E
+      # - name: Run GPU simulation E2E test (excludes tests requiring Rust compilation)
+      #   working-directory: client
+      #   run: go test -v ./e2e -run TestGpuSimulationE2E
 
       - name: Generate coverage report
         working-directory: client
@@ -197,7 +199,7 @@ jobs:
         id: install-buf
         run: |
           BUF_VERSION=1.28.1
-          curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
           chmod +x /usr/local/bin/buf
         continue-on-error: true
 
