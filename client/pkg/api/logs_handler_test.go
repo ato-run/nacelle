@@ -59,7 +59,7 @@ func TestExtractCapsuleIDFromPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractCapsuleIDFromPath(tt.path)
+			result, _ := extractCapsuleIDFromPath(tt.path)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

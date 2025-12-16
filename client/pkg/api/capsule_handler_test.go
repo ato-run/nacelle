@@ -14,7 +14,7 @@ import (
 
 func setupTestHandler(t *testing.T) (*CapsuleHandler, func()) {
 	sm := db.NewStateManager(nil)
-	h := NewCapsuleHandler(sm, nil)
+	h := NewCapsuleHandler(sm, nil, nil)
 
 	cleanup := func() {}
 	return h, cleanup
@@ -38,7 +38,7 @@ func TestCapsuleHandler_HandleGetCapsule(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 
 	var response db.Capsule
-	err = json.NewDecoder(rec.Body).Decode(&response)
+	err := json.NewDecoder(rec.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, capsule.ID, response.ID)
 	assert.Equal(t, capsule.Name, response.Name)
