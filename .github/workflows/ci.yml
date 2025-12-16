@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: '1.23'
-  RUST_VERSION: '1.75'
-  NODE_VERSION: '20'
+  GO_VERSION: "1.23"
+  RUST_VERSION: "1.75"
+  NODE_VERSION: "20"
 
 jobs:
   lint-go:
@@ -26,7 +26,6 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: latest
           version: latest
           working-directory: client
 
@@ -145,7 +144,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coordinator-${{ matrix.os }}
-          name: coordinator-${{ matrix.os }}
           path: client/coordinator
 
       - name: Upload Engine
@@ -163,10 +161,10 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
 
       - name: Set up Go
         uses: actions/setup-go@v5

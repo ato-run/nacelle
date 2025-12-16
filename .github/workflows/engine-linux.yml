@@ -4,13 +4,13 @@ on:
     push:
         branches: [main, develop]
         paths:
-            - "capsuled/engine/**"
+            - "engine/**"
             - "libadep/**"
             - ".github/workflows/engine-linux.yml"
     pull_request:
         branches: [main]
         paths:
-            - "capsuled/engine/**"
+            - "engine/**"
             - "libadep/**"
 
 env:
@@ -46,32 +46,32 @@ jobs:
                   path: |
                       ~/.cargo/registry
                       ~/.cargo/git
-                      capsuled/engine/target
-                  key: ${{ runner.os }}-cargo-engine-${{ hashFiles('capsuled/engine/Cargo.lock') }}
+                      engine/target
+                  key: ${{ runner.os }}-cargo-engine-${{ hashFiles('engine/Cargo.lock') }}
                   restore-keys: |
                       ${{ runner.os }}-cargo-engine-
 
             - name: Check formatting
               run: cargo fmt --check
-              working-directory: capsuled/engine
+              working-directory: engine
 
             - name: Clippy
               run: cargo clippy --all-targets --all-features -- -D warnings
-              working-directory: capsuled/engine
+              working-directory: engine
 
             - name: Build release
               run: cargo build --release --bin capsuled-engine
-              working-directory: capsuled/engine
+              working-directory: engine
 
             - name: Run tests
               run: cargo test --release
-              working-directory: capsuled/engine
+              working-directory: engine
 
             - name: Upload binary
               uses: actions/upload-artifact@v4
               with:
                   name: capsuled-engine-linux-x86_64
-                  path: capsuled/engine/target/release/capsuled-engine
+                  path: engine/target/release/capsuled-engine
                   retention-days: 7
 
     # ============================================
@@ -91,8 +91,8 @@ jobs:
             - name: Build Docker image (CPU)
               uses: docker/build-push-action@v5
               with:
-                  context: ./capsuled/engine
-                  file: ./capsuled/engine/Dockerfile
+                  context: ./engine
+                  file: ./engine/Dockerfile
                   push: false
                   tags: capsuled-engine:test
                   cache-from: type=gha
@@ -145,8 +145,8 @@ jobs:
             - name: Build and push
               uses: docker/build-push-action@v5
               with:
-                  context: ./capsuled/engine
-                  file: ./capsuled/engine/Dockerfile
+                  context: ./engine
+                  file: ./engine/Dockerfile
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
@@ -171,7 +171,7 @@ jobs:
             - name: Start services
               run: |
                   docker compose -f docker-compose.cloud.yml up -d engine
-              working-directory: capsuled/engine
+              working-directory: engine
 
             - name: Wait for health
               run: |
@@ -186,7 +186,7 @@ jobs:
                   echo "Engine failed to start"
                   docker compose -f docker-compose.cloud.yml logs engine
                   exit 1
-              working-directory: capsuled/engine
+              working-directory: engine
 
             - name: Run API tests
               run: |
@@ -200,4 +200,4 @@ jobs:
               if: always()
               run: |
                   docker compose -f docker-compose.cloud.yml down -v
-              working-directory: capsuled/engine
+              working-directory: engine
