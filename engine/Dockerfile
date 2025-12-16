@@ -57,7 +57,7 @@ RUN mkdir -p /var/lib/capsuled /var/log/capsuled /tmp/capsuled/logs /tmp/capsule
     && chown -R capsuled:capsuled /var/lib/capsuled /var/log/capsuled /tmp/capsuled
 
 # Copy binary from builder
-COPY --from=builder /workspace/engine/target/release/capsuled-engine /usr/local/bin/
+COPY --from=builder /workspace/target/release/capsuled-engine /usr/local/bin/
 
 # Copy migrations
 COPY --from=builder /workspace/engine/migrations /var/lib/capsuled/migrations
