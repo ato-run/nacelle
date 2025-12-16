@@ -48,6 +48,7 @@ mod linux_impl {
     use nix::sys::signal::{self, Signal};
     use nix::unistd::Pid;
     use std::collections::HashMap;
+    use std::path::Path;
     use std::sync::{Arc, Mutex};
 
     pub struct DirectRuntime {
@@ -66,13 +67,11 @@ mod linux_impl {
             let _ = std::fs::create_dir_all(&cache_dir);
             let _ = std::fs::create_dir_all(&rootfs_dir);
 
-            let runtime = Self {
+            Self {
                 root_dir: root_dir.clone(),
                 image_manager: ImageManager::new(cache_dir, rootfs_dir),
                 active_processes: Arc::new(Mutex::new(HashMap::new())),
-            };
-
-            runtime
+            }
         }
 
         /// Public method to start a container, handling bundle preparation.
@@ -106,39 +105,39 @@ mod linux_impl {
                 std::fs::create_dir_all(&bundle_path).map_err(RuntimeError::Io)?;
 
                 // Determine rootfs path based on whether we have a real image
-                let rootfs_path = if !image.is_empty() && image != "dummy" && image != "dummy-image"
-                {
-                    // Phase 1-C: Pull real OCI image
-                    info!("  [Phase 1-C] Pulling OCI image: {}", image);
-                    match self.image_manager.pull_image(image).await {
-                        Ok(pulled) => {
-                            info!(
-                                "  Image pulled successfully: {} layers, {} bytes",
-                                pulled.layer_count, pulled.total_size
-                            );
-                            // Symlink or copy rootfs to bundle
-                            let bundle_rootfs = bundle_path.join("rootfs");
-                            if !bundle_rootfs.exists() {
-                                // Create symlink to the pulled rootfs
-                                #[cfg(unix)]
-                                std::os::unix::fs::symlink(&pulled.rootfs_path, &bundle_rootfs)
-                                    .map_err(RuntimeError::Io)?;
+                let _rootfs_path =
+                    if !image.is_empty() && image != "dummy" && image != "dummy-image" {
+                        // Phase 1-C: Pull real OCI image
+                        info!("  [Phase 1-C] Pulling OCI image: {}", image);
+                        match self.image_manager.pull_image(image).await {
+                            Ok(pulled) => {
+                                info!(
+                                    "  Image pulled successfully: {} layers, {} bytes",
+                                    pulled.layer_count, pulled.total_size
+                                );
+                                // Symlink or copy rootfs to bundle
+                                let bundle_rootfs = bundle_path.join("rootfs");
+                                if !bundle_rootfs.exists() {
+                                    // Create symlink to the pulled rootfs
+                                    #[cfg(unix)]
+                                    std::os::unix::fs::symlink(&pulled.rootfs_path, &bundle_rootfs)
+                                        .map_err(RuntimeError::Io)?;
+                                }
+                                bundle_rootfs
                             }
-                            bundle_rootfs
+                            Err(e) => {
+                                warn!(
+                                    "  Failed to pull image: {:?}, falling back to bind-mount mode",
+                                    e
+                                );
+                                self.prepare_fallback_rootfs(&bundle_path).await?
+                            }
                         }
-                        Err(e) => {
-                            warn!(
-                                "  Failed to pull image: {:?}, falling back to bind-mount mode",
-                                e
-                            );
-                            self.prepare_fallback_rootfs(&bundle_path).await?
-                        }
-                    }
-                } else {
-                    // Phase 1-B fallback: Use bind-mounts for testing
-                    info!("  [Phase 1-B Fallback] Using bind-mount mode (no real image)");
-                    self.prepare_fallback_rootfs(&bundle_path).await?
-                };
+                    } else {
+                        // Phase 1-B fallback: Use bind-mounts for testing
+                        info!("  [Phase 1-B Fallback] Using bind-mount mode (no real image)");
+                        self.prepare_fallback_rootfs(&bundle_path).await?
+                    };
 
                 Self::write_config_json(&bundle_path, command, mounts)?;
             }
@@ -154,7 +153,7 @@ mod linux_impl {
         /// Fallback rootfs preparation for Phase 1-B (bind-mount mode)
         async fn prepare_fallback_rootfs(
             &self,
-            bundle_path: &PathBuf,
+            bundle_path: &Path,
         ) -> Result<PathBuf, RuntimeError> {
             let rootfs_path = bundle_path.join("rootfs");
             std::fs::create_dir_all(&rootfs_path).map_err(RuntimeError::Io)?;
@@ -170,7 +169,7 @@ mod linux_impl {
         }
 
         fn write_config_json(
-            bundle_path: &PathBuf,
+            bundle_path: &Path,
             command: Option<&[String]>,
             mounts: Option<&[HostMount]>,
         ) -> Result<(), RuntimeError> {

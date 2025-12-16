@@ -565,7 +565,7 @@ fn get_total_memory() -> u64 {
 fn get_total_disk_space() -> u64 {
     // This is a simplified version - in production you'd check actual mount points
     use std::fs;
-    if let Ok(metadata) = fs::metadata("/") {
+    if fs::metadata("/").is_ok() {
         // This doesn't give us total disk space, just a placeholder
         return 100 * 1024 * 1024 * 1024; // Default 100 GB
     }

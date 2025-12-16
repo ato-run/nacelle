@@ -51,29 +51,27 @@ async fn mock_registry() -> impl IntoResponse {
 }
 
 async fn mock_runtime_zip() -> impl IntoResponse {
-    // Create a dummy zip file
+    Body::from(build_runtime_zip_bytes())
+}
+
+fn build_runtime_zip_bytes() -> Vec<u8> {
+    // Make the zip deterministic: zip headers include timestamps by default.
     let mut buf = Vec::new();
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
 
-    let options =
-        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+    let options = zip::write::FileOptions::<()>::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .last_modified_time(zip::DateTime::from_date_and_time(1980, 1, 1, 0, 0, 0).unwrap());
 
     zip.start_file("bin/test-binary", options).unwrap();
     zip.write_all(b"#!/bin/sh\necho 'Hello'").unwrap();
     zip.finish().unwrap();
 
-    Body::from(buf)
+    buf
 }
 
 fn calculate_zip_hash() -> String {
-    let mut buf = Vec::new();
-    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-    let options =
-        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file("bin/test-binary", options).unwrap();
-    zip.write_all(b"#!/bin/sh\necho 'Hello'").unwrap();
-    zip.finish().unwrap();
-
+    let buf = build_runtime_zip_bytes();
     let mut hasher = Sha256::new();
     hasher.update(&buf);
     format!("{:x}", hasher.finalize())

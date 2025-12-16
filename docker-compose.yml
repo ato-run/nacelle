@@ -17,7 +17,9 @@ services:
   # rqlite - Distributed SQLite for state
   # ========================================
   rqlite:
-    image: rqlite/rqlite:latest
+    # Keep this pinned by default to avoid Docker Hub tag churn.
+    # Override with env var if you need a different version.
+    image: rqlite/rqlite:${RQLITE_VERSION:-9.3.5}
     container_name: gumball-rqlite
     command:
       - "-http-addr"

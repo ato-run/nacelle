@@ -1,7 +1,44 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use libadep_core::capsule_v1::CapsuleManifestV1;
+
+fn find_go_bin() -> PathBuf {
+    if let Some(go) = std::env::var_os("GO_BIN").or_else(|| std::env::var_os("GO")) {
+        return PathBuf::from(go);
+    }
+
+    #[cfg(windows)]
+    const GO_EXE: &str = "go.exe";
+    #[cfg(not(windows))]
+    const GO_EXE: &str = "go";
+
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(GO_EXE);
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+
+    // Common macOS/Homebrew locations (useful when cargo is launched from a GUI without PATH).
+    let fallback_candidates: [&Path; 3] = [
+        Path::new("/opt/homebrew/bin/go"),
+        Path::new("/usr/local/bin/go"),
+        Path::new("/usr/bin/go"),
+    ];
+    for candidate in fallback_candidates {
+        if candidate.is_file() {
+            return candidate.to_path_buf();
+        }
+    }
+
+    panic!(
+        "go binary not found. Install Go, ensure `go` is on PATH, or set GO_BIN=/path/to/go. PATH={}",
+        std::env::var("PATH").unwrap_or_else(|_| "<missing>".to_string())
+    );
+}
 
 fn go_runplan_output(manifest: &str) -> serde_json::Value {
     let tmp = tempfile::NamedTempFile::new().expect("tmp file");
@@ -16,7 +53,8 @@ fn go_runplan_output(manifest: &str) -> serde_json::Value {
     // Go module root lives at client (module: github.com/onescluster/coordinator)
     let go_workdir = repo_root.join("client");
 
-    let output = Command::new("go")
+    let go_bin = find_go_bin();
+    let output = Command::new(go_bin)
         .arg("run")
         .arg("./cmd/runplan")
         .arg(tmp.path())
