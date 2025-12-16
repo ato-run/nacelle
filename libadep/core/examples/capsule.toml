@@ -1,0 +1,22 @@
+[capsule]
+name = "meeting-summarizer"
+version = "0.1.0"
+description = "A local AI agent that summarizes audio files."
+
+[resources]
+cpu_cores = 2
+memory = "4GB"
+gpu_memory_min = "8GB" # 0GBならCPUモードで動作可能
+
+[ai]
+base_model = "hf:meta-llama/Meta-Llama-3.1-8B-Instruct"
+fallback_device = "cpu"
+
+[permissions]
+network_allow = ["api.openai.com", "slack.com"]
+files_allow = ["/home/user/recordings:ro"]
+mcp_servers = ["google-drive"]
+
+[routing]
+domain = "summarizer.local"
+internal_port = 8080

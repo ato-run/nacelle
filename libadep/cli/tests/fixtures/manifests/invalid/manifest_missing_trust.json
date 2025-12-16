@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.1",
+  "id": "20000000-0000-0000-0000-000000000001",
+  "family_id": "20000000-0000-0000-0000-000000000010",
+  "version": {
+    "number": "0.2.0",
+    "channel": "beta"
+  },
+  "network": {
+    "egress_allow": [],
+    "egress_id_allow": [
+      {
+        "type": "spiffe",
+        "value": "spiffe://example.org/service/api",
+        "scheme": [
+          "https"
+        ],
+        "ports": 443
+      }
+    ],
+    "http_proxy_dev": true
+  },
+  "capabilities": [],
+  "files": [
+    {
+      "path": "dist/app.bin",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "size": 100,
+      "role": "runtime"
+    }
+  ]
+}

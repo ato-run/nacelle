@@ -1,0 +1,41 @@
+[package]
+name = "libadep-core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["std", "toml-support"]
+std = []
+crypto-hw = []
+schema = ["std", "schemars"]
+toml-support = ["toml"]
+hcl-support = ["hcl"]
+capsuled-proto = ["std", "dep:onescluster-capsuled-proto"]
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+hex = "0.4"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+uuid = { version = "1.7", features = ["v4", "serde"] }
+walkdir = "2.5"
+url = "2.4"
+schemars = { version = "0.8", optional = true, features = ["chrono", "uuid1"] }
+thiserror = "1.0"
+toml = { version = "0.8", optional = true }
+onescluster-capsuled-proto = { path = "../../proto/rust", optional = true }
+
+[dependencies.hcl]
+package = "hcl-rs"
+version = "0.17"
+optional = true
+
+[dev-dependencies]
+tempfile = "3"
+
+ 

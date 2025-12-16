@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package adep.depsd.v1;
+
+option go_package = "github.com/adep/specs/depsd/v1;depsd";
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+}
+
+message ExpandCapsuleRequest {
+  string capsule_path = 1;
+  string cas_root = 2;
+  string output_dir = 3;
+  bool force_clean = 4;
+  repeated string filter_kinds = 5;
+}
+
+message ExpandedEntry {
+  string path = 1;
+  string coords = 2;
+  string kind = 3;
+  uint64 raw_bytes = 4;
+  uint64 compressed_bytes = 5;
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STORED = 1;
+    REUSED = 2;
+  }
+  Status status = 6;
+}
+
+message ExpandCapsuleResponse {
+  repeated ExpandedEntry entries = 1;
+}
+
+message InstallPythonRequest {
+  string capsule_path = 1;
+  string cas_root = 2;
+  string requirements_lock = 3;
+  string target_dir = 4;
+  string pip_binary = 5;
+  repeated string pip_args = 6;
+  bool dry_run = 7;
+  string project_dir = 8;
+}
+
+message CommandLog {
+  enum Stream {
+    STREAM_STDOUT = 0;
+    STREAM_STDERR = 1;
+  }
+  Stream stream = 1;
+  string line = 2;
+}
+
+message OperationError {
+  string code = 1;
+  string message = 2;
+}
+
+message InstallPythonResponse {
+  repeated string command = 1;
+  int32 exit_code = 2;
+  repeated CommandLog logs = 3;
+  string requirements_lock = 4;
+  repeated string installed_wheels = 5;
+}
+
+message InstallPnpmRequest {
+  string capsule_path = 1;
+  string cas_root = 2;
+  string lockfile = 3;
+  string project_dir = 4;
+  string store_dir = 5;
+  string pnpm_binary = 6;
+  repeated string pnpm_args = 7;
+  bool dry_run = 8;
+}
+
+message InstallPnpmResponse {
+  repeated string command = 1;
+  int32 exit_code = 2;
+  repeated CommandLog logs = 3;
+  repeated string installed_packages = 4;
+}
+
+service Depsd {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc ExpandCapsule(ExpandCapsuleRequest) returns (ExpandCapsuleResponse);
+  rpc InstallPython(InstallPythonRequest) returns (InstallPythonResponse);
+  rpc InstallPnpm(InstallPnpmRequest) returns (InstallPnpmResponse);
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "id": "10000000-0000-0000-0000-000000000001",
+  "family_id": "10000000-0000-0000-0000-000000000010",
+  "version": {
+    "number": "0.1.0",
+    "channel": "stable"
+  },
+  "network": {
+    "egress_allow": [
+      "http://localhost:8080"
+    ],
+    "egress_id_allow": [],
+    "http_proxy_dev": true
+  },
+  "capabilities": [],
+  "files": [
+    {
+      "path": "dist/index.html",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "size": 42,
+      "role": "asset"
+    }
+  ]
+}
