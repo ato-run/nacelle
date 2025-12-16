@@ -43,6 +43,7 @@ message DeployRequest {
   }
   string oci_image = 3;  // Optional, can be derived from manifest
   string digest = 4;     // Optional
+  bytes manifest_signature = 7; // Raw signature bytes (Ed25519)
 }
 
 message DeployResponse {

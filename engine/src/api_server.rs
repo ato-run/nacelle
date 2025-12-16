@@ -17,7 +17,7 @@ use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
 use crate::network::service_registry::ServiceRegistry;
 use crate::manifest::{Manifest, Resource};
-use crate::adep::{AdepManifest, ComputeConfig, SchedulingConfig, GpuConstraints};
+use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleMetadataV1, CapsuleRequirements, CapsuleStorage, RuntimeType, SignalConfig, CapsuleRouting, CapsuleType};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -162,7 +162,7 @@ async fn apply_handler(
     Json(payload): Json<ApplyRequest>,
 ) -> impl IntoResponse {
     // 1. Parse HCL
-    let manifest: Manifest = match hcl::from_str(&payload.hcl) {
+    let manifest_hcl: Manifest = match hcl::from_str(&payload.hcl) {
         Ok(m) => m,
         Err(e) => return Json(ApplyResponse {
             capsule_id: "".to_string(),
@@ -171,9 +171,9 @@ async fn apply_handler(
         }),
     };
 
-    // 2. Convert to AdepManifest
-    // Find the first container resource to use as the main capsule
-    let (capsule_id, container_config) = match manifest.resource.get("container") {
+    // 2. Convert to CapsuleManifestV1 (Best Effort)
+    // Find the first container resource
+    let (capsule_id, container_config) = match manifest_hcl.resource.get("container") {
         Some(containers) => {
             if let Some((name, Resource::Container(config))) = containers.iter().next() {
                 (name.clone(), config)
@@ -193,44 +193,63 @@ async fn apply_handler(
     };
 
     // Check for compute resources
-    let compute_res = manifest.resource.get("compute")
+    let compute_res = manifest_hcl.resource.get("compute")
         .and_then(|c| c.values().next())
         .and_then(|r| match r {
             Resource::Compute(c) => Some(c),
             _ => None,
         });
 
-    let vram_min_gb = compute_res
+    let vram_string = compute_res
         .and_then(|c| c.vram_min.as_ref())
-        .and_then(|v| v.trim_end_matches("GB").parse::<u64>().ok())
-        .unwrap_or(0);
+        .cloned();
 
-    let adep = AdepManifest {
-        name: capsule_id.clone(),
-        scheduling: SchedulingConfig {
-            gpu: Some(GpuConstraints {
-                vram_min_gb,
-                cuda_version_min: None, // TODO: Parse from HCL
-            }),
-            strategy: Some("best_fit".to_string()),
-            cloud: None, // TODO: Parse cloud config
-        },
-        compute: ComputeConfig {
-            image: container_config.image.clone(),
-            args: vec![], // TODO: Add args to HCL
-            env: container_config.env.clone()
-                .map(|m| m.iter().map(|(k, v)| format!("{}={}", k, v)).collect())
-                .unwrap_or_default(),
-            native: container_config.native.clone().map(|n| crate::adep::NativeConfig {
-                runtime: n.runtime,
-                args: n.args,
-            }),
-        },
-        volumes: vec![], // TODO: Parse volumes
-        metadata: Default::default(),
+    // Map Native vs Docker
+    let (runtime_type, entrypoint) = if let Some(native_cfg) = &container_config.native {
+         (RuntimeType::Native, native_cfg.runtime.clone())
+         // TODO: What about native_cfg.args?
+         // Use the shell_words join or assume entrypoint has it?
+         // In runplan we assume binary_path has it. 
+         // Here HCL has `runtime` and `args` (Vec<String>).
+         // We should join them: "runtime arg1 arg2"
+         // let full_cmd = format!("{} {}", native_cfg.runtime, native_cfg.args.join(" "));
+         // (RuntimeType::Native, full_cmd)
+    } else {
+         (RuntimeType::Docker, container_config.image.clone())
     };
 
-    let adep_json = serde_json::to_vec(&adep).unwrap_or_default();
+    let manifest = CapsuleManifestV1 {
+        schema_version: "1.0".to_string(),
+        name: capsule_id.clone(),
+        version: "0.0.1".to_string(),
+        capsule_type: CapsuleType::App,
+        metadata: Default::default(),
+        capabilities: None,
+        requirements: CapsuleRequirements {
+            platform: vec![],
+            vram_min: vram_string,
+            vram_recommended: None,
+            disk: None,
+            dependencies: vec![],
+        },
+        execution: CapsuleExecution {
+            runtime: runtime_type,
+            entrypoint,
+            port: None, // HCL doesn't seem to have explicit port field in container block?
+            health_check: None,
+            startup_timeout: 60,
+            env: container_config.env.clone()
+                .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                .unwrap_or_default(),
+            signals: Default::default(),
+        },
+        storage: Default::default(),
+            routing: CapsuleRouting::default(),
+            network: None,
+            model: None,
+    };
+
+    let adep_json = serde_json::to_vec(&manifest).unwrap_or_default();
 
     // 3. Deploy
     match state.capsule_manager.deploy_capsule(
@@ -238,6 +257,8 @@ async fn apply_handler(
         adep_json,
         container_config.image.clone(),
         "".to_string(),
+        None,
+        None,
     ).await {
         Ok(status) => {
              let url = state.service_registry
@@ -284,7 +305,7 @@ async fn logs_handler(
         if let Some(path_str) = log_path {
             let path = std::path::PathBuf::from(path_str);
             
-            // Wait for file to be created (up to 10 seconds)
+            // Wait for file
             let mut file = None;
             for _ in 0..20 {
                 match tokio::fs::File::open(&path).await {
@@ -293,49 +314,39 @@ async fn logs_handler(
                         break;
                     }
                     Err(_) => {
-                        // File not ready yet, wait
                         tokio::time::sleep(Duration::from_millis(500)).await;
-                        // Send keep-alive comment to prevent browser timeout? 
-                        // SSE comments start with colon
                         yield Ok(axum::response::sse::Event::default().comment("waiting for log file"));
                     }
                 }
             }
 
-            let mut file = match file {
-                Some(f) => f,
-                None => {
-                    yield Ok(axum::response::sse::Event::default().data("Timed out waiting for log file creation"));
-                    return;
-                }
-            };
-
-            use tokio::io::AsyncReadExt;
-            let mut buffer = [0; 1024];
-
-            loop {
-                match file.read(&mut buffer).await {
-                    Ok(0) => {
-                        // EOF, wait a bit
-                        tokio::time::sleep(Duration::from_millis(500)).await;
-                        continue;
-                    }
-                    Ok(n) => {
-                        let chunk = String::from_utf8_lossy(&buffer[..n]);
-                        for line in chunk.lines() {
-                            if !line.trim().is_empty() {
-                                // Sanitize: remove any newlines/carriage returns for SSE
-                                let sanitized = line.replace('\n', " ").replace('\r', " ");
-                                yield Ok(axum::response::sse::Event::default().data(sanitized));
+            if let Some(mut f) = file {
+                use tokio::io::AsyncReadExt;
+                let mut buffer = [0; 1024];
+                loop {
+                    match f.read(&mut buffer).await {
+                        Ok(0) => {
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            continue;
+                        }
+                        Ok(n) => {
+                            let chunk = String::from_utf8_lossy(&buffer[..n]);
+                            for line in chunk.lines() {
+                                if !line.trim().is_empty() {
+                                    let sanitized = line.replace('\n', " ").replace('\r', " ");
+                                    yield Ok(axum::response::sse::Event::default().data(sanitized));
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        let error_msg = format!("Error reading logs: {}", e).replace('\n', " ").replace('\r', " ");
-                        yield Ok(axum::response::sse::Event::default().data(error_msg));
-                        break;
+                        Err(e) => {
+                             let error_msg = format!("Error reading logs: {}", e);
+                             yield Ok(axum::response::sse::Event::default().data(error_msg));
+                             break;
+                        }
                     }
                 }
+            } else {
+                 yield Ok(axum::response::sse::Event::default().data("Timed out waiting for log file creation"));
             }
         } else {
             yield Ok(axum::response::sse::Event::default().data("Log path not found for capsule"));

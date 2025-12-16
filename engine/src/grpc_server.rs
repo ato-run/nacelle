@@ -34,8 +34,6 @@ pub struct EngineService {
     _runtime: Arc<ContainerRuntime>,
     _allowed_host_paths: Vec<String>,
     gpu_detector: Arc<dyn GpuDetector>,
-    artifact_manager: Arc<ArtifactManager>,
-    direct_runtime: Arc<crate::runtime::direct::DirectRuntime>,
 }
 
 impl EngineService {
@@ -59,11 +57,6 @@ impl EngineService {
             _runtime: runtime,
             _allowed_host_paths: allowed_host_paths,
             gpu_detector,
-            artifact_manager,
-            // Initialize DirectRuntime hardcoded for now as per instructions (or pass it in?)
-            // Passing it in would require changing main.rs.
-            // Let's initialize it here with default path "/var/lib/capsuled"
-            direct_runtime: Arc::new(crate::runtime::direct::DirectRuntime::new(std::path::PathBuf::from("/var/lib/capsuled"))),
         }
     }
 }
@@ -154,30 +147,7 @@ fn canonical_runplan_to_proto(plan: &libadep_core::runplan::RunPlan) -> common::
     }
 }
 
-fn try_canonical_toml_to_adep_json(
-    toml_str: &str,
-    oci_image: &mut String,
-    digest: &mut String,
-) -> Result<Option<Vec<u8>>, Status> {
-    let plan = match try_canonical_toml_to_runplan_proto(toml_str) {
-        Some(p) => p,
-        None => return Ok(None),
-    };
 
-    info!("  Parsed canonical capsule_v1 TOML; normalizing to RunPlan");
-    let converted = runplan::from_engine(&plan);
-    if oci_image.is_empty() {
-        *oci_image = converted.oci_image;
-    }
-    if digest.is_empty() {
-        *digest = converted.digest;
-    }
-
-    let bytes = serde_json::to_vec(&converted.adep)
-        .map_err(|e| Status::internal(format!("Failed to serialize RunPlan: {}", e)))?;
-
-    Ok(Some(bytes))
-}
 
 fn try_canonical_toml_to_runplan_proto(toml_str: &str) -> Option<common::RunPlan> {
     let canonical = CapsuleManifestV1::from_toml(toml_str).ok()?;
@@ -200,7 +170,6 @@ impl Engine for EngineService {
         let mut oci_image = req.oci_image.clone();
         let mut digest = req.digest.clone();
         let mut direct_command: Option<Vec<String>> = None;
-        let mut direct_mounts: Vec<crate::runtime::direct::HostMount> = Vec::new();
 
         let _manifest_bytes = match req.manifest {
             Some(DeployManifest::RunPlan(plan)) => {
@@ -212,18 +181,6 @@ impl Engine for EngineService {
                 {
                     if !d.command.is_empty() {
                         direct_command = Some(d.command.clone());
-                    }
-
-                    if !d.mounts.is_empty() {
-                        direct_mounts = d
-                            .mounts
-                            .iter()
-                            .map(|m| crate::runtime::direct::HostMount {
-                                source: m.source.clone(),
-                                target: m.target.clone(),
-                                readonly: m.readonly,
-                            })
-                            .collect();
                     }
                 }
 
@@ -246,17 +203,6 @@ impl Engine for EngineService {
                     {
                         if direct_command.is_none() && !d.command.is_empty() {
                             direct_command = Some(d.command.clone());
-                        }
-                        if direct_mounts.is_empty() && !d.mounts.is_empty() {
-                            direct_mounts = d
-                                .mounts
-                                .iter()
-                                .map(|m| crate::runtime::direct::HostMount {
-                                    source: m.source.clone(),
-                                    target: m.target.clone(),
-                                    readonly: m.readonly,
-                                })
-                                .collect();
                         }
                     }
 
@@ -299,8 +245,11 @@ impl Engine for EngineService {
         let capsule_id = req.capsule_id.clone();
         let capsule_manager = self.capsule_manager.clone();
         tokio::spawn(async move {
-            match capsule_manager
-                .deploy_capsule(capsule_id.clone(), _manifest_bytes, oci_image, digest)
+                // Note: manifest_signature field not in proto - signature verification is internal
+                let signature: Option<Vec<u8>> = None;
+
+                match capsule_manager
+                .deploy_capsule(capsule_id.clone(), _manifest_bytes, oci_image, digest, direct_command, signature)
                 .await
             {
                 Ok(status) => info!("Capsule {} deploy completed: {}", capsule_id, status),

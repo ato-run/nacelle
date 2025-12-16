@@ -42,6 +42,9 @@ pub struct DeployRequest {
     /// Optional
     #[prost(string, tag = "4")]
     pub digest: ::prost::alloc::string::String,
+    /// Raw signature bytes (Ed25519)
+    #[prost(bytes = "vec", tag = "7")]
+    pub manifest_signature: ::prost::alloc::vec::Vec<u8>,
     #[prost(oneof = "deploy_request::Manifest", tags = "2, 5, 6")]
     pub manifest: ::core::option::Option<deploy_request::Manifest>,
 }
