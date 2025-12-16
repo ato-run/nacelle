@@ -190,6 +190,7 @@ func main() {
 	webhookSecret := os.Getenv("POLAR_WEBHOOK_SECRET")
 	webhookHandler := billing.NewWebhookHandler(polarClient, supabaseClient, webhookSecret)
 	usageHandler := api.NewUsageHandler(supabaseClient, meteredBilling)
+	statsHandler := api.NewStatsHandler(stateManager)
 
 	// Initialize HTTP Middleware
 	isDev := os.Getenv("ENVIRONMENT") == "development"
@@ -269,6 +270,9 @@ func main() {
 
 		// Usage Reporting (Machine Auth TODO)
 		http.HandleFunc("/api/v1/usage/report", usageHandler.HandleReportUsage)
+
+		// Stats (Admin Dashboard)
+		http.HandleFunc("/api/v1/stats", statsHandler.HandleGetStats)
 
 		log.Println("HTTP server listening at :8081")
 		// Use MetricsMiddleware for all requests (we might want to exclude /metrics itself if we used a mux that supported it easily,
