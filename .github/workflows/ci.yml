@@ -47,7 +47,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            engine/target
+            target
           key: ${{ runner.os }}-cargo-engine-${{ hashFiles('engine/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-engine-
@@ -68,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: capsuled-engine-linux-x86_64
-          path: engine/target/release/capsuled-engine
+          path: target/release/capsuled-engine
           retention-days: 7
 
   # Go - client
@@ -212,7 +212,7 @@ jobs:
         run: |
           cargo build --release
           mkdir -p ../bin
-          cp target/release/capsuled-engine ../bin/
+          cp ../target/release/capsuled-engine ../bin/
 
       - name: Build Client
         working-directory: client
