@@ -20,6 +20,8 @@
 
 > **Note:** AI 推論プラットフォームへの進化計画（vLLM 統合、分散推論、GPU セキュリティ等）については [AI_INFERENCE_ROADMAP.md](./AI_INFERENCE_ROADMAP.md) を参照してください。
 
+> **Note:** Deploy/Launch/Share（Drag&Drop→Build→Registry→Deploy / Scale-to-Zero / Marketplace）の縦切り実装計画は [DEPLOY_LAUNCH_SHARE_100_POINT_PLAN.md](./DEPLOY_LAUNCH_SHARE_100_POINT_PLAN.md) を参照してください。
+
 ---
 
 ## エグゼクティブサマリー
