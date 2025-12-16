@@ -28,6 +28,7 @@ jobs:
         with:
           version: latest
           working-directory: client
+          args: --timeout=5m
 
   lint-rust:
     name: Lint Rust

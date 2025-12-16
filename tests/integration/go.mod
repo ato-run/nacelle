@@ -6,7 +6,7 @@ replace github.com/onescluster/coordinator => ../../client
 
 require (
 	github.com/oklog/ulid/v2 v2.1.1
-	github.com/onescluster/coordinator v0.0.0-00010101000000-000000000000
+	github.com/onescluster/coordinator v0.0.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -27,10 +27,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rqlite/gorqlite v0.0.0-20230708021416-2acd02b70b79 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/net v0.34.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect

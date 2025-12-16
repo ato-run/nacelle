@@ -51,6 +51,9 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-cargo-engine-
 
+            - name: Install rustfmt
+              run: rustup component add rustfmt
+
             - name: Check formatting
               run: cargo fmt --check
               working-directory: engine
