@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::fs;
-use anyhow::{Result, anyhow, Context};
+use anyhow::{Result, anyhow};
 use crate::capsule_v1::{CapsuleManifestV1, CapsuleType, RuntimeType, CapsuleExecution, CapsuleRequirements, CapsuleMetadataV1, CapsuleStorage};
 use crate::draft::{DraftInput, DraftType};
 
@@ -47,7 +47,7 @@ impl Resolver {
         let health_check = adv.and_then(|a| a.health_check.clone());
 
         // Construct Manifest
-        let mut manifest = CapsuleManifestV1 {
+        let manifest = CapsuleManifestV1 {
             schema_version: "1.0".to_string(),
             name,
             version,

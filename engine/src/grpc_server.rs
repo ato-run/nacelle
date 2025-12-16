@@ -37,6 +37,7 @@ pub struct EngineService {
 }
 
 impl EngineService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         capsule_manager: Arc<CapsuleManager>,
         wasm_host: Arc<AdepLogicHost>,
@@ -46,7 +47,7 @@ impl EngineService {
         runtime: Arc<ContainerRuntime>,
         allowed_host_paths: Vec<String>,
         gpu_detector: Arc<dyn GpuDetector>,
-        artifact_manager: Arc<ArtifactManager>,
+        _artifact_manager: Arc<ArtifactManager>,
     ) -> Self {
         Self {
             capsule_manager,
@@ -551,6 +552,7 @@ fn get_total_disk_space() -> u64 {
 }
 
 /// Start the gRPC server
+#[allow(clippy::too_many_arguments)]
 pub async fn start_grpc_server(
     addr: &str,
     capsule_manager: Arc<CapsuleManager>,

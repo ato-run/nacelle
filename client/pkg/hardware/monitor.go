@@ -3,25 +3,25 @@
 package hardware
 
 import (
-"context"
-"time"
+	"context"
+	"time"
 )
 
 // SystemResources represents current system resource state
 type SystemResources struct {
 	// VRAM (GPU memory)
-	TotalVRAM     int64   `json:"total_vram"`      // bytes
-	AvailableVRAM int64   `json:"available_vram"`  // bytes
-	
+	TotalVRAM     int64 `json:"total_vram"`     // bytes
+	AvailableVRAM int64 `json:"available_vram"` // bytes
+
 	// RAM (System memory)
-	TotalRAM      int64   `json:"total_ram"`       // bytes
-	AvailableRAM  int64   `json:"available_ram"`   // bytes
-	
+	TotalRAM     int64 `json:"total_ram"`     // bytes
+	AvailableRAM int64 `json:"available_ram"` // bytes
+
 	// CPU
-	CPUUsage      float64 `json:"cpu_usage"`       // 0.0 - 1.0
-	
+	CPUUsage float64 `json:"cpu_usage"` // 0.0 - 1.0
+
 	// Timestamp
-	Timestamp     time.Time `json:"timestamp"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // VRAMUsagePercent returns the VRAM usage as a percentage (0-100)
@@ -52,9 +52,9 @@ func (r *SystemResources) AvailableVRAMGB() float64 {
 
 // ResourceThresholds defines thresholds for resource alerts
 type ResourceThresholds struct {
-	VRAMWarningPercent float64 `yaml:"vram_warning_threshold" json:"vram_warning_percent"`   // e.g., 80
-	VRAMBlockPercent   float64 `yaml:"vram_block_threshold" json:"vram_block_percent"`       // e.g., 95
-	RAMWarningPercent  float64 `yaml:"ram_warning_threshold" json:"ram_warning_percent"`     // e.g., 85
+	VRAMWarningPercent float64       `yaml:"vram_warning_threshold" json:"vram_warning_percent"` // e.g., 80
+	VRAMBlockPercent   float64       `yaml:"vram_block_threshold" json:"vram_block_percent"`     // e.g., 95
+	RAMWarningPercent  float64       `yaml:"ram_warning_threshold" json:"ram_warning_percent"`   // e.g., 85
 	MonitorInterval    time.Duration `yaml:"monitor_interval" json:"monitor_interval"`
 }
 
@@ -80,11 +80,11 @@ type ResourceCheckResult struct {
 type HardwareMonitor interface {
 	// GetCurrentResources returns the current system resource state
 	GetCurrentResources() (*SystemResources, error)
-	
+
 	// CanRunCapsule checks if there are enough resources to run a Capsule
 	// vramRequired is the minimum VRAM in bytes needed by the Capsule
 	CanRunCapsule(vramRequired int64) (*ResourceCheckResult, error)
-	
+
 	// Watch starts continuous monitoring, calling the callback on each interval
 	// Cancel the context to stop watching
 	Watch(ctx context.Context, interval time.Duration, callback func(*SystemResources))

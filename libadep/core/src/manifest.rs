@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use base64::{engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD}, Engine as _};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::{SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
@@ -238,9 +238,10 @@ impl PackSpec {
     }
 
     pub fn with_profile(profile: &str) -> Self {
-        let mut spec = Self::default();
-        spec.profile = Some(profile.to_string());
-        spec
+        Self {
+            profile: Some(profile.to_string()),
+            ..Default::default()
+        }
     }
 }
 

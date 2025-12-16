@@ -183,8 +183,16 @@ fn test_is_resolver_allowed() {
     println!("✅ Resolver allow-list validation works correctly");
 }
 
-// ============================================================================
-// Test 4: Rule 
+#[test]
+fn test_dns_rule_format() {
+    use capsuled_engine::security::dns_monitor::{generate_dns_rules, DnsConfig};
+
+    let config = DnsConfig::default();
+    let rules = generate_dns_rules(&config, "TEST_CHAIN");
+
+    for rule in &rules {
+        // All rules should start with iptables
+        assert!(
             rule.starts_with("iptables"),
             "Rule should start with iptables: {}",
             rule
@@ -202,24 +210,13 @@ fn test_is_resolver_allowed() {
             rule.contains("--dport 53"),
             "Rule should target port 53: {}",
             rule
-        
-    let config = DnsConfig::default();
-    let rules = generate_dns_rules(&config, "TEST_CHAIN");
-
-    for rule in &rules {
-        // All rules should start with iptables
-        assert!(rule.starts_with("iptables"), "Rule should start with iptables: {}", rule);
-        
-        // All rules should target the chain
-        assert!(rule.contains("TEST_CHAIN"), "Rule should target chain: {}", rule);
-        
-        // All rules should specify port 53
-        assert!(rule.contains("--dport 53"), "Rule should target port 53: {}", rule);
+        );
         
         // All rules should specify protocol (udp or tcp)
         assert!(
             rule.contains("-p udp") || rule.contains("-p tcp"),
-            "Rule should specify protocol: {}", rule
+            "Rule should specify protocol: {}",
+            rule
         );
     }
 
@@ -232,11 +229,7 @@ fn test_is_resolver_allowed() {
 
 #[test]
 fn test_dns_config_clone_and_debug() {
-    use caps
-        debug_str.contains("DnsConfig")
-    );
-    assert!(
-        debug_str.contains("allowed_resolvers")
+    use capsuled_engine::security::dns_monitor::DnsConfig;
     
     let config = DnsConfig::default();
     
@@ -248,8 +241,12 @@ fn test_dns_config_clone_and_debug() {
     
     // Test Debug
     let debug_str = format!("{:?}", config);
-    assert!(debug_str.contains("DnsConfig"));
-    assert!(debug_str.contains("allowed_resolvers"));
+    assert!(
+        debug_str.contains("DnsConfig")
+    );
+    assert!(
+        debug_str.contains("allowed_resolvers")
+    );
 
     println!("✅ DnsConfig Clone and Debug traits work correctly");
 }
@@ -267,11 +264,6 @@ async fn test_dns_block_audit_logging() {
     let log_path = tmp.path().join("dns_audit.log");
     let key_path = tmp.path().join("key.pem");
 
-            allowed,
-            *expected_allowed,
-            "Resolver {} check failed",
-            resolver
-        
     let logger = AuditLogger::new(log_path.clone(), key_path, "dns-test-node".to_string())
         .expect("logger");
 
@@ -287,36 +279,41 @@ async fn test_dns_block_audit_logging() {
 
     for (resolver, expected_allowed) in &queries {
         let allowed = is_resolver_allowed(resolver, &config);
-        assert_eq!(allowed, *expected_allowed, "Resolver {} check failed", resolver);
+        assert_eq!(
+            allowed,
+            *expected_allowed,
+            "Resolver {} check failed",
+            resolver
+        );
 
         // Log blocked attempts
         if !allowed {
-            log
-        blocked_count,
-        2,
-        "Should have logged 2 blocked DNS attempts"
-    
+            logger.log(
                 AuditOperation::NetworkAccess,
                 AuditStatus::Failure,
-                Some("test-capsule".to_string()),
-                Some(format!("DNS query to {} blocked", resolver)),
+                Some("dns-check".to_string()),
+                Some(format!("Blocked DNS: {}", resolver)),
             ).await;
         }
     }
 
-    // Verify audit logs
+    // Verify logs
     let db_path = log_path.with_extension("db");
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
 
     let blocked_count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM audit_logs WHERE operation = 'network_access' AND status = 'failure'",
+            "SELECT COUNT(*) FROM audit_logs WHERE status = 'failure'",
             [],
             |row| row.get(0),
         )
-        .expect("count");
+        .expect("query");
 
-    assert_eq!(blocked_count, 2, "Should have logged 2 blocked DNS attempts");
+    assert_eq!(
+        blocked_count,
+        2,
+        "Should have logged 2 blocked DNS attempts"
+    );
 
-    println!("✅ DNS block events correctly logged to audit ({} blocked)", blocked_count);
+    println!("✅ DNS audit logging verified");
 }

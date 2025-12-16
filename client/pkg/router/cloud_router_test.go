@@ -266,10 +266,10 @@ func TestCloudRouterGetEndpoints(t *testing.T) {
 
 // MockRegistryClient implements registry.Client for testing
 type MockRegistryClient struct {
-	capsules       []registry.CapsuleSummary
-	downloadInfo   map[string]*registry.DownloadInfo
-	listError      error
-	downloadError  error
+	capsules      []registry.CapsuleSummary
+	downloadInfo  map[string]*registry.DownloadInfo
+	listError     error
+	downloadError error
 }
 
 func (m *MockRegistryClient) List(ctx context.Context, opts registry.ListOptions) (*registry.CapsuleListResponse, error) {

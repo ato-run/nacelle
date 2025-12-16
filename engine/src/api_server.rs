@@ -17,7 +17,7 @@ use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
 use crate::network::service_registry::ServiceRegistry;
 use crate::manifest::{Manifest, Resource};
-use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleMetadataV1, CapsuleRequirements, CapsuleStorage, RuntimeType, SignalConfig, CapsuleRouting, CapsuleType};
+use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, RuntimeType, CapsuleRouting, CapsuleType};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -266,7 +266,7 @@ async fn apply_handler(
                 .iter()
                 .find(|s| s.name == capsule_id)
                 .map(|s| format!("http://localhost:{}", s.port))
-                .unwrap_or_else(|| format!("http://localhost"));
+                .unwrap_or_else(|| "http://localhost".to_string());
 
             Json(ApplyResponse {
                 capsule_id,
@@ -333,7 +333,7 @@ async fn logs_handler(
                             let chunk = String::from_utf8_lossy(&buffer[..n]);
                             for line in chunk.lines() {
                                 if !line.trim().is_empty() {
-                                    let sanitized = line.replace('\n', " ").replace('\r', " ");
+                                    let sanitized = line.replace(['\n', '\r'], " ");
                                     yield Ok(axum::response::sse::Event::default().data(sanitized));
                                 }
                             }

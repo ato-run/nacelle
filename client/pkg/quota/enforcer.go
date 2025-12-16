@@ -45,8 +45,8 @@ var Plans = map[string]PlanLimits{
 
 // DBClientInterface defines what we need from the DB layer
 type DBClientInterface interface {
-    GetUserPlan(ctx context.Context, userID string) (string, error)
-    CountUserCapsules(ctx context.Context, userID string) (int, error)
+	GetUserPlan(ctx context.Context, userID string) (string, error)
+	CountUserCapsules(ctx context.Context, userID string) (int, error)
 }
 
 type Enforcer struct {
@@ -54,19 +54,19 @@ type Enforcer struct {
 }
 
 func NewEnforcer(db DBClientInterface) *Enforcer {
-    return &Enforcer{db: db}
+	return &Enforcer{db: db}
 }
 
 func (e *Enforcer) CheckDeployAllowed(ctx context.Context, userID string) error {
-    planName, err := e.db.GetUserPlan(ctx, userID)
-    if err != nil {
-        return err
-    }
-    
-    // Default to free if unknown
-    if _, ok := Plans[planName]; !ok {
-        planName = "free"
-    }
+	planName, err := e.db.GetUserPlan(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Default to free if unknown
+	if _, ok := Plans[planName]; !ok {
+		planName = "free"
+	}
 
 	limits := Plans[planName]
 	if limits.MaxCapsules == -1 {
@@ -90,10 +90,10 @@ func (e *Enforcer) GetResourceLimits(ctx context.Context, userID string) (*PlanL
 	if err != nil {
 		return nil, err
 	}
-    
-    if _, ok := Plans[planName]; !ok {
-        planName = "free"
-    }
+
+	if _, ok := Plans[planName]; !ok {
+		planName = "free"
+	}
 
 	limits := Plans[planName]
 	return &limits, nil

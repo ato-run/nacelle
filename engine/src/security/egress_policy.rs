@@ -58,30 +58,24 @@ impl EgressPolicyRegistry {
 /// - Allow Local Gateway/Service Subnet (Implied/Configurable? For now, standard docker bridge is allowlisted via specific rules if needed, but strict mode blocks it unless specified)
 /// - Allow explicitly listed IPs/CIDRs
 pub fn generate_fw_rules(manifest: &CapsuleManifestV1) -> Vec<String> {
-    let mut rules = Vec::new();
+    let mut rules = vec![
+        // 1. Basic Setup: Flush and Default DROP
+        "iptables -P OUTPUT DROP".to_string(),
+        "iptables -P INPUT DROP".to_string(),
+        "iptables -P FORWARD DROP".to_string(),
 
-    // 1. Basic Setup: Flush and Default DROP
-    // Note: We assume these run inside the container's netns, so we affect the container's filter table.
-    // However, usually detailed setup involves `iptables-save`/`restore`. 
-    // Here we generate individual commands for OCI hooks to execute via /bin/sh.
-    
-    // Set default policy to DROP for OUTPUT chain
-    rules.push("iptables -P OUTPUT DROP".to_string());
-    rules.push("iptables -P INPUT DROP".to_string()); // Strict ingress too?
-    rules.push("iptables -P FORWARD DROP".to_string());
+        // 2. Allow Loopback
+        "iptables -A OUTPUT -o lo -j ACCEPT".to_string(),
+        "iptables -A INPUT -i lo -j ACCEPT".to_string(),
 
-    // 2. Allow Loopback
-    rules.push("iptables -A OUTPUT -o lo -j ACCEPT".to_string());
-    rules.push("iptables -A INPUT -i lo -j ACCEPT".to_string());
+        // 3. Allow Established connections
+        "iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT".to_string(),
+        "iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT".to_string(),
 
-    // 3. Allow Established connections
-    rules.push("iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT".to_string());
-    rules.push("iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT".to_string());
-
-    // 4. Critical Services (DNS)
-    // Assuming standard DNS port 53.
-    rules.push("iptables -A OUTPUT -p udp --dport 53 -j ACCEPT".to_string());
-    rules.push("iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT".to_string());
+        // 4. Critical Services (DNS)
+        "iptables -A OUTPUT -p udp --dport 53 -j ACCEPT".to_string(),
+        "iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT".to_string(),
+    ];
 
     // 5. Explicit Allowlist
     if let Some(net) = &manifest.network {
@@ -116,7 +110,7 @@ fn is_safe_ip_string(s: &str) -> bool {
 pub fn parse_allowlist_csv(value: &str) -> Vec<String> {
     let mut out: Vec<String> = value
         .split(',')
-        .filter_map(|s| normalize_allowlist_entry(s))
+        .filter_map(normalize_allowlist_entry)
         .collect();
     out.sort();
     out.dedup();

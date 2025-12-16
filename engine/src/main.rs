@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize Headscale if configured
     let headscale_config = load_headscale_config()?;
-    if headscale_config.server_url != "" {
+    if !headscale_config.server_url.is_empty() {
         let headscale = HeadscaleClient::new(headscale_config);
         
         match headscale.connect().await {
@@ -382,8 +382,10 @@ fn load_storage_config() -> Option<StorageConfig> {
     // Check environment variable for enabling storage
     if std::env::var("GUMBALL_STORAGE_ENABLED").map(|v| v == "true" || v == "1").unwrap_or(false) {
         info!("Storage enabled via environment variable");
-        let mut config = StorageConfig::default();
-        config.enabled = true;
+        let mut config = StorageConfig {
+            enabled: true,
+            ..Default::default()
+        };
         
         // Override defaults from environment
         if let Ok(vg) = std::env::var("GUMBALL_STORAGE_VG") {

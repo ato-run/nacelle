@@ -32,14 +32,14 @@ var (
 func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// Wrap ResponseWriter to capture status code
 		ww := &responseWriterWrapper{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		next.ServeHTTP(ww, r)
-		
+
 		duration := time.Since(start).Seconds()
-		
+
 		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(ww.statusCode)).Inc()
 		httpRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
 	})

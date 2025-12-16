@@ -1,10 +1,10 @@
 package capsule
 
 import (
-"testing"
+	"testing"
 
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const validTOML = `
@@ -67,7 +67,7 @@ func TestParseTOML(t *testing.T) {
 func TestValidate_Valid(t *testing.T) {
 	manifest, err := ParseTOML(validTOML)
 	require.NoError(t, err)
-	
+
 	err = manifest.Validate()
 	assert.NoError(t, err)
 }
@@ -75,7 +75,7 @@ func TestValidate_Valid(t *testing.T) {
 func TestValidate_InvalidSchemaVersion(t *testing.T) {
 	manifest, err := ParseTOML(validTOML)
 	require.NoError(t, err)
-	
+
 	manifest.SchemaVersion = "2.0"
 	err = manifest.Validate()
 	assert.Error(t, err)
@@ -85,7 +85,7 @@ func TestValidate_InvalidSchemaVersion(t *testing.T) {
 func TestValidate_InvalidName(t *testing.T) {
 	manifest, err := ParseTOML(validTOML)
 	require.NoError(t, err)
-	
+
 	manifest.Name = "Invalid Name!"
 	err = manifest.Validate()
 	assert.Error(t, err)
@@ -142,10 +142,10 @@ func TestParseMemoryString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-result, err := parseMemoryString(tt.input)
-require.NoError(t, err)
-assert.Equal(t, tt.expected, result)
-})
+			result, err := parseMemoryString(tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
 	}
 }
 
@@ -173,12 +173,12 @@ func TestKebabCaseValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-if tt.name == "" {
-assert.False(t, kebabCaseRegex.MatchString(tt.name))
-} else {
-assert.Equal(t, tt.valid, kebabCaseRegex.MatchString(tt.name))
-}
-})
+			if tt.name == "" {
+				assert.False(t, kebabCaseRegex.MatchString(tt.name))
+			} else {
+				assert.Equal(t, tt.valid, kebabCaseRegex.MatchString(tt.name))
+			}
+		})
 	}
 }
 
@@ -196,7 +196,7 @@ func TestSemverValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.version, func(t *testing.T) {
-assert.Equal(t, tt.valid, semverRegex.MatchString(tt.version))
-})
+			assert.Equal(t, tt.valid, semverRegex.MatchString(tt.version))
+		})
 	}
 }

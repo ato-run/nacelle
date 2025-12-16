@@ -3,6 +3,8 @@
 // This crate intentionally re-uses the checked-in generated sources in
 // `capsuled/engine/src/proto` to avoid requiring protoc/buf in consumers.
 
+#![allow(clippy::large_enum_variant)]
+
 pub mod onescluster {
     pub mod common {
         pub mod v1 {

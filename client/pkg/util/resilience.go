@@ -26,7 +26,7 @@ func NewCircuitBreaker(name string) *gobreaker.CircuitBreaker {
 func RetryWithBackoff(operation func() error, maxRetries uint64) error {
 	b := backoff.NewExponentialBackOff()
 	b.MaxElapsedTime = 30 * time.Second
-	
+
 	if maxRetries > 0 {
 		return backoff.Retry(operation, backoff.WithMaxRetries(b, maxRetries))
 	}

@@ -15,7 +15,7 @@ const (
 // RigGpuInfo represents GPU resource information reported by an Agent and stored in the database.
 // This corresponds to the Rust RigHardwareReport from the Agent.
 type RigGpuInfo struct {
-	RigID             string // Unique identifier for the Rig (Agent node)
+	RigID             string    // Unique identifier for the Rig (Agent node)
 	TotalVRAMBytes    uint64    // Total VRAM capacity across all GPUs on this Rig
 	UsedVRAMBytes     uint64    // Currently reserved VRAM on this Rig (sum of all running capsules)
 	CudaDriverVersion string    // CUDA driver version (e.g., "12.2")
@@ -25,9 +25,9 @@ type RigGpuInfo struct {
 
 // GpuInfo represents a single GPU device
 type GpuInfo struct {
-	UUID             string
-	DeviceName       string
-	TotalVRAMBytes   uint64
+	UUID               string
+	DeviceName         string
+	TotalVRAMBytes     uint64
 	AvailableVRAMBytes uint64 // Calculated by scheduler
 }
 

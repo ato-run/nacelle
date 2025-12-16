@@ -1,18 +1,18 @@
 package hardware
 
 import (
-"os"
-"path/filepath"
-"testing"
-"time"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
 
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultHardwareConfig(t *testing.T) {
 	cfg := DefaultHardwareConfig()
-	
+
 	assert.Equal(t, 80.0, cfg.Thresholds.VRAMWarningPercent)
 	assert.Equal(t, 95.0, cfg.Thresholds.VRAMBlockPercent)
 	assert.Equal(t, 85.0, cfg.Thresholds.RAMWarningPercent)
@@ -24,14 +24,14 @@ func TestDefaultHardwareConfig(t *testing.T) {
 func TestLoadHardwareConfig_FileNotFound(t *testing.T) {
 	cfg, err := LoadHardwareConfig("/nonexistent/path/config.yaml")
 	require.NoError(t, err) // Should return defaults
-	
+
 	assert.Equal(t, 80.0, cfg.Thresholds.VRAMWarningPercent)
 }
 
 func TestLoadHardwareConfig_ValidFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	
+
 	content := `
 hardware:
   thresholds:
@@ -45,10 +45,10 @@ hardware:
 `
 	err := os.WriteFile(configPath, []byte(content), 0644)
 	require.NoError(t, err)
-	
+
 	cfg, err := LoadHardwareConfig(configPath)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, 70.0, cfg.Thresholds.VRAMWarningPercent)
 	assert.Equal(t, 90.0, cfg.Thresholds.VRAMBlockPercent)
 	assert.Equal(t, 75.0, cfg.Thresholds.RAMWarningPercent)
@@ -60,7 +60,7 @@ hardware:
 func TestLoadHardwareConfig_PartialConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	
+
 	// Only override VRAM warning
 	content := `
 hardware:
@@ -69,13 +69,13 @@ hardware:
 `
 	err := os.WriteFile(configPath, []byte(content), 0644)
 	require.NoError(t, err)
-	
+
 	cfg, err := LoadHardwareConfig(configPath)
 	require.NoError(t, err)
-	
+
 	// Override should work
 	assert.Equal(t, 75.0, cfg.Thresholds.VRAMWarningPercent)
-	
+
 	// Defaults should be preserved
 	assert.Equal(t, 95.0, cfg.Thresholds.VRAMBlockPercent)
 	assert.Equal(t, 85.0, cfg.Thresholds.RAMWarningPercent)
@@ -84,7 +84,7 @@ hardware:
 func TestLoadHardwareConfig_DisabledMonitoring(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	
+
 	content := `
 hardware:
   monitoring:
@@ -93,10 +93,10 @@ hardware:
 `
 	err := os.WriteFile(configPath, []byte(content), 0644)
 	require.NoError(t, err)
-	
+
 	cfg, err := LoadHardwareConfig(configPath)
 	require.NoError(t, err)
-	
+
 	assert.False(t, cfg.Monitoring.Enabled)
 	assert.Equal(t, 30*time.Second, cfg.Monitoring.Interval)
 }
@@ -112,9 +112,9 @@ func TestHardwareConfig_ToResourceThresholds(t *testing.T) {
 			Interval: 10 * time.Second,
 		},
 	}
-	
+
 	thresholds := cfg.ToResourceThresholds()
-	
+
 	assert.Equal(t, 70.0, thresholds.VRAMWarningPercent)
 	assert.Equal(t, 90.0, thresholds.VRAMBlockPercent)
 	assert.Equal(t, 75.0, thresholds.RAMWarningPercent)

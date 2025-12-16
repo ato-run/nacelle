@@ -5,28 +5,8 @@
 //! 2. Stop
 //! 3. Re-deploy with same [storage] → HostPath 再 mount → データ残存確認
 
-use std::sync::Arc;
-use std::path::PathBuf;
-use tempfile::TempDir;
 
-use capsuled_engine::{
-    artifact::manager::{ArtifactConfig, ArtifactManager},
-    capsule_manager::CapsuleManager,
-    grpc_server::EngineService,
-    hardware::{create_gpu_detector, GpuDetector},
-    network::{service_registry::ServiceRegistry, tailscale::TailscaleManager},
-    proto::onescluster::engine::v1::{
-        engine_server::{Engine, EngineServer},
-        DeployRequest, deploy_request::Manifest as DeployManifest,
-    },
-    proto::onescluster::common::v1 as common,
-    runtime::{ContainerRuntime, RuntimeConfig, RuntimeKind},
-    security::audit::AuditLogger,
-    wasm_host::AdepLogicHost,
-};
 
-use tonic::transport::Server;
-use tonic::Request;
 
 /// Test prerequisite check
 #[tokio::test]

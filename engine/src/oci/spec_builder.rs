@@ -39,19 +39,18 @@ fn derive_args(execution: &CapsuleExecution, extra_args: Option<&[String]>) -> V
          } else {
              parts
          }
+    } else if let Some(extra) = extra_args {
+        if !extra.is_empty() {
+            extra.to_vec()
+        } else {
+            vec!["/bin/sh".to_string()]
+        }
     } else {
-         if let Some(extra) = extra_args {
-             if !extra.is_empty() {
-                 extra.to_vec()
-             } else {
-                 vec!["/bin/sh".to_string()]
-             }
-         } else {
-             vec!["/bin/sh".to_string()]
-         }
+        vec!["/bin/sh".to_string()]
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_oci_spec(
     rootfs_path: &Path,
     execution: &CapsuleExecution,

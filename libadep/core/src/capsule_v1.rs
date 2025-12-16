@@ -12,7 +12,7 @@ use crate::error::CapsuleError;
 use crate::utils::parse_memory_string;
 
 /// Capsule Type - defines the fundamental nature of the Capsule
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CapsuleType {
     /// AI model inference (MLX, vLLM, etc.)
@@ -20,20 +20,16 @@ pub enum CapsuleType {
     /// Utility tool (RAG, code interpreter, etc.)
     Tool,
     /// Application (agent, workflow, etc.)
+    #[default]
     App,
 }
 
-impl Default for CapsuleType {
-    fn default() -> Self {
-        CapsuleType::App
-    }
-}
-
 /// Runtime Type - how the Capsule is executed
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum RuntimeType {
     /// Python with uv package manager
+    #[default]
     PythonUv,
     /// Docker container
     Docker,
@@ -41,30 +37,18 @@ pub enum RuntimeType {
     Native,
 }
 
-impl Default for RuntimeType {
-    fn default() -> Self {
-        RuntimeType::PythonUv
-    }
-}
-
 /// Routing Weight - determines local vs cloud routing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteWeight {
     /// Small models, quick tasks - prefer local
+    #[default]
     Light,
     /// Large models, heavy compute - consider cloud
     Heavy,
 }
 
-impl Default for RouteWeight {
-    fn default() -> Self {
-        RouteWeight::Light
-    }
-}
-
-/// Model Quantization Format
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Quantization {
     Fp16,

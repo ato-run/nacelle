@@ -1,7 +1,6 @@
 #![cfg(feature = "toml-support")]
 
 use libadep_core::capsule_manifest::CapsuleManifest;
-use libadep_core::capsule_manifest::Resources;
 use libadep_core::utils::parse_memory_string;
 
 #[test]

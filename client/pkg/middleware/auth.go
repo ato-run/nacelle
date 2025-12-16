@@ -40,8 +40,8 @@ func (i *AuthInterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		// Skip auth for machine registration and heartbeat
 		// TODO: Implement separate Machine Auth (e.g. mTLS or PSK)
-		if strings.HasSuffix(info.FullMethod, "RegisterMachine") || 
-		   strings.HasSuffix(info.FullMethod, "Heartbeat") {
+		if strings.HasSuffix(info.FullMethod, "RegisterMachine") ||
+			strings.HasSuffix(info.FullMethod, "Heartbeat") {
 			return handler(ctx, req)
 		}
 
@@ -72,7 +72,7 @@ func (i *AuthInterceptor) authorize(ctx context.Context) (*User, error) {
 	if !strings.HasPrefix(accessToken, "Bearer ") {
 		return nil, status.Errorf(codes.Unauthenticated, "authorization token must be a Bearer token")
 	}
-	
+
 	tokenString := strings.TrimPrefix(accessToken, "Bearer ")
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -91,7 +91,7 @@ func (i *AuthInterceptor) authorize(ctx context.Context) (*User, error) {
 		if !ok {
 			return nil, status.Errorf(codes.Unauthenticated, "token does not contain subject")
 		}
-		
+
 		email, _ := claims["email"].(string)
 
 		return &User{

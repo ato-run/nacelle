@@ -369,7 +369,7 @@ func TestParseSize_ValidInputs(t *testing.T) {
 		{"512MB", 512 * 1024 * 1024},
 		{"100MB", 100 * 1024 * 1024},
 		{"1.5GB", int64(1.5 * 1024 * 1024 * 1024)},
-		{"8gb", 8 * 1024 * 1024 * 1024}, // lowercase
+		{"8gb", 8 * 1024 * 1024 * 1024},    // lowercase
 		{"16 GB", 16 * 1024 * 1024 * 1024}, // with space
 	}
 

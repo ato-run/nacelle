@@ -130,9 +130,9 @@ pub fn compute_package_digest(root: &Path) -> Result<String> {
     let mut hasher = Sha256::new();
     for (path, hash) in entries {
         hasher.update(path.as_bytes());
-        hasher.update(&[0u8]);
+        hasher.update([0u8]);
         hasher.update(hash.as_bytes());
-        hasher.update(&[0u8]);
+        hasher.update([0u8]);
     }
 
     Ok(hex::encode(hasher.finalize()))
@@ -184,7 +184,7 @@ fn should_include_in_digest(path: &Path) -> Result<bool> {
             if name_str == "_sig" {
                 return Ok(false);
             }
-            Ok(PACKAGE_TOP_LEVEL.iter().any(|allowed| name_str == *allowed))
+            Ok(PACKAGE_TOP_LEVEL.contains(&name_str))
         }
         _ => Ok(false),
     }

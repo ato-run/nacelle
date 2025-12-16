@@ -239,7 +239,7 @@ impl CanonicalIndex {
                 None => added.push(*next),
                 Some(prev) if *prev != *next => changed.push(IndexChange {
                     path,
-                    previous: *prev,
+                    previous: prev,
                     next,
                 }),
                 _ => {}

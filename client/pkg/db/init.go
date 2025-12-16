@@ -24,7 +24,7 @@ func InitSchema(client *Client) error {
 
 	// Split schema into individual statements (rqlite doesn't support multi-statement exec)
 	statements := splitSQLStatements(schema)
-	
+
 	// Execute schema statements
 	if err := client.ExecuteMany(statements); err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
@@ -88,7 +88,7 @@ func ApplyMigrations(client *Client) error {
 
 		// Split migration into individual statements
 		statements := splitSQLStatements(string(migrationBytes))
-		
+
 		if err := client.ExecuteMany(statements); err != nil {
 			msg := err.Error()
 			// Allow idempotent reruns (duplicate columns/tables)
@@ -132,17 +132,17 @@ func splitSQLStatements(sql string) []string {
 	var statements []string
 	var current string
 	lines := strings.Split(sql, "\n")
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip empty lines and comments
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		
+
 		current += line + "\n"
-		
+
 		// Check if line ends with semicolon (statement terminator)
 		if strings.HasSuffix(trimmed, ";") {
 			stmt := strings.TrimSpace(current)
@@ -152,12 +152,12 @@ func splitSQLStatements(sql string) []string {
 			current = ""
 		}
 	}
-	
+
 	// Add any remaining statement
 	if current := strings.TrimSpace(current); current != "" && current != ";" {
 		statements = append(statements, current)
 	}
-	
+
 	return statements
 }
 

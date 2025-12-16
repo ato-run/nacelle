@@ -118,81 +118,81 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	// Record start in store
 	if err := m.store.RecordStart(ctx, name, runningCapsule.Process.Pid); err != nil {
 		// Kill the process if we can't record it
-runningCapsule.Process.Kill()
-return fmt.Errorf("failed to record start: %w", err)
-}
+		runningCapsule.Process.Kill()
+		return fmt.Errorf("failed to record start: %w", err)
+	}
 
-// Update store status
-if err := m.store.UpdateStatus(ctx, name, store.StatusRunning); err != nil {
-runningCapsule.Process.Kill()
-return fmt.Errorf("failed to update status: %w", err)
-}
+	// Update store status
+	if err := m.store.UpdateStatus(ctx, name, store.StatusRunning); err != nil {
+		runningCapsule.Process.Kill()
+		return fmt.Errorf("failed to update status: %w", err)
+	}
 
-m.capsules[name] = runningCapsule
-return nil
+	m.capsules[name] = runningCapsule
+	return nil
 }
 
 // Stop stops a running capsule
 func (m *Manager) Stop(ctx context.Context, name string) error {
-m.mu.Lock()
-defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-running, exists := m.capsules[name]
-if !exists {
-return fmt.Errorf("capsule %s is not running", name)
-}
+	running, exists := m.capsules[name]
+	if !exists {
+		return fmt.Errorf("capsule %s is not running", name)
+	}
 
-// Send interrupt signal
-if err := running.Cmd.Process.Signal(os.Interrupt); err != nil {
-// If interrupt fails, try kill
-running.Cmd.Process.Kill()
-}
+	// Send interrupt signal
+	if err := running.Cmd.Process.Signal(os.Interrupt); err != nil {
+		// If interrupt fails, try kill
+		running.Cmd.Process.Kill()
+	}
 
-// Wait for process to exit (with timeout)
-done := make(chan error, 1)
-go func() {
-done <- running.Cmd.Wait()
-}()
+	// Wait for process to exit (with timeout)
+	done := make(chan error, 1)
+	go func() {
+		done <- running.Cmd.Wait()
+	}()
 
-select {
-case <-done:
-// Process exited
-case <-time.After(10 * time.Second):
-// Force kill
-running.Cmd.Process.Kill()
-}
+	select {
+	case <-done:
+	// Process exited
+	case <-time.After(10 * time.Second):
+		// Force kill
+		running.Cmd.Process.Kill()
+	}
 
-// Record stop
-if err := m.store.RecordStop(ctx, name, running.Process.Pid); err != nil {
-return fmt.Errorf("failed to record stop: %w", err)
-}
+	// Record stop
+	if err := m.store.RecordStop(ctx, name, running.Process.Pid); err != nil {
+		return fmt.Errorf("failed to record stop: %w", err)
+	}
 
-// Update status
-if err := m.store.UpdateStatus(ctx, name, store.StatusStopped); err != nil {
-return fmt.Errorf("failed to update status: %w", err)
-}
+	// Update status
+	if err := m.store.UpdateStatus(ctx, name, store.StatusStopped); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
 
-delete(m.capsules, name)
-return nil
+	delete(m.capsules, name)
+	return nil
 }
 
 // List returns all installed capsules
 func (m *Manager) List(ctx context.Context) ([]*store.Capsule, error) {
-return m.store.List(ctx)
+	return m.store.List(ctx)
 }
 
 // Status returns the status of a capsule
 func (m *Manager) Status(ctx context.Context, name string) (*store.Capsule, bool, error) {
-capsule, err := m.store.Get(ctx, name)
-if err != nil {
-return nil, false, err
-}
+	capsule, err := m.store.Get(ctx, name)
+	if err != nil {
+		return nil, false, err
+	}
 
-m.mu.RLock()
-_, running := m.capsules[name]
-m.mu.RUnlock()
+	m.mu.RLock()
+	_, running := m.capsules[name]
+	m.mu.RUnlock()
 
-return capsule, running, nil
+	return capsule, running, nil
 }
 
 // Uninstall removes a capsule
@@ -313,79 +313,79 @@ func (m *Manager) IsInferenceActive(name string) bool {
 
 // startRuntime starts the appropriate runtime for the capsule
 func (m *Manager) startRuntime(ctx context.Context, manifest *CapsuleManifest, workDir string) (*RunningCapsule, error) {
-switch manifest.Execution.Runtime {
-case RuntimePythonUv:
-return m.startPythonUv(ctx, manifest, workDir)
-case RuntimeDocker:
-return nil, fmt.Errorf("docker runtime not yet implemented")
-case RuntimeNative:
-return nil, fmt.Errorf("native runtime not yet implemented")
-default:
-return nil, fmt.Errorf("unknown runtime: %s", manifest.Execution.Runtime)
-}
+	switch manifest.Execution.Runtime {
+	case RuntimePythonUv:
+		return m.startPythonUv(ctx, manifest, workDir)
+	case RuntimeDocker:
+		return nil, fmt.Errorf("docker runtime not yet implemented")
+	case RuntimeNative:
+		return nil, fmt.Errorf("native runtime not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown runtime: %s", manifest.Execution.Runtime)
+	}
 }
 
 // startPythonUv starts a python-uv based capsule
 func (m *Manager) startPythonUv(ctx context.Context, manifest *CapsuleManifest, workDir string) (*RunningCapsule, error) {
-// Find port - start from 8080, increment if in use
-port := 8080
-// TODO: Check if port is available
+	// Find port - start from 8080, increment if in use
+	port := 8080
+	// TODO: Check if port is available
 
-entrypoint := manifest.Execution.Entrypoint
-if entrypoint == "" {
-entrypoint = "main:app"
-}
+	entrypoint := manifest.Execution.Entrypoint
+	if entrypoint == "" {
+		entrypoint = "main:app"
+	}
 
-// Split entrypoint into module:app
-// e.g., "server:app" -> "server", "app"
-var module, app string
-if n, _ := fmt.Sscanf(entrypoint, "%s:%s", &module, &app); n == 2 {
-// Use uvicorn
-} else {
-module = entrypoint
-app = "app"
-}
+	// Split entrypoint into module:app
+	// e.g., "server:app" -> "server", "app"
+	var module, app string
+	if n, _ := fmt.Sscanf(entrypoint, "%s:%s", &module, &app); n == 2 {
+		// Use uvicorn
+	} else {
+		module = entrypoint
+		app = "app"
+	}
 
-// Use uv run to execute uvicorn
-cmd := exec.CommandContext(ctx, "uv", "run", "uvicorn",
-fmt.Sprintf("%s:%s", module, app),
-"--host", "127.0.0.1",
-"--port", fmt.Sprintf("%d", port),
-)
-cmd.Dir = workDir
-cmd.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
+	// Use uv run to execute uvicorn
+	cmd := exec.CommandContext(ctx, "uv", "run", "uvicorn",
+		fmt.Sprintf("%s:%s", module, app),
+		"--host", "127.0.0.1",
+		"--port", fmt.Sprintf("%d", port),
+	)
+	cmd.Dir = workDir
+	cmd.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
 
-// Set environment from manifest
-for k, v := range manifest.Execution.Env {
-cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
-}
+	// Set environment from manifest
+	for k, v := range manifest.Execution.Env {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 
-// Start the process
-if err := cmd.Start(); err != nil {
-return nil, fmt.Errorf("failed to start process: %w", err)
-}
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start process: %w", err)
+	}
 
-return &RunningCapsule{
-Manifest:  manifest,
-Process:   cmd.Process,
-Cmd:       cmd,
-StartedAt: time.Now(),
-Port:      port,
-}, nil
+	return &RunningCapsule{
+		Manifest:  manifest,
+		Process:   cmd.Process,
+		Cmd:       cmd,
+		StartedAt: time.Now(),
+		Port:      port,
+	}, nil
 }
 
 // Close stops all running capsules
 func (m *Manager) Close() error {
-ctx := context.Background()
-m.mu.Lock()
-names := make([]string, 0, len(m.capsules))
-for name := range m.capsules {
-names = append(names, name)
-}
-m.mu.Unlock()
+	ctx := context.Background()
+	m.mu.Lock()
+	names := make([]string, 0, len(m.capsules))
+	for name := range m.capsules {
+		names = append(names, name)
+	}
+	m.mu.Unlock()
 
-for _, name := range names {
-m.Stop(ctx, name)
-}
-return nil
+	for _, name := range names {
+		m.Stop(ctx, name)
+	}
+	return nil
 }

@@ -155,50 +155,50 @@ func (s *SQLiteStore) ListByStatus(ctx context.Context, status CapsuleStatus) ([
 
 // UpdateStatus updates a Capsule's status
 func (s *SQLiteStore) UpdateStatus(ctx context.Context, name string, status CapsuleStatus) error {
-result, err := s.db.ExecContext(ctx, `UPDATE capsules SET status = ? WHERE id = ?`, string(status), name)
-if err != nil {
-return fmt.Errorf("failed to update status: %w", err)
-}
+	result, err := s.db.ExecContext(ctx, `UPDATE capsules SET status = ? WHERE id = ?`, string(status), name)
+	if err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
 
-rows, err := result.RowsAffected()
-if err != nil {
-return err
-}
-if rows == 0 {
-return fmt.Errorf("capsule not found: %s", name)
-}
-return nil
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("capsule not found: %s", name)
+	}
+	return nil
 }
 
 // UpdateLastUsed updates the last_used_at timestamp
 func (s *SQLiteStore) UpdateLastUsed(ctx context.Context, name string) error {
-_, err := s.db.ExecContext(ctx, `UPDATE capsules SET last_used_at = ? WHERE id = ?`, time.Now().Unix(), name)
-if err != nil {
-return fmt.Errorf("failed to update last_used_at: %w", err)
-}
-return nil
+	_, err := s.db.ExecContext(ctx, `UPDATE capsules SET last_used_at = ? WHERE id = ?`, time.Now().Unix(), name)
+	if err != nil {
+		return fmt.Errorf("failed to update last_used_at: %w", err)
+	}
+	return nil
 }
 
 // Delete removes a Capsule
 func (s *SQLiteStore) Delete(ctx context.Context, name string) error {
-result, err := s.db.ExecContext(ctx, `DELETE FROM capsules WHERE id = ?`, name)
-if err != nil {
-return fmt.Errorf("failed to remove capsule: %w", err)
-}
+	result, err := s.db.ExecContext(ctx, `DELETE FROM capsules WHERE id = ?`, name)
+	if err != nil {
+		return fmt.Errorf("failed to remove capsule: %w", err)
+	}
 
-rows, err := result.RowsAffected()
-if err != nil {
-return err
-}
-if rows == 0 {
-return fmt.Errorf("capsule not found: %s", name)
-}
-return nil
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("capsule not found: %s", name)
+	}
+	return nil
 }
 
 // RecordStart records that a Capsule process has started
 func (s *SQLiteStore) RecordStart(ctx context.Context, name string, pid int) error {
-_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 INSERT INTO processes (capsule_id, pid, started_at)
 VALUES (?, ?, ?)
 ON CONFLICT(capsule_id) DO UPDATE SET
@@ -206,137 +206,137 @@ pid = excluded.pid,
 started_at = excluded.started_at
 `, name, pid, time.Now().Unix())
 
-if err != nil {
-return fmt.Errorf("failed to record start: %w", err)
-}
+	if err != nil {
+		return fmt.Errorf("failed to record start: %w", err)
+	}
 
-return s.UpdateStatus(ctx, name, StatusStarting)
+	return s.UpdateStatus(ctx, name, StatusStarting)
 }
 
 // RecordStop records that a Capsule process has stopped
 func (s *SQLiteStore) RecordStop(ctx context.Context, name string, pid int) error {
-_, err := s.db.ExecContext(ctx, `DELETE FROM processes WHERE capsule_id = ? AND pid = ?`, name, pid)
-if err != nil {
-return fmt.Errorf("failed to record stop: %w", err)
-}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM processes WHERE capsule_id = ? AND pid = ?`, name, pid)
+	if err != nil {
+		return fmt.Errorf("failed to record stop: %w", err)
+	}
 
-return s.UpdateStatus(ctx, name, StatusStopped)
+	return s.UpdateStatus(ctx, name, StatusStopped)
 }
 
 // GetProcess retrieves process info for a Capsule
 func (s *SQLiteStore) GetProcess(ctx context.Context, name string) (*ProcessInfo, error) {
-row := s.db.QueryRowContext(ctx, `
+	row := s.db.QueryRowContext(ctx, `
 SELECT capsule_id, pid, port, started_at
 FROM processes WHERE capsule_id = ?
 `, name)
 
-var info ProcessInfo
-var startedAtUnix int64
-var port sql.NullInt64
-err := row.Scan(&info.CapsuleName, &info.PID, &port, &startedAtUnix)
-if err == sql.ErrNoRows {
-return nil, nil
-}
-if err != nil {
-return nil, fmt.Errorf("failed to get process: %w", err)
-}
+	var info ProcessInfo
+	var startedAtUnix int64
+	var port sql.NullInt64
+	err := row.Scan(&info.CapsuleName, &info.PID, &port, &startedAtUnix)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get process: %w", err)
+	}
 
-if port.Valid {
-info.Port = int(port.Int64)
-}
-info.StartedAt = time.Unix(startedAtUnix, 0)
-return &info, nil
+	if port.Valid {
+		info.Port = int(port.Int64)
+	}
+	info.StartedAt = time.Unix(startedAtUnix, 0)
+	return &info, nil
 }
 
 // GetRunningProcesses returns all running Capsule processes
 func (s *SQLiteStore) GetRunningProcesses(ctx context.Context) ([]*ProcessInfo, error) {
-rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, `
 SELECT capsule_id, pid, port, started_at
 FROM processes
 `)
-if err != nil {
-return nil, fmt.Errorf("failed to get running processes: %w", err)
-}
-defer rows.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get running processes: %w", err)
+	}
+	defer rows.Close()
 
-var processes []*ProcessInfo
-for rows.Next() {
-var info ProcessInfo
-var startedAtUnix int64
-var port sql.NullInt64
-if err := rows.Scan(&info.CapsuleName, &info.PID, &port, &startedAtUnix); err != nil {
-return nil, err
-}
-if port.Valid {
-info.Port = int(port.Int64)
-}
-info.StartedAt = time.Unix(startedAtUnix, 0)
-processes = append(processes, &info)
-}
+	var processes []*ProcessInfo
+	for rows.Next() {
+		var info ProcessInfo
+		var startedAtUnix int64
+		var port sql.NullInt64
+		if err := rows.Scan(&info.CapsuleName, &info.PID, &port, &startedAtUnix); err != nil {
+			return nil, err
+		}
+		if port.Valid {
+			info.Port = int(port.Int64)
+		}
+		info.StartedAt = time.Unix(startedAtUnix, 0)
+		processes = append(processes, &info)
+	}
 
-return processes, nil
+	return processes, nil
 }
 
 // RecordHardwareSnapshot stores a hardware snapshot
 func (s *SQLiteStore) RecordHardwareSnapshot(ctx context.Context, snapshot *HardwareSnapshot) error {
-_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 INSERT INTO hardware_snapshots (timestamp, total_vram_gb, available_vram_gb, total_ram_gb, available_ram_gb, cpu_usage_percent)
 VALUES (?, ?, ?, ?, ?, ?)
 `, snapshot.Timestamp.Unix(), snapshot.TotalVRAMGB, snapshot.AvailableVRAMGB, snapshot.TotalRAMGB, snapshot.AvailableRAMGB, snapshot.CPUUsagePercent)
 
-if err != nil {
-return fmt.Errorf("failed to record hardware snapshot: %w", err)
-}
-return nil
+	if err != nil {
+		return fmt.Errorf("failed to record hardware snapshot: %w", err)
+	}
+	return nil
 }
 
 // GetLatestHardware returns the most recent hardware snapshot
 func (s *SQLiteStore) GetLatestHardware(ctx context.Context) (*HardwareSnapshot, error) {
-row := s.db.QueryRowContext(ctx, `
+	row := s.db.QueryRowContext(ctx, `
 SELECT id, timestamp, total_vram_gb, available_vram_gb, total_ram_gb, available_ram_gb, cpu_usage_percent
 FROM hardware_snapshots ORDER BY timestamp DESC LIMIT 1
 `)
 
-var snapshot HardwareSnapshot
-var timestampUnix int64
-err := row.Scan(&snapshot.ID, &timestampUnix, &snapshot.TotalVRAMGB, &snapshot.AvailableVRAMGB, &snapshot.TotalRAMGB, &snapshot.AvailableRAMGB, &snapshot.CPUUsagePercent)
-if err == sql.ErrNoRows {
-return nil, nil
-}
-if err != nil {
-return nil, fmt.Errorf("failed to get latest hardware: %w", err)
-}
+	var snapshot HardwareSnapshot
+	var timestampUnix int64
+	err := row.Scan(&snapshot.ID, &timestampUnix, &snapshot.TotalVRAMGB, &snapshot.AvailableVRAMGB, &snapshot.TotalRAMGB, &snapshot.AvailableRAMGB, &snapshot.CPUUsagePercent)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest hardware: %w", err)
+	}
 
-snapshot.Timestamp = time.Unix(timestampUnix, 0)
-return &snapshot, nil
+	snapshot.Timestamp = time.Unix(timestampUnix, 0)
+	return &snapshot, nil
 }
 
 // GetHardwareHistory returns hardware snapshots since a given time
 func (s *SQLiteStore) GetHardwareHistory(ctx context.Context, since time.Time, limit int) ([]*HardwareSnapshot, error) {
-rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, `
 SELECT id, timestamp, total_vram_gb, available_vram_gb, total_ram_gb, available_ram_gb, cpu_usage_percent
 FROM hardware_snapshots
 WHERE timestamp >= ?
 ORDER BY timestamp DESC
 LIMIT ?
 `, since.Unix(), limit)
-if err != nil {
-return nil, fmt.Errorf("failed to get hardware history: %w", err)
-}
-defer rows.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hardware history: %w", err)
+	}
+	defer rows.Close()
 
-var snapshots []*HardwareSnapshot
-for rows.Next() {
-var snapshot HardwareSnapshot
-var timestampUnix int64
-if err := rows.Scan(&snapshot.ID, &timestampUnix, &snapshot.TotalVRAMGB, &snapshot.AvailableVRAMGB, &snapshot.TotalRAMGB, &snapshot.AvailableRAMGB, &snapshot.CPUUsagePercent); err != nil {
-return nil, err
-}
-snapshot.Timestamp = time.Unix(timestampUnix, 0)
-snapshots = append(snapshots, &snapshot)
-}
+	var snapshots []*HardwareSnapshot
+	for rows.Next() {
+		var snapshot HardwareSnapshot
+		var timestampUnix int64
+		if err := rows.Scan(&snapshot.ID, &timestampUnix, &snapshot.TotalVRAMGB, &snapshot.AvailableVRAMGB, &snapshot.TotalRAMGB, &snapshot.AvailableRAMGB, &snapshot.CPUUsagePercent); err != nil {
+			return nil, err
+		}
+		snapshot.Timestamp = time.Unix(timestampUnix, 0)
+		snapshots = append(snapshots, &snapshot)
+	}
 
-return snapshots, nil
+	return snapshots, nil
 }
 
 // Helper functions

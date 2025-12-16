@@ -3,7 +3,7 @@
 //! Combines LVM volume management and LUKS encryption into a single
 //! interface for provisioning and managing capsule storage.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};

@@ -141,36 +141,8 @@ impl<'a> Packager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capsule_v1::{CapsuleManifestV1, CapsuleType, RuntimeType, CapsuleExecution, CapsuleMetadataV1};
+    use crate::capsule_v1::{CapsuleManifestV1, CapsuleType, RuntimeType, CapsuleExecution};
 
-    fn mock_manifest(entrypoint: &str) -> CapsuleManifestV1 {
-        CapsuleManifestV1 {
-            schema_version: "1.0".into(),
-            name: "test-app".into(),
-            version: "0.1.0".into(),
-            capsule_type: CapsuleType::App,
-            metadata: CapsuleMetadataV1::default(),
-            execution: CapsuleExecution {
-                runtime: RuntimeType::Docker,
-                entrypoint: entrypoint.into(),
-                port: Some(8080),
-                ..base_execution()
-            },
-            requirements: Default::default(),
-            capabilities: None,
-            routing: Default::default(),
-            model: None,
-            storage: Default::default(),
-        }
-    }
-
-    fn base_execution() -> CapsuleExecution {
-        // ... (can use Default if we implemented it, or construct manually)
-        unsafe { std::mem::zeroed() } // Quick dirty way for test? No, let's correspond to struct.
-        // Actually simpler to just construct minimal struct in test
-        unimplemented!()
-    }
-    
     // Helper to bypass full struct construction in every test
     fn create_manifest(entrypoint: &str) -> CapsuleManifestV1 {
         // Use a minimal valid JSON and parse it? Or construct?
@@ -195,6 +167,7 @@ mod tests {
             routing: Default::default(),
             model: None,
             storage: Default::default(),
+            network: None,
         }
     }
 

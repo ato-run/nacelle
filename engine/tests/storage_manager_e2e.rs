@@ -173,7 +173,7 @@ fn test_storage_manager_provision_unencrypted() {
         mount_base: PathBuf::from("/tmp/capsuled_test_mounts"),
     };
 
-    let mut manager = StorageManager::new(config);
+    let manager = StorageManager::new(config);
     let capsule_id = "test-capsule-001";
 
     // 1. Provision
@@ -184,7 +184,11 @@ fn test_storage_manager_provision_unencrypted() {
     println!("Provisioned: {:?}", storage);
     
     // 2. Mount
-    println!
+    println!("Mounting volume...");
+    manager.mount_volume(&mut storage).expect("Mount failed");
+    
+    let mount_path = storage.mount_point.clone().expect("Mount point missing");
+    assert!(
         mount_path.exists()
     );
 
@@ -202,12 +206,7 @@ fn test_storage_manager_provision_unencrypted() {
     // Mount point directory should be removed by unmount_volume
     assert!(
         !mount_path.exists()
-    
-    // 4. Unmount
-    println!("Unmounting...");
-    manager.unmount_volume(capsule_id, &storage.lv_name).expect("Unmount failed");
-    // Mount point directory should be removed by unmount_volume
-    assert!(!mount_path.exists()); 
+    ); 
 
     // 5. Cleanup
     println!("Cleaning up...");

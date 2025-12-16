@@ -121,9 +121,9 @@ type ChatChunk struct {
 
 // ChunkChoice represents a single choice in a streaming chunk.
 type ChunkChoice struct {
-	Index        int          `json:"index"`
-	Delta        ChatDelta    `json:"delta"`
-	FinishReason string       `json:"finish_reason,omitempty"`
+	Index        int       `json:"index"`
+	Delta        ChatDelta `json:"delta"`
+	FinishReason string    `json:"finish_reason,omitempty"`
 }
 
 // ChatDelta represents the incremental content in a streaming chunk.

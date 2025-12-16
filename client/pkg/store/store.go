@@ -99,4 +99,3 @@ func (h *HardwareSnapshot) RAMUsagePercent() float64 {
 	}
 	return (h.TotalRAMGB - h.AvailableRAMGB) / h.TotalRAMGB * 100
 }
-

@@ -1,6 +1,5 @@
-use anyhow::{anyhow, Result};
 use crate::proto::onescluster::common::v1 as common;
-use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleStorage, RuntimeType, SignalConfig, CapsuleRouting, CapsuleType, StorageVolume};
+use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleStorage, RuntimeType, CapsuleRouting, CapsuleType, StorageVolume};
 use std::collections::HashMap;
 
 /// Result of converting a RunPlan proto into the canonical CapsuleManifestV1.

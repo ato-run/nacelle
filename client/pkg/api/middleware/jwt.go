@@ -22,10 +22,10 @@ type AuthenticatedUser struct {
 
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
-	Secret    string
-	Issuer    string
-	Audience  string
-	DevMode   bool
+	Secret   string
+	Issuer   string
+	Audience string
+	DevMode  bool
 }
 
 // JWTMiddleware validates JWT tokens for HTTP requests

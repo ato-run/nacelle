@@ -370,7 +370,7 @@ func (sm *StateManager) UpsertNode(node *Node) error {
 // UpdateNodeHeartbeat updates node heartbeat and syncs workloads/GPUs
 func (sm *StateManager) UpdateNodeHeartbeat(nodeID string, lastSeen time.Time, workloads []*NodeWorkload, gpus []*NodeGpu) error {
 	now := time.Now()
-	
+
 	// Prepare batch queries
 	queries := []string{
 		// Update node last_seen
@@ -385,8 +385,8 @@ func (sm *StateManager) UpdateNodeHeartbeat(nodeID string, lastSeen time.Time, w
 		queries = append(queries, fmt.Sprintf(`
 			INSERT INTO node_workloads (node_id, workload_id, name, reserved_vram_bytes, observed_vram_bytes, pid, phase, updated_at)
 			VALUES ('%s', '%s', '%s', %d, %d, %d, '%s', %d)
-		`, escapeSQLString(wl.NodeID), escapeSQLString(wl.WorkloadID), escapeSQLString(wl.Name), 
-		wl.ReservedVRAMBytes, wl.ObservedVRAMBytes, wl.PID, escapeSQLString(wl.Phase), wl.UpdatedAt.Unix()))
+		`, escapeSQLString(wl.NodeID), escapeSQLString(wl.WorkloadID), escapeSQLString(wl.Name),
+			wl.ReservedVRAMBytes, wl.ObservedVRAMBytes, wl.PID, escapeSQLString(wl.Phase), wl.UpdatedAt.Unix()))
 	}
 
 	// Insert GPUs
@@ -394,8 +394,8 @@ func (sm *StateManager) UpdateNodeHeartbeat(nodeID string, lastSeen time.Time, w
 		queries = append(queries, fmt.Sprintf(`
 			INSERT INTO node_gpus (id, node_id, gpu_index, name, total_vram_bytes, used_vram_bytes, updated_at)
 			VALUES ('%s', '%s', %d, '%s', %d, %d, %d)
-		`, escapeSQLString(gpu.ID), escapeSQLString(gpu.NodeID), gpu.Index, escapeSQLString(gpu.Name), 
-		gpu.TotalVRAMBytes, gpu.UsedVRAMBytes, gpu.UpdatedAt.Unix()))
+		`, escapeSQLString(gpu.ID), escapeSQLString(gpu.NodeID), gpu.Index, escapeSQLString(gpu.Name),
+			gpu.TotalVRAMBytes, gpu.UsedVRAMBytes, gpu.UpdatedAt.Unix()))
 	}
 
 	if err := sm.client.ExecuteMany(queries); err != nil {
@@ -435,7 +435,7 @@ func (sm *StateManager) GetAllGpuRigs(ctx context.Context) ([]*gpu.RigGpuInfo, e
 
 		var gpus []gpu.GpuInfo
 		var totalVRAM uint64
-		
+
 		for gpuRows.Next() {
 			var id, name string
 			var total, used uint64 // used from heartbeat (observed)
@@ -488,7 +488,7 @@ func (sm *StateManager) GetAllGpuRigs(ctx context.Context) ([]*gpu.RigGpuInfo, e
 // ReserveVRAM reserves VRAM for a workload on a node by inserting a pending workload record
 func (sm *StateManager) ReserveVRAM(ctx context.Context, nodeID, workloadID string, vramBytes uint64) error {
 	now := time.Now()
-	
+
 	// Insert pending workload
 	query := fmt.Sprintf(`
 		INSERT INTO node_workloads (node_id, workload_id, name, reserved_vram_bytes, observed_vram_bytes, pid, phase, updated_at)
@@ -504,12 +504,12 @@ func (sm *StateManager) ReserveVRAM(ctx context.Context, nodeID, workloadID stri
 
 // ReleaseVRAM releases reserved VRAM by deleting the workload record (if it's still pending/failed)
 func (sm *StateManager) ReleaseVRAM(ctx context.Context, nodeID string, vramBytes uint64) error {
-	// We don't have workloadID here in the old signature, but we should probably just rely on 
+	// We don't have workloadID here in the old signature, but we should probably just rely on
 	// the fact that if deployment failed, we want to remove the pending record.
 	// But without workloadID, we might delete the wrong one?
 	// The DeployHandler calls this on error.
 	// I'll update DeployHandler to pass workloadID to ReleaseVRAM too.
-	// For now, I'll implement a version that takes workloadID if possible, 
+	// For now, I'll implement a version that takes workloadID if possible,
 	// but to match the old interface I might need to change DeployHandler first.
 	// Let's assume I will update DeployHandler.
 	return nil
@@ -619,8 +619,6 @@ func (sm *StateManager) MarkCapsuleFailed(ctx context.Context, capsuleID string)
 func (sm *StateManager) MarkCapsulePending(ctx context.Context, capsuleID string) error {
 	return sm.UpdateCapsuleStatus(capsuleID, CapsuleStatusPending)
 }
-
-
 
 // escapeSQLString escapes single quotes in SQL strings
 func escapeSQLString(s string) string {

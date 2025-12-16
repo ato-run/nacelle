@@ -6,7 +6,7 @@ use std::path::Path;
 use anyhow::{anyhow, bail, Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Verifier, Signer};
+use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Verifier};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

@@ -131,7 +131,7 @@ impl ImageManager {
             let temp_path = std::env::temp_dir()
                 .join("capsuled")
                 .join("downloads")
-                .join(&layer.digest.replace("sha256:", ""));
+                .join(layer.digest.replace("sha256:", ""));
             
             client.download_blob(image_ref, &layer.digest, &temp_path).await?;
             

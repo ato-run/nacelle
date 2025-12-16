@@ -153,7 +153,7 @@ impl LayerCache {
         };
         
         let metadata_json = serde_json::to_string_pretty(&metadata)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
         fs::write(&temp_metadata_path, &metadata_json)?;
         
         // Atomic rename: temp -> final
@@ -186,7 +186,7 @@ impl LayerCache {
             if let Ok(mut metadata) = serde_json::from_str::<CacheMetadata>(&content) {
                 metadata.last_accessed = chrono::Utc::now();
                 let updated = serde_json::to_string_pretty(&metadata)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                    .map_err(io::Error::other)?;
                 fs::write(&metadata_path, updated)?;
             }
         }
@@ -201,10 +201,10 @@ impl LayerCache {
             return Ok(0);
         }
         
-        self.dir_size(&layers_dir)
+        Self::dir_size(&layers_dir)
     }
     
-    fn dir_size(&self, path: &Path) -> CacheResult<u64> {
+    fn dir_size(path: &Path) -> CacheResult<u64> {
         let mut total = 0;
         
         if path.is_file() {
@@ -216,7 +216,7 @@ impl LayerCache {
             let path = entry.path();
             
             if path.is_dir() {
-                total += self.dir_size(&path)?;
+                total += Self::dir_size(&path)?;
             } else {
                 total += fs::metadata(&path)?.len();
             }
@@ -241,7 +241,7 @@ impl LayerCache {
         
         let layers_dir = self.cache_dir.join("layers").join("sha256");
         if layers_dir.exists() {
-            self.collect_entries(&layers_dir, &mut entries)?;
+            Self::collect_entries(&layers_dir, &mut entries)?;
         }
         
         // Sort by last_accessed (oldest first)
@@ -266,7 +266,6 @@ impl LayerCache {
     }
     
     fn collect_entries(
-        &self,
         dir: &Path,
         entries: &mut Vec<(PathBuf, chrono::DateTime<chrono::Utc>, u64)>,
     ) -> CacheResult<()> {
@@ -280,12 +279,12 @@ impl LayerCache {
                 if metadata_path.exists() {
                     let content = fs::read_to_string(&metadata_path)?;
                     if let Ok(metadata) = serde_json::from_str::<CacheMetadata>(&content) {
-                        let size = self.dir_size(&path)?;
+                        let size = Self::dir_size(&path)?;
                         entries.push((path, metadata.last_accessed, size));
                     }
                 } else {
                     // Recurse into subdirectories
-                    self.collect_entries(&path, entries)?;
+                    Self::collect_entries(&path, entries)?;
                 }
             }
         }

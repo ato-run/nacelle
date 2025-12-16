@@ -26,9 +26,9 @@ const (
 	ErrCodeConflict      ErrorCode = "CONFLICT"
 
 	// Validation errors (400)
-	ErrCodeValidation    ErrorCode = "VALIDATION_ERROR"
-	ErrCodeInvalidInput  ErrorCode = "INVALID_INPUT"
-	ErrCodeMissingField  ErrorCode = "MISSING_FIELD"
+	ErrCodeValidation   ErrorCode = "VALIDATION_ERROR"
+	ErrCodeInvalidInput ErrorCode = "INVALID_INPUT"
+	ErrCodeMissingField ErrorCode = "MISSING_FIELD"
 
 	// Scheduling errors (503)
 	ErrCodeNoCapacity     ErrorCode = "NO_CAPACITY"

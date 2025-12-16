@@ -62,9 +62,9 @@ type ManifestProvider interface {
 
 // Router decides whether to run Capsules locally or in the cloud
 type Router struct {
-	monitor  hardware.HardwareMonitor
-	store    ManifestProvider
-	config   Config
+	monitor hardware.HardwareMonitor
+	store   ManifestProvider
+	config  Config
 }
 
 // NewRouter creates a new Router instance

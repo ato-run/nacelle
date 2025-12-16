@@ -1,7 +1,6 @@
 package api
 
 import (
-
 	"encoding/json"
 	"fmt"
 
@@ -13,16 +12,15 @@ import (
 	pb "github.com/onescluster/coordinator/pkg/proto"
 	"github.com/onescluster/coordinator/pkg/scheduler/gpu"
 	"github.com/onescluster/coordinator/pkg/wasm"
-
 )
 
 type DeployRequest struct {
-	AppID          string             `json:"app_id"`
-	RuntimeName    string             `json:"runtime_name"`
-	RuntimeVersion string             `json:"runtime_version"`
-	Config         map[string]string  `json:"config"`
-	Requirements   gpu.GpuConstraints `json:"requirements"`
-	AllowCloudBurst bool              `json:"allow_cloud_burst"`
+	AppID           string             `json:"app_id"`
+	RuntimeName     string             `json:"runtime_name"`
+	RuntimeVersion  string             `json:"runtime_version"`
+	Config          map[string]string  `json:"config"`
+	Requirements    gpu.GpuConstraints `json:"requirements"`
+	AllowCloudBurst bool               `json:"allow_cloud_burst"`
 }
 
 // AdepManifest represents the adep.json structure (simplified for Week 4)
@@ -63,24 +61,23 @@ type VolumeConfig struct {
 // Allows dependency injection for testing
 // AgentClientFactory removed
 
-
 // DeployHandler handles workload deployment requests
 type DeployHandler struct {
-	StateManager       *db.StateManager
-	Scheduler          *gpu.Scheduler
+	StateManager *db.StateManager
+	Scheduler    *gpu.Scheduler
 	// AgentClientFactory AgentClientFactory // Removed
 
-	WasmHost           *wasm.WasmerHost   // Optional: for Wasm validation
+	WasmHost *wasm.WasmerHost // Optional: for Wasm validation
 }
 
 // NewDeployHandler creates a new deploy handler
 func NewDeployHandler(stateManager *db.StateManager, scheduler *gpu.Scheduler) *DeployHandler {
 	return &DeployHandler{
-		StateManager:       stateManager,
-		Scheduler:          scheduler,
-		// AgentClientFactory: nil, 
+		StateManager: stateManager,
+		Scheduler:    scheduler,
+		// AgentClientFactory: nil,
 
-		WasmHost:           nil, // Initialize on first use
+		WasmHost: nil, // Initialize on first use
 	}
 }
 
@@ -122,7 +119,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		// Let's rely on adding GetApp to StateManager in a separate step if not present.
 		// Wait, I didn't add GetApp to StateManager yet. I should add it first.
 		// BUT for now, I'll assume GetApp exists or implement basic lookup here via GetAllApps
-		
+
 		apps := h.StateManager.GetAllApps()
 		var selectedApp *db.App
 		for _, app := range apps {
@@ -137,13 +134,12 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 				req.RuntimeName = selectedApp.Name
 			}
 			// Use App Image as the container image
-            // We store the image in the manifest.Compute.Image
+			// We store the image in the manifest.Compute.Image
 		}
 	}
-	
+
 	// If RuntimeName is still empty (no AppID or App not found), error out?
 	// Or assume the user meant to provide it manually.
-
 
 	// Populate AllowCloudBurst from request to requirements
 	req.Requirements.AllowCloudBurst = req.AllowCloudBurst
@@ -155,7 +151,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	if userID != "" {
 		activeCount := h.StateManager.GetActiveCapsuleCount(userID)
 		// TODO: Fetch actual limit from subscription
-		limit := 5 
+		limit := 5
 		if activeCount >= limit {
 			http.Error(w, fmt.Sprintf("Capsule limit reached (%d)", limit), http.StatusForbidden)
 			return
@@ -182,7 +178,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	// We need a workload ID.
 	workloadID := fmt.Sprintf("wl-%d", time.Now().UnixNano())
 	requiredVRAM := req.Requirements.RequiredVRAMBytes()
-	
+
 	if err := h.StateManager.ReserveVRAM(ctx, bestRig.RigID, workloadID, requiredVRAM); err != nil {
 		http.Error(w, "failed to reserve VRAM", http.StatusConflict)
 		return
@@ -209,7 +205,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	// 5. Execute on remote Engine
 	// We need to construct AdepManifest from DeployRequest
-	
+
 	// If AppID was used, we should ideally retrieve the image from the App definition
 	// But `req.RuntimeName` is just a name.
 	// Let's retry the app lookup logic here cleanly or persist the image from step 1
@@ -226,13 +222,13 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	if appImage == "" {
 		appImage = req.RuntimeName // Fallback to using name as image (legacy behavior)
 	}
 
 	manifest := AdepManifest{
-		Name:    req.RuntimeName,
+		Name: req.RuntimeName,
 		Compute: ComputeConfig{
 			Image: appImage,
 		},
@@ -268,20 +264,20 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Record capsule in DB
 	capsule := &db.Capsule{
-		ID:            resp.CapsuleId,
-		UserID:        userID,
-		Name:          req.RuntimeName,
-		NodeID:        bestRig.RigID,
-		RuntimeName:   req.RuntimeName,
-		Manifest:      string(manifestBytes),
-		Status:        db.CapsuleStatusRunning,
-		AccessURL:     resp.LocalUrl, // Use LocalUrl from response
+		ID:          resp.CapsuleId,
+		UserID:      userID,
+		Name:        req.RuntimeName,
+		NodeID:      bestRig.RigID,
+		RuntimeName: req.RuntimeName,
+		Manifest:    string(manifestBytes),
+		Status:      db.CapsuleStatusRunning,
+		AccessURL:   resp.LocalUrl, // Use LocalUrl from response
 		// Port is not in response. We can try to parse it from LocalUrl if needed.
 		// For now, leave it as 0.
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
-	
+
 	h.StateManager.CreateCapsule(capsule)
 
 	response := map[string]interface{}{
@@ -295,7 +291,6 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 }
 
 // callAgentDeploy removed
-
 
 func (h *DeployHandler) getEngineAddress(machine *db.Node) string {
 	// Prefer Tailnet IP if available

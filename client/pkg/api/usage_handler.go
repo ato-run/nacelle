@@ -33,7 +33,7 @@ type ReportUsageRequest struct {
 
 func (h *UsageHandler) HandleReportUsage(w http.ResponseWriter, r *http.Request) {
 	// TODO: Authenticate Machine (e.g. via Bearer token matching machine ID or secret)
-	
+
 	var req ReportUsageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

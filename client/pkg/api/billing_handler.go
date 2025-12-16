@@ -40,65 +40,65 @@ type CreateCheckoutResponse struct {
 
 // POST /api/v1/billing/checkout
 func (h *BillingHandler) CreateCheckout(w http.ResponseWriter, r *http.Request) {
-    user, ok := middleware.GetUser(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+	user, ok := middleware.GetUser(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    var req CreateCheckoutRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
+	var req CreateCheckoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-    productID, ok := h.productIDs[req.Tier]
-    if !ok || productID == "" {
-        http.Error(w, "Invalid tier", http.StatusBadRequest)
-        return
-    }
+	productID, ok := h.productIDs[req.Tier]
+	if !ok || productID == "" {
+		http.Error(w, "Invalid tier", http.StatusBadRequest)
+		return
+	}
 
-    metadata := map[string]string{
-        "user_id": user.ID,
-        "tier":    req.Tier,
-    }
+	metadata := map[string]string{
+		"user_id": user.ID,
+		"tier":    req.Tier,
+	}
 
-    checkoutURL, err := h.polar.CreateCheckoutSession(productID, req.SuccessURL, metadata)
-    if err != nil {
-        http.Error(w, "Failed to create checkout session", http.StatusInternalServerError)
-        return
-    }
+	checkoutURL, err := h.polar.CreateCheckoutSession(productID, req.SuccessURL, metadata)
+	if err != nil {
+		http.Error(w, "Failed to create checkout session", http.StatusInternalServerError)
+		return
+	}
 
-    json.NewEncoder(w).Encode(CreateCheckoutResponse{URL: checkoutURL})
+	json.NewEncoder(w).Encode(CreateCheckoutResponse{URL: checkoutURL})
 }
 
 // POST /api/v1/billing/portal
 func (h *BillingHandler) CreatePortalSession(w http.ResponseWriter, r *http.Request) {
-    user, ok := middleware.GetUser(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+	user, ok := middleware.GetUser(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    var req struct {
-        ReturnURL string `json:"return_url"`
-    }
-    _ = json.NewDecoder(r.Body).Decode(&req)
+	var req struct {
+		ReturnURL string `json:"return_url"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
 
-    // Polar portal currently redirects to purchases dashboard.
-    url, err := h.polar.GetCustomerPortalURL("")
-    if err != nil {
-        http.Error(w, "Failed to create portal session", http.StatusInternalServerError)
-        return
-    }
+	// Polar portal currently redirects to purchases dashboard.
+	url, err := h.polar.GetCustomerPortalURL("")
+	if err != nil {
+		http.Error(w, "Failed to create portal session", http.StatusInternalServerError)
+		return
+	}
 
-    // Ensure profile exists to keep consistent error surface.
-    if _, err := h.supabase.GetProfile(r.Context(), user.ID); err != nil {
-        http.Error(w, "No billing account found", http.StatusNotFound)
-        return
-    }
+	// Ensure profile exists to keep consistent error surface.
+	if _, err := h.supabase.GetProfile(r.Context(), user.ID); err != nil {
+		http.Error(w, "No billing account found", http.StatusNotFound)
+		return
+	}
 
-    json.NewEncoder(w).Encode(map[string]string{"url": url})
+	json.NewEncoder(w).Encode(map[string]string{"url": url})
 }
 
 // GET /api/v1/billing/subscription
@@ -116,9 +116,9 @@ func (h *BillingHandler) GetSubscription(w http.ResponseWriter, r *http.Request)
 	}
 
 	response := map[string]interface{}{
-		"tier":              profile.Tier,
-		"status":            profile.SubscriptionStatus,
-		"current_period_end": profile.SubscriptionPeriodEnd,
+		"tier":                 profile.Tier,
+		"status":               profile.SubscriptionStatus,
+		"current_period_end":   profile.SubscriptionPeriodEnd,
 		"cancel_at_period_end": profile.SubscriptionStatus == "cancelling",
 	}
 

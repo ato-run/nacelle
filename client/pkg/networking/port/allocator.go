@@ -60,10 +60,8 @@ func (a *Allocator) Reserve(port int) error {
 	if a.usedPorts[port] {
 		return fmt.Errorf("port %d is already allocated by internal tracker", port)
 	}
-    // We don't check OS availability strictly here because we might be restoring state 
-    // where the process is already running.
+	// We don't check OS availability strictly here because we might be restoring state
+	// where the process is already running.
 	a.usedPorts[port] = true
 	return nil
 }
-
-

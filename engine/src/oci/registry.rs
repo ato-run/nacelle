@@ -158,7 +158,7 @@ impl RegistryClient {
     pub async fn authenticate(&mut self, image_ref: &ImageRef) -> RegistryResult<()> {
         // Try to get manifest without auth first
         let response = self.client
-            .get(&image_ref.manifest_url())
+            .get(image_ref.manifest_url())
             .header("Accept", "application/vnd.oci.image.manifest.v1+json")
             .header("Accept", "application/vnd.docker.distribution.manifest.v2+json")
             .send()
@@ -300,7 +300,7 @@ impl RegistryClient {
         use tokio::io::AsyncWriteExt;
         
         let mut request = self.client
-            .get(&image_ref.blob_url(digest));
+            .get(image_ref.blob_url(digest));
         
         if let Some(token) = &self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));

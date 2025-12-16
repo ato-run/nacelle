@@ -319,7 +319,7 @@ func (sm *StateManager) GetAllApps() []*App {
 	for _, app := range sm.apps {
 		apps = append(apps, app)
 	}
-	
+
 	// Sort by name
 	sort.Slice(apps, func(i, j int) bool {
 		return apps[i].Name < apps[j].Name

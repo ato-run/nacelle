@@ -43,13 +43,13 @@ func (m *mockMonitor) Watch(ctx context.Context, interval time.Duration, callbac
 
 func TestManager_Install(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create SQLite store
 	dbPath := filepath.Join(tmpDir, "test.db")
 	st, err := store.NewSQLiteStore(dbPath)
 	require.NoError(t, err)
 	defer st.Close()
-	
+
 	// Create mock monitor
 	mon := &mockMonitor{
 		resources: &hardware.SystemResources{
@@ -58,14 +58,14 @@ func TestManager_Install(t *testing.T) {
 		},
 		canRun: true,
 	}
-	
+
 	// Create manager
 	mgr := NewManager(st, mon, tmpDir)
-	
+
 	// Create a test capsule directory
 	capsuleDir := filepath.Join(tmpDir, "test-capsule")
 	require.NoError(t, os.MkdirAll(capsuleDir, 0755))
-	
+
 	manifestContent := `
 schema_version = "1.0"
 name = "test-capsule"
@@ -90,20 +90,20 @@ weight = "light"
 source = "test-model"
 `
 	require.NoError(t, os.WriteFile(
-filepath.Join(capsuleDir, "capsule.toml"),
-[]byte(manifestContent),
-0644,
-))
-	
+		filepath.Join(capsuleDir, "capsule.toml"),
+		[]byte(manifestContent),
+		0644,
+	))
+
 	// Test install
 	ctx := context.Background()
 	manifest, err := mgr.Install(ctx, capsuleDir)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "test-capsule", manifest.Name)
 	assert.Equal(t, "1.0.0", manifest.Version)
 	assert.Equal(t, CapsuleType("inference"), manifest.Type)
-	
+
 	// Verify in store
 	capsule, err := st.Get(ctx, "test-capsule")
 	require.NoError(t, err)
@@ -113,29 +113,29 @@ filepath.Join(capsuleDir, "capsule.toml"),
 
 func TestManager_InstallInvalidManifest(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	dbPath := filepath.Join(tmpDir, "test.db")
 	st, err := store.NewSQLiteStore(dbPath)
 	require.NoError(t, err)
 	defer st.Close()
-	
+
 	mon := &mockMonitor{canRun: true}
 	mgr := NewManager(st, mon, tmpDir)
-	
+
 	// Create capsule with invalid manifest (missing required fields)
 	capsuleDir := filepath.Join(tmpDir, "invalid-capsule")
 	require.NoError(t, os.MkdirAll(capsuleDir, 0755))
-	
+
 	invalidManifest := `
 schema_version = "1.0"
 # Missing name, version, type
 `
 	require.NoError(t, os.WriteFile(
-filepath.Join(capsuleDir, "capsule.toml"),
-[]byte(invalidManifest),
-0644,
-))
-	
+		filepath.Join(capsuleDir, "capsule.toml"),
+		[]byte(invalidManifest),
+		0644,
+	))
+
 	ctx := context.Background()
 	_, err = mgr.Install(ctx, capsuleDir)
 	assert.Error(t, err)
@@ -144,20 +144,20 @@ filepath.Join(capsuleDir, "capsule.toml"),
 
 func TestManager_List(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	dbPath := filepath.Join(tmpDir, "test.db")
 	st, err := store.NewSQLiteStore(dbPath)
 	require.NoError(t, err)
 	defer st.Close()
-	
+
 	mon := &mockMonitor{canRun: true}
 	mgr := NewManager(st, mon, tmpDir)
-	
+
 	// Install multiple capsules
 	for i, name := range []string{"capsule-a", "capsule-b"} {
 		capsuleDir := filepath.Join(tmpDir, name)
 		require.NoError(t, os.MkdirAll(capsuleDir, 0755))
-		
+
 		manifest := `
 schema_version = "1.0"
 name = "` + name + `"
@@ -172,15 +172,15 @@ entrypoint = "main:app"
 weight = "light"
 `
 		require.NoError(t, os.WriteFile(
-filepath.Join(capsuleDir, "capsule.toml"),
-[]byte(manifest),
-0644,
-))
-		
+			filepath.Join(capsuleDir, "capsule.toml"),
+			[]byte(manifest),
+			0644,
+		))
+
 		_, err := mgr.Install(context.Background(), capsuleDir)
 		require.NoError(t, err)
 	}
-	
+
 	// List
 	capsules, err := mgr.List(context.Background())
 	require.NoError(t, err)
@@ -189,19 +189,19 @@ filepath.Join(capsuleDir, "capsule.toml"),
 
 func TestManager_Status(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	dbPath := filepath.Join(tmpDir, "test.db")
 	st, err := store.NewSQLiteStore(dbPath)
 	require.NoError(t, err)
 	defer st.Close()
-	
+
 	mon := &mockMonitor{canRun: true}
 	mgr := NewManager(st, mon, tmpDir)
-	
+
 	// Create and install a capsule
 	capsuleDir := filepath.Join(tmpDir, "status-test")
 	require.NoError(t, os.MkdirAll(capsuleDir, 0755))
-	
+
 	manifest := `
 schema_version = "1.0"
 name = "status-test"
@@ -216,14 +216,14 @@ entrypoint = "main:app"
 weight = "light"
 `
 	require.NoError(t, os.WriteFile(
-filepath.Join(capsuleDir, "capsule.toml"),
-[]byte(manifest),
-0644,
-))
-	
+		filepath.Join(capsuleDir, "capsule.toml"),
+		[]byte(manifest),
+		0644,
+	))
+
 	_, err = mgr.Install(context.Background(), capsuleDir)
 	require.NoError(t, err)
-	
+
 	// Check status
 	capsule, running, err := mgr.Status(context.Background(), "status-test")
 	require.NoError(t, err)
@@ -233,19 +233,19 @@ filepath.Join(capsuleDir, "capsule.toml"),
 
 func TestManager_Uninstall(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	dbPath := filepath.Join(tmpDir, "test.db")
 	st, err := store.NewSQLiteStore(dbPath)
 	require.NoError(t, err)
 	defer st.Close()
-	
+
 	mon := &mockMonitor{canRun: true}
 	mgr := NewManager(st, mon, tmpDir)
-	
+
 	// Create and install a capsule
 	capsuleDir := filepath.Join(tmpDir, "uninstall-test")
 	require.NoError(t, os.MkdirAll(capsuleDir, 0755))
-	
+
 	manifest := `
 schema_version = "1.0"
 name = "uninstall-test"
@@ -260,18 +260,18 @@ entrypoint = "main:app"
 weight = "light"
 `
 	require.NoError(t, os.WriteFile(
-filepath.Join(capsuleDir, "capsule.toml"),
-[]byte(manifest),
-0644,
-))
-	
+		filepath.Join(capsuleDir, "capsule.toml"),
+		[]byte(manifest),
+		0644,
+	))
+
 	_, err = mgr.Install(context.Background(), capsuleDir)
 	require.NoError(t, err)
-	
+
 	// Uninstall
 	err = mgr.Uninstall(context.Background(), "uninstall-test")
 	require.NoError(t, err)
-	
+
 	// Verify removed
 	_, err = st.Get(context.Background(), "uninstall-test")
 	assert.Error(t, err)
@@ -454,7 +454,7 @@ func TestManager_ListInferenceCapsules(t *testing.T) {
 	for _, c := range capsules {
 		capsuleDir := filepath.Join(tmpDir, c.name)
 		require.NoError(t, os.MkdirAll(capsuleDir, 0755))
-		
+
 		manifest := `
 schema_version = "1.0"
 name = "` + c.name + `"
@@ -516,4 +516,3 @@ func TestManager_GetActiveInference_NoActive(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, active)
 }
-

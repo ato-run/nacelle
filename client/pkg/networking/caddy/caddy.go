@@ -47,7 +47,7 @@ func (c *Client) EnsureBaseConfig() error {
 	// We'll bind to :80 for now, assuming user has permissions or port forwarding.
 	baseConfig := map[string]interface{}{
 		"listen": []string{":80"}, // Standard HTTP port
-		"routes": []interface{}{},  // Start empty
+		"routes": []interface{}{}, // Start empty
 	}
 
 	// Create via PUT
@@ -76,14 +76,14 @@ func (c *Client) EnsureBaseConfig() error {
 // It assigns the route an ID of "capsule-<capsuleID>" for easy management.
 func (c *Client) AddRoute(capsuleID string, host string, upstreamPort int) error {
 	routeID := fmt.Sprintf("capsule-%s", capsuleID)
-	
+
 	// Use CADDY_UPSTREAM_HOST for Docker environments where Caddy needs to proxy to host
 	// Default to 127.0.0.1 for native/localhost environments
 	upstreamHost := os.Getenv("CADDY_UPSTREAM_HOST")
 	if upstreamHost == "" {
 		upstreamHost = "127.0.0.1"
 	}
-	
+
 	// Caddy Route Structure
 	route := map[string]interface{}{
 		"@id": routeID,
@@ -109,7 +109,7 @@ func (c *Client) AddRoute(capsuleID string, host string, upstreamPort int) error
 	// Actually, PUT /id/xyz configures the object *referred to* by ID xyz.
 	// If the object doesn't exist, we can't PUT to /id/xyz directly to *create* it in a list.
 	// We must first POST it to the array if it's new, OR replace it if it exists.
-	
+
 	// Check existence
 	exists := false
 	resp, err := c.HTTPClient.Get(c.BaseURL + "/id/" + routeID)

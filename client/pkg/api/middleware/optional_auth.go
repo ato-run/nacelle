@@ -12,7 +12,7 @@ import (
 func (m *JWTMiddleware) OptionalHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		
+
 		// No token - continue without user
 		if authHeader == "" {
 			next.ServeHTTP(w, r)

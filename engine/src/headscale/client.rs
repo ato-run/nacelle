@@ -90,7 +90,7 @@ impl HeadscaleClient {
 
         if !output.status.success() {
             return Err(HeadscaleError::CommandFailed(
-                std::io::Error::new(std::io::ErrorKind::Other, "status command failed")
+                std::io::Error::other("status command failed")
             ));
         }
 

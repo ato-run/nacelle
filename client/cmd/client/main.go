@@ -204,12 +204,12 @@ func main() {
 	// Start HTTP API server for coordinator UI and health checks
 	log.Println("Starting HTTP API server...")
 	httpAddr := ":8080" // Default address for coordinator UI
-	
+
 	// Initialize handlers
 	runtimeHandler := api.NewRuntimeHandler(stateManager)
-	
+
 	httpSrv := httpserver.NewServer(httpserver.Config{
-		Addr: httpAddr,
+		Addr:           httpAddr,
 		RuntimeHandler: runtimeHandler,
 	})
 

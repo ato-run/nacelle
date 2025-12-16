@@ -1,10 +1,10 @@
 package hardware
 
 import (
-"os"
-"time"
+	"os"
+	"time"
 
-"gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 // HardwareConfig represents the hardware configuration section of config.yaml
@@ -58,14 +58,14 @@ func LoadHardwareConfig(path string) (*HardwareConfig, error) {
 	var outer struct {
 		Hardware HardwareConfig `yaml:"hardware"`
 	}
-	
+
 	if err := yaml.Unmarshal(data, &outer); err != nil {
 		return nil, err
 	}
 
 	// Merge with defaults
 	cfg := DefaultHardwareConfig()
-	
+
 	if outer.Hardware.Thresholds.VRAMWarningPercent > 0 {
 		cfg.Thresholds.VRAMWarningPercent = outer.Hardware.Thresholds.VRAMWarningPercent
 	}

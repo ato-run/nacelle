@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod manifest_tests {
     use crate::workload::manifest_loader::load_manifest_str;
 
     #[test]

@@ -239,16 +239,16 @@ fn test_signature_verification_priority_over_egress() {
     let invalid_signature = vec![0u8; 64];
 
     // Verification should fail BEFORE egress rules are even considered
-    // Possi
-        result.is_err(),
-        "Invalid signature should cause verification failure"
-    
+    // Possible errors:
     // 1. Signature file too short (invalid format)
     // 2. Signature key doesn't match trusted key
     // 3. Cryptographic verification fails
     let result = verifier.verify(manifest_json.as_bytes(), &invalid_signature, "");
     
-    assert!(result.is_err(), "Invalid signature should cause verification failure");
+    assert!(
+        result.is_err(),
+        "Invalid signature should cause verification failure"
+    );
     
     let err_msg = result.unwrap_err().to_string();
     println!("Verification error: {}", err_msg);
@@ -296,7 +296,9 @@ fn test_storage_vram_lifecycle_cleanup() {
     println!("Phase 1: Provisioning storage...");
     let mut storage = manager
         .provision_capsule_storage(capsule_id, None, Some(false))
-        .exp
+        .expect("provision");
+
+    assert!(
         PathBuf::from(&storage.device_path).exists() || 
         storage.device_path.starts_with("/dev/mapper"), 
         "Device path should exist"
@@ -311,10 +313,7 @@ fn test_storage_vram_lifecycle_cleanup() {
     assert!(
         mount_path.exists(),
         "Mount point should exist after mount"
-    
-    let mount_path = storage.mount_point.clone().expect("Mount point should be set");
-    println!("  Mount point: {:?}", mount_path);
-    assert!(mount_path.exists(), "Mount point should exist after mount");
+    );
 
     // Phase 3: Write data
     println!("Phase 3: Writing test data...");
@@ -363,7 +362,14 @@ fn test_combined_security_flow() {
     use capsuled_engine::security::verifier::ManifestVerifier;
     use capsuled_engine::security::egress_policy::generate_fw_rules;
 
-    // Step 
+    // Step 1: Create manifest
+    let manifest = create_test_manifest("combined-flow-test");
+    let manifest_json = serde_json::to_string(&manifest).expect("serialize");
+
+    // Step 2: Verify signature (permissive mode for test)
+    let verifier = ManifestVerifier::new(None, false);
+    let verify_result = verifier.verify(manifest_json.as_bytes(), &[], "");
+    assert!(
         verify_result.is_ok(),
         "Permissive verifier should pass empty signature"
     );
@@ -377,15 +383,7 @@ fn test_combined_security_flow() {
     assert!(
         rules.iter().any(|r| r.contains("-P OUTPUT DROP")), 
         "Default DROP should always be present"
-    
-    let verify_result = verifier.verify(manifest_json.as_bytes(), &[], "");
-    assert!(verify_result.is_ok(), "Permissive verifier should pass empty signature");
-
-    // Step 3: Generate egress rules (should be default DROP with essentials)
-    let rules = generate_fw_rules(&manifest);
-    assert!(!rules.is_empty(), "Should generate base firewall rules");
-    assert!(rules.iter().any(|r| r.contains("-P OUTPUT DROP")), 
-        "Default DROP should always be present");
+    );
 
     println!("✅ Combined security flow verified");
 }

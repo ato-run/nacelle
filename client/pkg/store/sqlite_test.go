@@ -297,4 +297,3 @@ func TestSQLiteStore_LocalNode(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, retrieved.IsOnline)
 }
-

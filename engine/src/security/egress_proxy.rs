@@ -198,7 +198,7 @@ fn extract_target_host(request_str: &str) -> Option<String> {
     request_str
         .lines()
         .find(|l| l.to_lowercase().starts_with("host:"))
-        .and_then(|l| l.splitn(2, ':').nth(1))
+        .and_then(|l| l.split_once(':').map(|x| x.1))
         .and_then(normalize_extracted_host)
 }
 
@@ -206,8 +206,7 @@ fn extract_basic_proxy_auth(request_str: &str) -> Option<(String, String)> {
     let header_value = request_str
         .lines()
         .find(|l| l.to_lowercase().starts_with("proxy-authorization:"))?
-        .splitn(2, ':')
-        .nth(1)?
+        .split_once(':')?.1
         .trim();
 
     let (scheme, b64) = header_value.split_once(' ')?;

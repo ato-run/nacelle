@@ -84,7 +84,7 @@ impl BlobStore {
         let mut raw_size = 0u64;
         let hashing_writer = HashingTempFile::new(&self.tmp_dir)?;
         let mut encoder = Encoder::new(hashing_writer, options.compression_level)
-            .map_err(|err| CasError::Io(io::Error::new(io::ErrorKind::Other, err)))?;
+            .map_err(|err| CasError::Io(io::Error::other(err)))?;
 
         let mut buf = [0u8; 8192];
         loop {
@@ -99,7 +99,7 @@ impl BlobStore {
         let raw_sha256 = hex::encode(raw_hasher.finalize());
         let hashing_writer = encoder
             .finish()
-            .map_err(|err| CasError::Io(io::Error::new(io::ErrorKind::Other, err)))?;
+            .map_err(|err| CasError::Io(io::Error::other(err)))?;
         let (temp_file, compressed_sha256, compressed_size) = hashing_writer.finalize()?;
 
         safety::enforce_compression_ratio(raw_size, compressed_size)?;

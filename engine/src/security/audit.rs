@@ -94,7 +94,8 @@ impl AuditEvent {
 }
 
 pub struct AuditLogger {
-    log_path: PathBuf,
+    #[allow(dead_code)]
+    _log_path: PathBuf,
     #[allow(dead_code)]
     key_path: PathBuf,
     node_id: String,
@@ -152,7 +153,7 @@ impl AuditLogger {
         .map_err(|e| anyhow!("Failed to create audit tables: {}", e))?;
 
         Ok(Self {
-            log_path,
+            _log_path: log_path,
             key_path,
             node_id,
             db: Some(Mutex::new(conn)),
@@ -195,29 +196,6 @@ impl AuditLogger {
         // Note: For fully non-blocking, we'd need an async SQLite driver
         // This approach still releases the async runtime while waiting
         let _ = self.persist_event(&event);
-    }
-
-    /// Synchronous persist for use in spawn_blocking
-    fn persist_event_sync(conn: &Connection, event: &AuditEvent, node_id: &str) -> Result<()> {
-        conn.execute(
-            r#"
-            INSERT INTO audit_logs 
-                (timestamp, operation, status, capsule_id, user_id, node_id, details_json, content_hash)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-            "#,
-            params![
-                event.timestamp as i64,
-                event.operation.to_string(),
-                event.status.to_string(),
-                event.capsule_id,
-                event.user_id,
-                node_id,
-                event.details,
-                event.content_hash,
-            ],
-        )
-        .map_err(|e| anyhow!("Failed to persist audit event: {}", e))?;
-        Ok(())
     }
 
     /// Legacy method for backward compatibility
@@ -463,7 +441,7 @@ impl AuditLogger {
 impl Default for AuditLogger {
     fn default() -> Self {
         Self {
-            log_path: PathBuf::from("/tmp/audit.log"),
+            _log_path: PathBuf::from("/tmp/audit.log"),
             key_path: PathBuf::from("/tmp/node_key.pem"),
             node_id: "default-node".to_string(),
             db: None,

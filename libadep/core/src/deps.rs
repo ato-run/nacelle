@@ -23,6 +23,7 @@ impl ResolveReport {
 
 /// Trait for dependency default handlers. Blocking by default.
 pub trait DependencyDefaults {
+    #[allow(clippy::result_large_err)]
     fn apply_defaults(
         &self,
         manifest: &mut Manifest,
@@ -49,7 +50,7 @@ pub fn apply_dependency_defaults(
     manifest: &mut Manifest,
     opts: &DefaultOptions<'_>,
 ) -> (Vec<ManifestWarning>, bool) {
-    let noop = NoopDefaults::default();
+    let noop = NoopDefaults;
     let resolver: &dyn DependencyDefaults = match opts.dependency_defaults {
         Some(resolver) => resolver,
         None => &noop,

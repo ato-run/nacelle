@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
     use ed25519_dalek::{SigningKey, Signer, VerifyingKey};
     use rand::rngs::OsRng;
     use capsuled_engine::security::verifier::ManifestVerifier;

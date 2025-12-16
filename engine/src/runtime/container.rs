@@ -27,7 +27,7 @@ impl ContainerRuntime {
     pub fn new(
         config: RuntimeConfig,
         artifact_manager: Option<Arc<ArtifactManager>>,
-        process_supervisor: Option<Arc<ProcessSupervisor>>,
+        _process_supervisor: Option<Arc<ProcessSupervisor>>,
         egress_proxy_port: Option<u16>,
     ) -> Self {
         let native_runtime = if config.kind == crate::runtime::RuntimeKind::Native {

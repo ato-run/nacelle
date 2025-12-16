@@ -4,10 +4,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::process::Command;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 use crate::artifact::ArtifactManager;
-use crate::process_supervisor::ProcessSupervisor;
 use crate::runtime::traits::Runtime;
 use crate::runtime::{LaunchRequest, LaunchResult, RuntimeError};
 use crate::adep::{CapsuleManifestV1, RuntimeType};

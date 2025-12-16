@@ -9,7 +9,6 @@
 //! cargo test --test audit_cas_e2e -- --test-threads=1
 //! ```
 
-use std::path::PathBuf;
 use tempfile::TempDir;
 use sha2::{Digest, Sha256};
 
@@ -122,6 +121,9 @@ async fn test_cas_uri_validation() {
 
     let manager = ArtifactManager::new(config).await.expect("manager");
 
+    // Test invalid URI prefix
+    let result = manager.resolve_cas_uri("https://example.com/blob");
+    assert!(
         matches!(result, Err(ArtifactError::InvalidUri(_)))
     );
     println!("✅ Invalid prefix rejected");
@@ -137,10 +139,7 @@ async fn test_cas_uri_validation() {
     let result = manager.resolve_cas_uri(&format!("cas://{}", "g".repeat(64)));
     assert!(
         matches!(result, Err(ArtifactError::InvalidUri(_)))
-    
-    // Test non-hex characters
-    let result = manager.resolve_cas_uri(&format!("cas://{}", "g".repeat(64)));
-    assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
+    );
     println!("✅ Non-hex characters rejected");
 }
 
@@ -153,15 +152,15 @@ async fn test_cas_root_not_configured() {
     let config = ArtifactConfig {
         registry_url: "file:///dev/null".to_string(),
         cache_path: tmp.path().join("cache"),
-        cas_
-        matches!(result, Err(ArtifactError::CasError(_)))
-    
+        cas_root: None, // Not configured
     };
 
     let manager = ArtifactManager::new(config).await.expect("manager");
 
     let result = manager.resolve_cas_uri(&format!("cas://{}", "a".repeat(64)));
-    assert!(matches!(result, Err(ArtifactError::CasError(_))));
+    assert!(
+        matches!(result, Err(ArtifactError::CasError(_)))
+    );
     println!("✅ CAS root not configured error returned");
 }
 
@@ -181,13 +180,21 @@ async fn test_audit_log_persistence() {
         .expect("create logger");
 
     // Log several events
-    let events = vec![
+    let events = [
         (AuditOperation::DeployCapsule, AuditStatus::Success, Some("test-capsule-001".to_string())),
         (AuditOperation::CapsuleStart, AuditStatus::Success, Some("test-capsule-001".to_string())),
         (AuditOperation::EgressRulesApplied, AuditStatus::Success, Some("test-capsule-001".to_string())),
         (AuditOperation::CapsuleStop, AuditStatus::Success, Some("test-capsule-001".to_string())),
         (AuditOperation::SignatureRejected, AuditStatus::Failure, Some("bad-capsule".to_string())),
     ];
+
+    for (op, status, capsule_id) in events.iter() {
+        logger.log(op.clone(), status.clone(), capsule_id.clone(), None).await;
+    }
+
+    // Verify database was created
+    let db_path = log_path.with_extension("db");
+    assert!(
         db_path.exists(),
         "Audit database should be created at {:?}",
         db_path
@@ -205,21 +212,14 @@ async fn test_audit_log_persistence() {
         count,
         5,
         "Should have 5 audit events"
-    
-    let conn = rusqlite::Connection::open(&db_path).expect("open db");
-
-    // Count events
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM audit_logs", [], |row| row.get(0))
-        .expect("count query");
-    
-    assert_eq!(count, 5, "Should have 5 audit events");
+    );
 
     // Verify each event has required fields
     let mut stmt = conn
         .prepare("SELECT operation, status, capsule_id, node_id, content_hash FROM audit_logs ORDER BY id")
         .expect("prepare");
 
+    #[allow(clippy::type_complexity)]
     let rows: Vec<(String, String, Option<String>, String, Option<String>)> = stmt
         .query_map([], |row| {
             Ok((
@@ -229,14 +229,7 @@ async fn test_audit_log_persistence() {
                 row.get(3)?,
                 row.get(4)?,
             ))
-        hash.len(),
-        64,
-        "Hash should be 64 hex characters"
-    );
-    assert!(
-        hash.chars().all(|c| c.is_ascii_hexdigit()),
-        "Hash should be hex"
-    
+        })
         .expect("query")
         .map(|r| r.unwrap())
         .collect();
@@ -251,8 +244,15 @@ async fn test_audit_log_persistence() {
     
     // Verify content_hash is SHA-256 (64 hex chars)
     let hash = rows[0].4.as_ref().expect("hash should exist");
-    assert_eq!(hash.len(), 64, "Hash should be 64 hex characters");
-    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "Hash should be hex");
+    assert_eq!(
+        hash.len(),
+        64,
+        "Hash should be 64 hex characters"
+    );
+    assert!(
+        hash.chars().all(|c| c.is_ascii_hexdigit()),
+        "Hash should be hex"
+    );
 
     // Verify failure event
     assert_eq!(rows[4].0, "signature_rejected");
@@ -284,11 +284,7 @@ async fn test_audit_content_hash_uniqueness() {
     logger.log(
         AuditOperation::DeployCapsule, 
         AuditStatus::Success, 
-        Some("c
-        hashes[0],
-        hashes[1],
-        "Different events should have different hashes"
-    
+        Some("capsule-b".to_string()),
         Some("details-2".to_string()),
     ).await;
 
@@ -304,6 +300,31 @@ async fn test_audit_content_hash_uniqueness() {
         .map(|r| r.unwrap())
         .collect();
 
+    assert_eq!(hashes.len(), 2);
+    assert_ne!(
+        hashes[0],
+        hashes[1],
+        "Different events should have different hashes"
+    );
+
+    println!("✅ Content hash uniqueness verified");
+}
+
+#[tokio::test]
+async fn test_audit_merkle_root_computation() {
+    use capsuled_engine::security::audit::AuditLogger;
+
+    // Test Merkle root computation
+    let hashes = vec![
+        "a".repeat(64),
+        "b".repeat(64),
+        "c".repeat(64),
+        "d".repeat(64),
+    ];
+
+    let root = AuditLogger::compute_merkle_root(&hashes);
+    
+    assert_eq!(
         root.len(),
         64,
         "Merkle root should be 64 hex chars"
@@ -328,28 +349,7 @@ async fn test_audit_content_hash_uniqueness() {
         root,
         root3,
         "Different inputs should give different roots"
-    
-    // Test Merkle root computation
-    let hashes = vec![
-        "a".repeat(64),
-        "b".repeat(64),
-        "c".repeat(64),
-        "d".repeat(64),
-    ];
-
-    let root = AuditLogger::compute_merkle_root(&hashes);
-    
-    assert_eq!(root.len(), 64, "Merkle root should be 64 hex chars");
-    assert!(root.chars().all(|c| c.is_ascii_hexdigit()), "Root should be hex");
-
-    // Verify determinism
-    let root2 = AuditLogger::compute_merkle_root(&hashes);
-    assert_eq!(root, root2, "Merkle root should be deterministic");
-
-    // Verify different input gives different root
-    let hashes2 = vec!["x".repeat(64)];
-    let root3 = AuditLogger::compute_merkle_root(&hashes2);
-    assert_ne!(root, root3, "Different inputs should give different roots");
+    );
 
     println!("✅ Merkle root computation verified");
 }

@@ -4,16 +4,16 @@
 package hardware
 
 import (
-"context"
-"fmt"
-"os/exec"
-"regexp"
-"strconv"
-"strings"
-"time"
+	"context"
+	"fmt"
+	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
 
-"github.com/shirou/gopsutil/v3/cpu"
-"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 // DarwinMonitor implements HardwareMonitor for macOS
@@ -92,7 +92,7 @@ func (m *DarwinMonitor) getVRAMViaIoreg() (*vramInfo, error) {
 	}
 
 	outputStr := string(output)
-	
+
 	// Look for VRAM,totalMB or similar patterns
 	vramRegex := regexp.MustCompile(`"VRAM,totalMB"\s*=\s*(\d+)`)
 	matches := vramRegex.FindStringSubmatch(outputStr)
@@ -119,22 +119,22 @@ func (m *DarwinMonitor) getUnifiedMemoryInfo() (*vramInfo, error) {
 	}
 
 	outputStr := string(output)
-	
+
 	// Parse memory pressure output
 	// Example: "System-wide memory free percentage: 42%"
 	freeRegex := regexp.MustCompile(`free percentage:\s*(\d+)%`)
 	matches := freeRegex.FindStringSubmatch(outputStr)
-	
+
 	vmStat, _ := mem.VirtualMemory()
 	total := int64(vmStat.Total)
-	
+
 	var freePercent int64 = 50 // Default
 	if len(matches) > 1 {
 		freePercent, _ = strconv.ParseInt(matches[1], 10, 64)
 	}
-	
+
 	available := total * freePercent / 100
-	
+
 	return &vramInfo{
 		total:     total,
 		available: available,
@@ -160,71 +160,71 @@ func (m *DarwinMonitor) CanRunCapsule(vramRequired int64) (*ResourceCheckResult,
 		result.VRAMWarning = true
 	}
 
-	// Check RAM warning threshold  
+	// Check RAM warning threshold
 	if ramUsage >= m.thresholds.RAMWarningPercent {
 		result.RAMWarning = true
 	}
 
 	// Check if we're at the block threshold
-if vramUsage >= m.thresholds.VRAMBlockPercent {
-result.CanRun = false
-result.Reason = fmt.Sprintf("VRAM usage too high (%.1f%% >= %.1f%%)", 
-vramUsage, m.thresholds.VRAMBlockPercent)
-return result, nil
-}
+	if vramUsage >= m.thresholds.VRAMBlockPercent {
+		result.CanRun = false
+		result.Reason = fmt.Sprintf("VRAM usage too high (%.1f%% >= %.1f%%)",
+			vramUsage, m.thresholds.VRAMBlockPercent)
+		return result, nil
+	}
 
-// Check if we have enough VRAM for this specific Capsule
-if vramRequired > 0 && resources.AvailableVRAM < vramRequired {
-result.CanRun = false
-result.Reason = fmt.Sprintf("Insufficient VRAM: need %.2fGB, have %.2fGB available",
-float64(vramRequired)/(1024*1024*1024),
-resources.AvailableVRAMGB())
-return result, nil
-}
+	// Check if we have enough VRAM for this specific Capsule
+	if vramRequired > 0 && resources.AvailableVRAM < vramRequired {
+		result.CanRun = false
+		result.Reason = fmt.Sprintf("Insufficient VRAM: need %.2fGB, have %.2fGB available",
+			float64(vramRequired)/(1024*1024*1024),
+			resources.AvailableVRAMGB())
+		return result, nil
+	}
 
-return result, nil
+	return result, nil
 }
 
 // Watch starts continuous monitoring
 func (m *DarwinMonitor) Watch(ctx context.Context, interval time.Duration, callback func(*SystemResources)) {
-ticker := time.NewTicker(interval)
-defer ticker.Stop()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
-// Initial call
-if resources, err := m.GetCurrentResources(); err == nil {
-callback(resources)
-}
+	// Initial call
+	if resources, err := m.GetCurrentResources(); err == nil {
+		callback(resources)
+	}
 
-for {
-select {
-case <-ctx.Done():
-return
-case <-ticker.C:
-if resources, err := m.GetCurrentResources(); err == nil {
-callback(resources)
-}
-}
-}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if resources, err := m.GetCurrentResources(); err == nil {
+				callback(resources)
+			}
+		}
+	}
 }
 
 // GetSystemSummary returns a human-readable summary of system resources
 func (m *DarwinMonitor) GetSystemSummary() (string, error) {
-resources, err := m.GetCurrentResources()
-if err != nil {
-return "", err
-}
+	resources, err := m.GetCurrentResources()
+	if err != nil {
+		return "", err
+	}
 
-var sb strings.Builder
-sb.WriteString(fmt.Sprintf("System Resources:\n"))
-sb.WriteString(fmt.Sprintf("  RAM:  %.1f GB / %.1f GB (%.1f%% used)\n",
-float64(resources.TotalRAM-resources.AvailableRAM)/(1024*1024*1024),
-float64(resources.TotalRAM)/(1024*1024*1024),
-resources.RAMUsagePercent()))
-sb.WriteString(fmt.Sprintf("  VRAM: %.1f GB / %.1f GB (%.1f%% used)\n",
-float64(resources.TotalVRAM-resources.AvailableVRAM)/(1024*1024*1024),
-float64(resources.TotalVRAM)/(1024*1024*1024),
-resources.VRAMUsagePercent()))
-sb.WriteString(fmt.Sprintf("  CPU:  %.1f%% used\n", resources.CPUUsage*100))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("System Resources:\n"))
+	sb.WriteString(fmt.Sprintf("  RAM:  %.1f GB / %.1f GB (%.1f%% used)\n",
+		float64(resources.TotalRAM-resources.AvailableRAM)/(1024*1024*1024),
+		float64(resources.TotalRAM)/(1024*1024*1024),
+		resources.RAMUsagePercent()))
+	sb.WriteString(fmt.Sprintf("  VRAM: %.1f GB / %.1f GB (%.1f%% used)\n",
+		float64(resources.TotalVRAM-resources.AvailableVRAM)/(1024*1024*1024),
+		float64(resources.TotalVRAM)/(1024*1024*1024),
+		resources.VRAMUsagePercent()))
+	sb.WriteString(fmt.Sprintf("  CPU:  %.1f%% used\n", resources.CPUUsage*100))
 
-return sb.String(), nil
+	return sb.String(), nil
 }

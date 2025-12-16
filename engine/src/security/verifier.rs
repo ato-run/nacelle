@@ -1,8 +1,6 @@
 use anyhow::{anyhow, Result};
-use std::sync::Arc;
 use tracing::{info, warn};
 use libadep_core::signing::{ensure_signature_matches_manifest, verify_signature_file, SignatureFile};
-use std::path::PathBuf;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
 /// Verifies capsule manifests against a trusted public key.
