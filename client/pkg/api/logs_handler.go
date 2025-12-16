@@ -44,7 +44,7 @@ type LogEntry struct {
 func (h *LogsHandler) StreamLogsHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract capsule ID from URL path
 	// Expected format: /api/v1/capsules/{id}/logs
-	capsuleID, err := extractCapsuleIDFromPath(r.URL.Path)
+	capsuleID, err := extractCapsuleIDFromLogsPath(r.URL.Path)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid capsule ID: %v", err), http.StatusBadRequest)
 		return

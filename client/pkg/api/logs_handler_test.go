@@ -19,7 +19,7 @@ func TestNewLogsHandler(t *testing.T) {
 	assert.NotNil(t, handler.upgrader)
 }
 
-func TestExtractCapsuleIDFromPath(t *testing.T) {
+func TestExtractCapsuleIDFromLogsPath(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
@@ -59,7 +59,7 @@ func TestExtractCapsuleIDFromPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, _ := extractCapsuleIDFromPath(tt.path)
+			result, _ := extractCapsuleIDFromLogsPath(tt.path)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
