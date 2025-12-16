@@ -30,7 +30,7 @@ pub fn load_manifest_str(
         Ok(manifest) => {
             let reqs = extract_requirements(&manifest);
             Ok((manifest, Some(reqs)))
-        },
+        }
         Err(_) => {
             // Try TOML
             load_toml_manifest(text)
@@ -40,21 +40,21 @@ pub fn load_manifest_str(
 
 fn load_toml_manifest(text: &str) -> Result<(CapsuleManifestV1, Option<ResourceRequirements>)> {
     // Use libadep conversion
-    let manifest = CapsuleManifestV1::from_toml(text)
-        .map_err(|e| anyhow!("failed to parse TOML: {}", e))?;
-    
+    let manifest =
+        CapsuleManifestV1::from_toml(text).map_err(|e| anyhow!("failed to parse TOML: {}", e))?;
+
     let reqs = extract_requirements(&manifest);
     Ok((manifest, Some(reqs)))
 }
 
 fn extract_requirements(manifest: &CapsuleManifestV1) -> ResourceRequirements {
     let mut req = ResourceRequirements::default();
-    
+
     // Extract VRAM
     if let Ok(Some(bytes)) = manifest.requirements.vram_min_bytes() {
         req.gpu_memory_bytes = Some(bytes);
     }
-    
+
     // CPU/Memory checks if they exist in requirements?
     // CapsuleRequirements has: vram_min, vram_recommended, platform.
     // Doesn't seem to have explicit CPU/RAM requirements yet in V1 spec?
@@ -63,6 +63,6 @@ fn extract_requirements(manifest: &CapsuleManifestV1) -> ResourceRequirements {
     // Maybe in metadata or assumed default?
     // Engine ResourceRequirements struct has cpu/memory.
     // For now we leave them None or check metadata.
-    
+
     req
 }

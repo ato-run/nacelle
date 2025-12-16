@@ -6,9 +6,9 @@ use tracing::info;
 
 use crate::config::RuntimeSection;
 
-pub mod direct;
 pub mod container;
 pub mod dev;
+pub mod direct;
 pub mod docker_cli;
 pub mod native;
 pub mod traits;

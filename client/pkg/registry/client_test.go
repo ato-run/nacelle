@@ -60,7 +60,10 @@ func TestList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -98,7 +101,10 @@ func TestListWithFilters(t *testing.T) {
 
 		resp := CapsuleListResponse{Capsules: []CapsuleSummary{}}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -123,7 +129,10 @@ func TestGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(manifest)
+		if err := json.NewEncoder(w).Encode(manifest); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -169,7 +178,10 @@ func TestGetDownloadInfo(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(info)
+		if err := json.NewEncoder(w).Encode(info); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -203,7 +215,10 @@ func TestListVersions(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -227,7 +242,10 @@ func TestCaching(t *testing.T) {
 		callCount++
 		resp := CapsuleListResponse{Capsules: []CapsuleSummary{}}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 

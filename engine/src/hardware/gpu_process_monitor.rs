@@ -34,13 +34,13 @@ impl GpuProcessMonitor for MockGpuProcessMonitor {
     }
 }
 
-#[cfg(feature = "real-gpu")]
+#[cfg(all(feature = "real-gpu", target_os = "linux"))]
 #[derive(Debug)]
 pub struct NvmlGpuProcessMonitor {
     nvml: Arc<nvml_wrapper::Nvml>,
 }
 
-#[cfg(feature = "real-gpu")]
+#[cfg(all(feature = "real-gpu", target_os = "linux"))]
 impl NvmlGpuProcessMonitor {
     pub fn new() -> Result<Self, GpuProcessMonitorError> {
         let nvml = nvml_wrapper::Nvml::init()
@@ -52,7 +52,7 @@ impl NvmlGpuProcessMonitor {
     }
 }
 
-#[cfg(feature = "real-gpu")]
+#[cfg(all(feature = "real-gpu", target_os = "linux"))]
 impl GpuProcessMonitor for NvmlGpuProcessMonitor {
     fn collect_usage_bytes(&self) -> Result<HashMap<u32, u64>, GpuProcessMonitorError> {
         let device_count = self
@@ -94,7 +94,7 @@ impl GpuProcessMonitor for NvmlGpuProcessMonitor {
 
 /// Factory that returns the appropriate GPU process monitor.
 pub fn create_gpu_process_monitor() -> Arc<dyn GpuProcessMonitor> {
-    #[cfg(feature = "real-gpu")]
+    #[cfg(all(feature = "real-gpu", target_os = "linux"))]
     {
         match NvmlGpuProcessMonitor::new() {
             Ok(monitor) => {
@@ -107,6 +107,11 @@ pub fn create_gpu_process_monitor() -> Arc<dyn GpuProcessMonitor> {
                 );
             }
         }
+    }
+
+    #[cfg(all(feature = "real-gpu", not(target_os = "linux")))]
+    {
+        tracing::info!("real-gpu feature enabled on non-Linux; NVML monitor disabled");
     }
 
     tracing::info!("Using mock GPU process monitor");

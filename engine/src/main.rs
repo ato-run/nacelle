@@ -5,14 +5,14 @@ use tracing::{error, info, warn};
 use tracing_subscriber::prelude::*;
 
 use capsuled_engine::api_server;
+use capsuled_engine::artifact::{manager::ArtifactConfig, ArtifactManager};
 use capsuled_engine::capsule_manager::CapsuleManager;
 use capsuled_engine::hardware;
 use capsuled_engine::network::service_registry::ServiceRegistry;
-use capsuled_engine::security::audit::AuditLogger;
-use capsuled_engine::security::EgressProxy;
-use capsuled_engine::artifact::{ArtifactManager, manager::ArtifactConfig};
 use capsuled_engine::process_supervisor::ProcessSupervisor;
 use capsuled_engine::runtime::{ContainerRuntime, RuntimeConfig, RuntimeKind};
+use capsuled_engine::security::audit::AuditLogger;
+use capsuled_engine::security::EgressProxy;
 use capsuled_engine::storage::StorageConfig;
 
 mod headscale;
@@ -57,11 +57,19 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Phase 2: backend selection (Hybrid). Default to Native/DirectRuntime.
-    let backend_mode = std::env::var("CAPSULED_BACKEND_MODE").unwrap_or_else(|_| "native".to_string());
-    let backend_mode = if backend_mode.is_empty() { "native".to_string() } else { backend_mode };
+    let backend_mode =
+        std::env::var("CAPSULED_BACKEND_MODE").unwrap_or_else(|_| "native".to_string());
+    let backend_mode = if backend_mode.is_empty() {
+        "native".to_string()
+    } else {
+        backend_mode
+    };
     info!("Backend Mode: {}", backend_mode);
 
-    info!("=== Capsuled Engine v{} (Phase 1.5: HTTP API Only) ===", env!("CARGO_PKG_VERSION"));
+    info!(
+        "=== Capsuled Engine v{} (Phase 1.5: HTTP API Only) ===",
+        env!("CARGO_PKG_VERSION")
+    );
     info!("HTTP API Port: {}", args.port);
 
     // Ensure log directory exists
@@ -87,11 +95,11 @@ async fn main() -> anyhow::Result<()> {
     info!("Audit logger initialized");
 
     info!("Audit logger initialized");
-    
+
     // Initialize Egress Proxy (User-Space Filtering)
     let proxy_port = args.port + 1; // e.g. 4501
     let egress_proxy = Arc::new(EgressProxy::new(proxy_port));
-    
+
     // Start Proxy
     let proxy_clone = egress_proxy.clone();
     tokio::spawn(async move {
@@ -108,7 +116,12 @@ async fn main() -> anyhow::Result<()> {
             info!("  Total GPUs: {}", report.gpus.len());
             info!("  Total VRAM: {:.2} GB", report.total_vram_gb());
             for gpu in &report.gpus {
-                info!("    GPU {}: {} ({:.2} GB)", gpu.index, gpu.device_name, gpu.vram_gb());
+                info!(
+                    "    GPU {}: {} ({:.2} GB)",
+                    gpu.index,
+                    gpu.device_name,
+                    gpu.vram_gb()
+                );
             }
         }
         Err(e) => {
@@ -120,7 +133,7 @@ async fn main() -> anyhow::Result<()> {
     let headscale_config = load_headscale_config()?;
     if !headscale_config.server_url.is_empty() {
         let headscale = HeadscaleClient::new(headscale_config);
-        
+
         match headscale.connect().await {
             Ok(info) => {
                 tracing::info!(
@@ -129,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
                     peers = info.peers.len(),
                     "Connected to Tailnet"
                 );
-                
+
                 // Update machine registration with Tailnet IP
                 // update_machine_tailnet_ip(&info.ip).await?;
             }
@@ -146,29 +159,29 @@ async fn main() -> anyhow::Result<()> {
     let process_supervisor = Arc::new(ProcessSupervisor::new());
 
     // Initialize Artifact Manager
-    let home_dir = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/tmp"));
+    let home_dir = std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"));
     let runtime_dir = home_dir.join(".gumball").join("runtimes");
-    
-    let registry_url = std::env::var("GUMBALL_REGISTRY_URL")
-        .unwrap_or_else(|_| {
-             // Try to find local registry relative to current executable or workspace
-             let local_registry = std::env::current_dir()
-                 .ok()
-                 .and_then(|cwd| {
-                     let candidates = vec![
-                         cwd.join("../../capsule-registry/registry.json"),
-                         cwd.join("../capsule-registry/registry.json"),
-                         cwd.join("capsule-registry/registry.json"),
-                     ];
-                     candidates.into_iter().find(|p| p.exists())
-                 });
-             
-             if let Some(path) = local_registry {
-                 format!("file://{}", path.to_string_lossy())
-             } else {
-                 "https://gist.githubusercontent.com/egamikohsuke/placeholder/raw/registry.json".to_string()
-             }
+
+    let registry_url = std::env::var("GUMBALL_REGISTRY_URL").unwrap_or_else(|_| {
+        // Try to find local registry relative to current executable or workspace
+        let local_registry = std::env::current_dir().ok().and_then(|cwd| {
+            let candidates = vec![
+                cwd.join("../../capsule-registry/registry.json"),
+                cwd.join("../capsule-registry/registry.json"),
+                cwd.join("capsule-registry/registry.json"),
+            ];
+            candidates.into_iter().find(|p| p.exists())
         });
+
+        if let Some(path) = local_registry {
+            format!("file://{}", path.to_string_lossy())
+        } else {
+            "https://gist.githubusercontent.com/egamikohsuke/placeholder/raw/registry.json"
+                .to_string()
+        }
+    });
 
     let artifact_config = ArtifactConfig {
         registry_url,
@@ -176,11 +189,18 @@ async fn main() -> anyhow::Result<()> {
         cas_root: None, // CAS integration - configure via CLI if needed
     };
 
-    let artifact_manager = Arc::new(ArtifactManager::new(artifact_config).await.expect("Failed to initialize ArtifactManager"));
+    let artifact_manager = Arc::new(
+        ArtifactManager::new(artifact_config)
+            .await
+            .expect("Failed to initialize ArtifactManager"),
+    );
 
     // Initialize UsageReporter
-    let coordinator_url = std::env::var("COORDINATOR_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    let usage_reporter = Arc::new(capsuled_engine::billing::reporter::UsageReporter::new(coordinator_url));
+    let coordinator_url =
+        std::env::var("COORDINATOR_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let usage_reporter = Arc::new(capsuled_engine::billing::reporter::UsageReporter::new(
+        coordinator_url,
+    ));
 
     // Load StorageConfig from config file if available
     let storage_config = load_storage_config();
@@ -232,8 +252,13 @@ async fn main() -> anyhow::Result<()> {
     // Initialize ManifestVerifier
     let verifier_pubkey = std::env::var("CAPSULED_PUBKEY").ok();
     // Default to strict enforcement? No, default to permissive for now to avoid breaking existing users unless configured.
-    let enforcement_enabled = std::env::var("CAPSULED_ENFORCE_SIGNATURES").map(|v| v == "true" || v == "1").unwrap_or(false);
-    let verifier = Arc::new(capsuled_engine::security::verifier::ManifestVerifier::new(verifier_pubkey, enforcement_enabled));
+    let enforcement_enabled = std::env::var("CAPSULED_ENFORCE_SIGNATURES")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    let verifier = Arc::new(capsuled_engine::security::verifier::ManifestVerifier::new(
+        verifier_pubkey,
+        enforcement_enabled,
+    ));
 
     // Initialize CapsuleManager
     let capsule_manager = Arc::new(CapsuleManager::new(
@@ -257,15 +282,14 @@ async fn main() -> anyhow::Result<()> {
     // Initialize AuthManager
     let auth_manager = Arc::new(capsuled_engine::auth::AuthManager::new());
 
-
     // Start HTTP API Server
     info!("Starting HTTP API server on port {}...", args.port);
-    
+
     let http_capsule_manager = capsule_manager.clone();
     let http_service_registry = service_registry.clone();
     let http_gpu_detector = gpu_detector.clone();
     let http_auth_manager = auth_manager;
-    
+
     tokio::spawn(async move {
         if let Err(e) = api_server::start_api_server(
             args.port,
@@ -285,24 +309,25 @@ async fn main() -> anyhow::Result<()> {
     let wasm_bytes = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
     let wasm_host = Arc::new(
         capsuled_engine::wasm_host::AdepLogicHost::new(&wasm_bytes)
-            .unwrap_or_else(|e| panic!("Failed to initialize WasmHost: {}", e))
+            .unwrap_or_else(|e| panic!("Failed to initialize WasmHost: {}", e)),
     );
 
     // Initialize TailscaleManager
-    let tailscale_manager = Arc::new(capsuled_engine::network::tailscale::TailscaleManager::start(None, None, None));
+    let tailscale_manager =
+        Arc::new(capsuled_engine::network::tailscale::TailscaleManager::start(None, None, None));
 
     let allowed_host_paths = vec![];
     // Start gRPC Server (Phase 2)
     let grpc_port = 50051;
     let grpc_addr = format!("0.0.0.0:{}", grpc_port);
-    
+
     info!("Starting gRPC server on {}...", grpc_addr);
-    
+
     let grpc_capsule_manager = capsule_manager.clone();
     let grpc_service_registry = service_registry.clone();
     let grpc_gpu_detector = gpu_detector.clone();
     let grpc_artifact_manager = artifact_manager.clone();
-    
+
     tokio::spawn(async move {
         if let Err(e) = capsuled_engine::grpc_server::start_grpc_server(
             &grpc_addr,
@@ -333,8 +358,7 @@ async fn main() -> anyhow::Result<()> {
 fn load_headscale_config() -> anyhow::Result<HeadscaleConfig> {
     // Load from environment or config file
     Ok(HeadscaleConfig {
-        server_url: std::env::var("GUMBALL_HEADSCALE_URL")
-            .unwrap_or_default(),
+        server_url: std::env::var("GUMBALL_HEADSCALE_URL").unwrap_or_default(),
         auth_key: std::env::var("GUMBALL_HEADSCALE_KEY").ok(),
         ..Default::default()
     })
@@ -351,7 +375,7 @@ fn load_storage_config() -> Option<StorageConfig> {
             .and_then(|p| p.parent().map(|d| d.join("config.toml")))
             .unwrap_or_default(),
     ];
-    
+
     for path in &config_paths {
         if path.exists() {
             match std::fs::read_to_string(path) {
@@ -382,15 +406,18 @@ fn load_storage_config() -> Option<StorageConfig> {
             }
         }
     }
-    
+
     // Check environment variable for enabling storage
-    if std::env::var("GUMBALL_STORAGE_ENABLED").map(|v| v == "true" || v == "1").unwrap_or(false) {
+    if std::env::var("GUMBALL_STORAGE_ENABLED")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false)
+    {
         info!("Storage enabled via environment variable");
         let mut config = StorageConfig {
             enabled: true,
             ..Default::default()
         };
-        
+
         // Override defaults from environment
         if let Ok(vg) = std::env::var("GUMBALL_STORAGE_VG") {
             config.default_vg = vg;
@@ -401,9 +428,9 @@ fn load_storage_config() -> Option<StorageConfig> {
         if let Ok(encrypt) = std::env::var("GUMBALL_STORAGE_ENCRYPT") {
             config.enable_encryption = encrypt == "true" || encrypt == "1";
         }
-        
+
         return Some(config);
     }
-    
+
     None
 }

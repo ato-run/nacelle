@@ -49,7 +49,7 @@ mod manifest_tests {
         "#;
         let (m, r) = load_manifest_str(None, toml).unwrap();
         assert_eq!(m.name, "meeting-summarizer");
-        
+
         let req = r.unwrap();
         // V1 parser extracts VRAM requirement
         assert!(req.gpu_memory_bytes.is_some());

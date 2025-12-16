@@ -224,13 +224,9 @@ impl BillingIntegration {
         period_start: u64,
         period_end: u64,
     ) -> Result<BillingResult> {
-        let billing = self.calculator.calculate(
-            customer_id,
-            tier,
-            usage,
-            period_start,
-            period_end,
-        )?;
+        let billing =
+            self.calculator
+                .calculate(customer_id, tier, usage, period_start, period_end)?;
 
         // In production, would:
         // 1. Create invoice in Polar
@@ -241,11 +237,7 @@ impl BillingIntegration {
     }
 
     /// Get customer's current usage and projected cost
-    pub async fn get_current_usage(
-        &self,
-        customer_id: &str,
-        tier: &str,
-    ) -> Result<BillingResult> {
+    pub async fn get_current_usage(&self, customer_id: &str, tier: &str) -> Result<BillingResult> {
         // In production, would fetch from usage tracker
         let usage = UsageSummary {
             total_tokens: 0,
@@ -259,7 +251,8 @@ impl BillingIntegration {
             .unwrap()
             .as_secs();
 
-        self.calculator.calculate(customer_id, tier, usage, now, now)
+        self.calculator
+            .calculate(customer_id, tier, usage, now, now)
     }
 }
 
@@ -283,9 +276,7 @@ mod tests {
             by_model: std::collections::HashMap::new(),
         };
 
-        let result = calc
-            .calculate("cus_123", "free", usage, 0, 1000)
-            .unwrap();
+        let result = calc.calculate("cus_123", "free", usage, 0, 1000).unwrap();
 
         assert_eq!(result.base_fee, dec!(0));
         assert_eq!(result.token_overage_cost, dec!(0));
@@ -298,7 +289,7 @@ mod tests {
         let calc = PricingCalculator::new();
         let usage = UsageSummary {
             total_tokens: 15_000_000, // 5M over quota
-            total_gpu_hours: dec!(2),     // Under 5h included
+            total_gpu_hours: dec!(2), // Under 5h included
             total_requests: 1000,
             by_model: std::collections::HashMap::new(),
         };
@@ -319,15 +310,13 @@ mod tests {
     fn test_pro_tier_gpu_overage() {
         let calc = PricingCalculator::new();
         let usage = UsageSummary {
-            total_tokens: 50_000_000, // Under 100M included
-            total_gpu_hours: dec!(60),    // 10h over 50h quota
+            total_tokens: 50_000_000,  // Under 100M included
+            total_gpu_hours: dec!(60), // 10h over 50h quota
             total_requests: 5000,
             by_model: std::collections::HashMap::new(),
         };
 
-        let result = calc
-            .calculate("cus_123", "pro", usage, 0, 1000)
-            .unwrap();
+        let result = calc.calculate("cus_123", "pro", usage, 0, 1000).unwrap();
 
         assert_eq!(result.base_fee, dec!(29));
         assert_eq!(result.token_overage_cost, dec!(0));
@@ -342,7 +331,7 @@ mod tests {
         let calc = PricingCalculator::new();
         let usage = UsageSummary {
             total_tokens: 1_200_000_000, // 200M over 1B quota
-            total_gpu_hours: dec!(600),      // 100h over 500h quota
+            total_gpu_hours: dec!(600),  // 100h over 500h quota
             total_requests: 100_000,
             by_model: std::collections::HashMap::new(),
         };
@@ -384,6 +373,9 @@ mod tests {
 
         let result = calc.calculate("cus_123", "invalid", usage, 0, 1000);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown pricing tier"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unknown pricing tier"));
     }
 }

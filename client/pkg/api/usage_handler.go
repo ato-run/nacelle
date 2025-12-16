@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -40,7 +41,7 @@ func (h *UsageHandler) HandleReportUsage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log := supabase.UsageLog{
+	usageLog := supabase.UsageLog{
 		UserID:    req.UserID,
 		CapsuleID: req.CapsuleID,
 		Resource:  req.Resource,
@@ -49,7 +50,7 @@ func (h *UsageHandler) HandleReportUsage(w http.ResponseWriter, r *http.Request)
 		EndTime:   req.EndTime,
 	}
 
-	if err := h.supabase.LogUsage(log); err != nil {
+	if err := h.supabase.LogUsage(usageLog); err != nil {
 		http.Error(w, "Failed to log usage", http.StatusInternalServerError)
 		return
 	}
@@ -60,8 +61,7 @@ func (h *UsageHandler) HandleReportUsage(w http.ResponseWriter, r *http.Request)
 		go func() {
 			// Use background context for async task
 			if err := h.metering.ReportUsage(context.Background(), req.UserID, req.Amount); err != nil {
-				// Log error (should use a logger)
-				// fmt.Printf("Failed to report usage to Stripe: %v\n", err)
+				log.Printf("failed to report usage to Stripe: user_id=%s amount=%f err=%v", req.UserID, req.Amount, err)
 			}
 		}()
 	}

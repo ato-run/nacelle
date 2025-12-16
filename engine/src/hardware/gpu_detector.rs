@@ -137,13 +137,13 @@ impl GpuDetector for MockGpuDetector {
 
 /// Real GPU detector using NVML (NVIDIA Management Library)
 /// Only available when compiled with `real-gpu` feature
-#[cfg(feature = "real-gpu")]
+#[cfg(all(feature = "real-gpu", target_os = "linux"))]
 #[derive(Debug)]
 pub struct NvmlGpuDetector {
     nvml: Arc<nvml_wrapper::Nvml>,
 }
 
-#[cfg(feature = "real-gpu")]
+#[cfg(all(feature = "real-gpu", target_os = "linux"))]
 impl NvmlGpuDetector {
     pub fn new() -> Result<Self, GpuDetectionError> {
         let nvml = nvml_wrapper::Nvml::init()
@@ -155,7 +155,7 @@ impl NvmlGpuDetector {
     }
 }
 
-#[cfg(feature = "real-gpu")]
+#[cfg(all(feature = "real-gpu", target_os = "linux"))]
 impl GpuDetector for NvmlGpuDetector {
     fn detect_gpus(&self) -> Result<RigHardwareReport, GpuDetectionError> {
         let rig_id = hostname::get()
@@ -241,13 +241,12 @@ impl GpuDetector for NvmlGpuDetector {
     }
 
     fn get_available_vram_bytes(&self, index: usize) -> Result<u64, GpuDetectionError> {
-        let device = self
-            .nvml
-            .device_by_index(index as u32)
-            .map_err(|e| GpuDetectionError::GpuQueryFailed {
+        let device = self.nvml.device_by_index(index as u32).map_err(|e| {
+            GpuDetectionError::GpuQueryFailed {
                 index: index as u32,
                 message: e.to_string(),
-            })?;
+            }
+        })?;
 
         let memory_info = device
             .memory_info()
@@ -315,12 +314,14 @@ impl GpuDetector for CpuGpuDetector {
 /// - Use Mock detector ONLY if explicitly requested via env var `CAPSULED_USE_MOCK_GPU=1`
 pub fn create_gpu_detector() -> Arc<dyn GpuDetector> {
     // Check if Mock is explicitly requested or implied by VRAM config
-    if std::env::var("CAPSULED_USE_MOCK_GPU").is_ok() || std::env::var("CAPSULED_MOCK_VRAM_GB").is_ok() {
+    if std::env::var("CAPSULED_USE_MOCK_GPU").is_ok()
+        || std::env::var("CAPSULED_MOCK_VRAM_GB").is_ok()
+    {
         tracing::info!("Using mock GPU detector (requested via env var)");
         return Arc::new(MockGpuDetector::new());
     }
 
-    #[cfg(feature = "real-gpu")]
+    #[cfg(all(feature = "real-gpu", target_os = "linux"))]
     {
         match NvmlGpuDetector::new() {
             Ok(detector) => {
@@ -334,6 +335,12 @@ pub fn create_gpu_detector() -> Arc<dyn GpuDetector> {
         }
     }
 
+    #[cfg(all(feature = "real-gpu", not(target_os = "linux")))]
+    {
+        tracing::info!("real-gpu feature enabled on non-Linux; using CPU-only detector");
+        Arc::new(CpuGpuDetector::new())
+    }
+
     #[cfg(not(feature = "real-gpu"))]
     {
         #[cfg(target_os = "macos")]
@@ -345,7 +352,10 @@ pub fn create_gpu_detector() -> Arc<dyn GpuDetector> {
                     Arc::new(detector)
                 }
                 Err(e) => {
-                    tracing::warn!("Mac GPU detector failed ({}), falling back to CPU-only mode", e);
+                    tracing::warn!(
+                        "Mac GPU detector failed ({}), falling back to CPU-only mode",
+                        e
+                    );
                     Arc::new(CpuGpuDetector::new())
                 }
             }

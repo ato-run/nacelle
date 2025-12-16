@@ -115,7 +115,9 @@ func TestListNodesAPIError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.responseBody))
+				if _, err := w.Write([]byte(tt.responseBody)); err != nil {
+					return
+				}
 			}))
 			defer server.Close()
 
@@ -160,7 +162,10 @@ func TestGetNodeByName(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		response := ListNodesResponse{Nodes: testNodes}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -237,7 +242,10 @@ func TestGetQuorumSize(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 
 				response := ListNodesResponse{Nodes: nodes}
-				json.NewEncoder(w).Encode(response)
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 			}))
 			defer server.Close()
 

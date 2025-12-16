@@ -56,9 +56,9 @@ impl Client {
             .connect_with_connector(service_fn(move |_| {
                 let path = socket_path.clone();
                 async move {
-                    UnixStream::connect(path).await.map_err(|err| {
-                        std::io::Error::other(format!("{err}"))
-                    })
+                    UnixStream::connect(path)
+                        .await
+                        .map_err(|err| std::io::Error::other(format!("{err}")))
                 }
             }))
             .await?;

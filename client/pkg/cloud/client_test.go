@@ -71,7 +71,10 @@ func TestCreateChatCompletion(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -106,7 +109,10 @@ func TestCreateChatCompletion(t *testing.T) {
 func TestCreateChatCompletionWithToolCalls(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req ChatRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		// Verify tools
 		if len(req.Tools) == 0 {
@@ -140,7 +146,10 @@ func TestCreateChatCompletionWithToolCalls(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -186,7 +195,10 @@ func TestCreateChatCompletionStream(t *testing.T) {
 		}
 
 		var req ChatRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		if !req.Stream {
 			t.Error("expected stream=true in request")
@@ -264,7 +276,9 @@ func TestHealth(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "ok"}`))
+		if _, err := w.Write([]byte(`{"status": "ok"}`)); err != nil {
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -305,7 +319,10 @@ func TestRetryOnError(t *testing.T) {
 			Choices: []Choice{{Message: ChatMessage{Content: "success"}}},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -333,7 +350,7 @@ func TestAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ErrorResponse{
+		if err := json.NewEncoder(w).Encode(ErrorResponse{
 			Error: struct {
 				Message string `json:"message"`
 				Type    string `json:"type"`
@@ -342,7 +359,10 @@ func TestAPIError(t *testing.T) {
 				Message: "Invalid model",
 				Type:    "invalid_request_error",
 			},
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 

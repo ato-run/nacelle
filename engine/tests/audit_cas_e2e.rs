@@ -9,8 +9,8 @@
 //! cargo test --test audit_cas_e2e -- --test-threads=1
 //! ```
 
-use tempfile::TempDir;
 use sha2::{Digest, Sha256};
+use tempfile::TempDir;
 
 // ============================================================================
 // Test 1: CAS URI Resolution
@@ -23,19 +23,19 @@ async fn test_cas_uri_resolution_success() {
     // Create temp CAS directory structure
     let tmp = TempDir::new().expect("tempdir");
     let cas_root = tmp.path().join("cas");
-    
+
     // Create a dummy blob with known content
     let blob_content = b"This is test blob content for CAS verification";
     let hash = format!("{:x}", Sha256::digest(blob_content));
-    
+
     // CAS layout: blobs/<prefix>/<hash>
     let prefix = &hash[0..2];
     let blob_dir = cas_root.join("blobs").join(prefix);
     std::fs::create_dir_all(&blob_dir).expect("create blob dir");
-    
+
     let blob_path = blob_dir.join(&hash);
     std::fs::write(&blob_path, blob_content).expect("write blob");
-    
+
     println!("Created CAS blob at: {}", blob_path.display());
     println!("Hash: {}", hash);
 
@@ -52,21 +52,29 @@ async fn test_cas_uri_resolution_success() {
     let uri = format!("cas://{}", hash);
     let result = manager.resolve_cas_uri(&uri);
 
-    assert!(result.is_ok(), "CAS resolution should succeed: {:?}", result.err());
-    
+    assert!(
+        result.is_ok(),
+        "CAS resolution should succeed: {:?}",
+        result.err()
+    );
+
     let resolved_path = result.unwrap();
     assert!(resolved_path.exists(), "Resolved path should exist");
-    
+
     // Verify content matches
     let read_content = std::fs::read(&resolved_path).expect("read blob");
     assert_eq!(read_content, blob_content, "Blob content should match");
 
-    println!("✅ CAS URI resolution verified: {} -> {}", uri, resolved_path.display());
+    println!(
+        "✅ CAS URI resolution verified: {} -> {}",
+        uri,
+        resolved_path.display()
+    );
 }
 
 #[tokio::test]
 async fn test_cas_uri_resolution_not_found() {
-    use capsuled_engine::artifact::manager::{ArtifactConfig, ArtifactManager, ArtifactError};
+    use capsuled_engine::artifact::manager::{ArtifactConfig, ArtifactError, ArtifactManager};
 
     let tmp = TempDir::new().expect("tempdir");
     let cas_root = tmp.path().join("cas");
@@ -85,8 +93,11 @@ async fn test_cas_uri_resolution_not_found() {
     let uri = format!("cas://{}", fake_hash);
     let result = manager.resolve_cas_uri(&uri);
 
-    assert!(result.is_err(), "Resolution should fail for non-existent blob");
-    
+    assert!(
+        result.is_err(),
+        "Resolution should fail for non-existent blob"
+    );
+
     match result.unwrap_err() {
         ArtifactError::NotFound(_) => println!("✅ Correctly returned NotFound error"),
         e => panic!("Expected NotFound, got: {:?}", e),
@@ -95,7 +106,7 @@ async fn test_cas_uri_resolution_not_found() {
 
 #[tokio::test]
 async fn test_cas_uri_validation() {
-    use capsuled_engine::artifact::manager::{ArtifactConfig, ArtifactManager, ArtifactError};
+    use capsuled_engine::artifact::manager::{ArtifactConfig, ArtifactError, ArtifactManager};
 
     let tmp = TempDir::new().expect("tempdir");
 
@@ -125,7 +136,7 @@ async fn test_cas_uri_validation() {
 
 #[tokio::test]
 async fn test_cas_root_not_configured() {
-    use capsuled_engine::artifact::manager::{ArtifactConfig, ArtifactManager, ArtifactError};
+    use capsuled_engine::artifact::manager::{ArtifactConfig, ArtifactError, ArtifactManager};
 
     let tmp = TempDir::new().expect("tempdir");
 
@@ -159,20 +170,46 @@ async fn test_audit_log_persistence() {
 
     // Log several events
     let events = [
-        (AuditOperation::DeployCapsule, AuditStatus::Success, Some("test-capsule-001".to_string())),
-        (AuditOperation::CapsuleStart, AuditStatus::Success, Some("test-capsule-001".to_string())),
-        (AuditOperation::EgressRulesApplied, AuditStatus::Success, Some("test-capsule-001".to_string())),
-        (AuditOperation::CapsuleStop, AuditStatus::Success, Some("test-capsule-001".to_string())),
-        (AuditOperation::SignatureRejected, AuditStatus::Failure, Some("bad-capsule".to_string())),
+        (
+            AuditOperation::DeployCapsule,
+            AuditStatus::Success,
+            Some("test-capsule-001".to_string()),
+        ),
+        (
+            AuditOperation::CapsuleStart,
+            AuditStatus::Success,
+            Some("test-capsule-001".to_string()),
+        ),
+        (
+            AuditOperation::EgressRulesApplied,
+            AuditStatus::Success,
+            Some("test-capsule-001".to_string()),
+        ),
+        (
+            AuditOperation::CapsuleStop,
+            AuditStatus::Success,
+            Some("test-capsule-001".to_string()),
+        ),
+        (
+            AuditOperation::SignatureRejected,
+            AuditStatus::Failure,
+            Some("bad-capsule".to_string()),
+        ),
     ];
 
     for (op, status, capsule_id) in events.iter() {
-        logger.log(op.clone(), status.clone(), capsule_id.clone(), None).await;
+        logger
+            .log(op.clone(), status.clone(), capsule_id.clone(), None)
+            .await;
     }
 
     // Verify database was created
     let db_path = log_path.with_extension("db");
-    assert!(db_path.exists(), "Audit database should be created at {:?}", db_path);
+    assert!(
+        db_path.exists(),
+        "Audit database should be created at {:?}",
+        db_path
+    );
 
     // Query the database directly
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
@@ -181,7 +218,7 @@ async fn test_audit_log_persistence() {
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM audit_logs", [], |row| row.get(0))
         .expect("count query");
-    
+
     assert_eq!(count, 5, "Should have 5 audit events");
 
     // Verify each event has required fields
@@ -211,18 +248,24 @@ async fn test_audit_log_persistence() {
     assert_eq!(rows[0].1, "success");
     assert_eq!(rows[0].2, Some("test-capsule-001".to_string()));
     assert_eq!(rows[0].3, "test-node-001");
-    
+
     // Verify content_hash is SHA-256 (64 hex chars)
     let hash = rows[0].4.as_ref().expect("hash should exist");
     assert_eq!(hash.len(), 64, "Hash should be 64 hex characters");
-    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "Hash should be hex");
+    assert!(
+        hash.chars().all(|c| c.is_ascii_hexdigit()),
+        "Hash should be hex"
+    );
 
     // Verify failure event
     assert_eq!(rows[4].0, "signature_rejected");
     assert_eq!(rows[4].1, "failure");
     assert_eq!(rows[4].2, Some("bad-capsule".to_string()));
 
-    println!("✅ Audit log persistence verified: {} events with content hashes", count);
+    println!(
+        "✅ Audit log persistence verified: {} events with content hashes",
+        count
+    );
 }
 
 #[tokio::test]
@@ -237,19 +280,23 @@ async fn test_audit_content_hash_uniqueness() {
         .expect("create logger");
 
     // Log events with different details - should have different hashes
-    logger.log(
-        AuditOperation::DeployCapsule, 
-        AuditStatus::Success, 
-        Some("capsule-a".to_string()),
-        Some("details-1".to_string()),
-    ).await;
+    logger
+        .log(
+            AuditOperation::DeployCapsule,
+            AuditStatus::Success,
+            Some("capsule-a".to_string()),
+            Some("details-1".to_string()),
+        )
+        .await;
 
-    logger.log(
-        AuditOperation::DeployCapsule, 
-        AuditStatus::Success, 
-        Some("capsule-b".to_string()),
-        Some("details-2".to_string()),
-    ).await;
+    logger
+        .log(
+            AuditOperation::DeployCapsule,
+            AuditStatus::Success,
+            Some("capsule-b".to_string()),
+            Some("details-2".to_string()),
+        )
+        .await;
 
     // Query hashes
     let db_path = log_path.with_extension("db");
@@ -264,7 +311,10 @@ async fn test_audit_content_hash_uniqueness() {
         .collect();
 
     assert_eq!(hashes.len(), 2);
-    assert_ne!(hashes[0], hashes[1], "Different events should have different hashes");
+    assert_ne!(
+        hashes[0], hashes[1],
+        "Different events should have different hashes"
+    );
 
     println!("✅ Content hash uniqueness verified");
 }
@@ -282,9 +332,12 @@ async fn test_audit_merkle_root_computation() {
     ];
 
     let root = AuditLogger::compute_merkle_root(&hashes);
-    
+
     assert_eq!(root.len(), 64, "Merkle root should be 64 hex chars");
-    assert!(root.chars().all(|c| c.is_ascii_hexdigit()), "Root should be hex");
+    assert!(
+        root.chars().all(|c| c.is_ascii_hexdigit()),
+        "Root should be hex"
+    );
 
     // Verify determinism
     let root2 = AuditLogger::compute_merkle_root(&hashes);
@@ -324,7 +377,8 @@ async fn test_combined_cas_audit_flow() {
         log_path.clone(),
         tmp.path().join("key.pem"),
         "combined-test-node".to_string(),
-    ).expect("logger");
+    )
+    .expect("logger");
 
     // Setup Artifact Manager
     let config = ArtifactConfig {
@@ -339,12 +393,18 @@ async fn test_combined_cas_audit_flow() {
     let resolved = manager.resolve_cas_uri(&uri).expect("resolve");
 
     // Log artifact resolution as audit event
-    logger.log(
-        AuditOperation::DeployCapsule,
-        AuditStatus::Success,
-        Some("cas-capsule".to_string()),
-        Some(format!("Resolved artifact: {} -> {}", uri, resolved.display())),
-    ).await;
+    logger
+        .log(
+            AuditOperation::DeployCapsule,
+            AuditStatus::Success,
+            Some("cas-capsule".to_string()),
+            Some(format!(
+                "Resolved artifact: {} -> {}",
+                uri,
+                resolved.display()
+            )),
+        )
+        .await;
 
     // Verify audit log captured the event
     let db_path = log_path.with_extension("db");
@@ -359,7 +419,10 @@ async fn test_combined_cas_audit_flow() {
         .expect("query");
 
     assert!(details.contains(&hash), "Audit log should contain CAS hash");
-    assert!(details.contains("Resolved artifact"), "Audit log should mention resolution");
+    assert!(
+        details.contains("Resolved artifact"),
+        "Audit log should mention resolution"
+    );
 
     println!("✅ Combined CAS + Audit flow verified");
 }
@@ -382,33 +445,40 @@ async fn test_audit_batch_signing() {
 
     // Log events for today
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    
-    logger.log(
-        AuditOperation::DeployCapsule,
-        AuditStatus::Success,
-        Some("signed-capsule".to_string()),
-        Some("test deploy".to_string()),
-    ).await;
 
-    logger.log(
-        AuditOperation::CapsuleStart,
-        AuditStatus::Success,
-        Some("signed-capsule".to_string()),
-        Some("test start".to_string()),
-    ).await;
+    logger
+        .log(
+            AuditOperation::DeployCapsule,
+            AuditStatus::Success,
+            Some("signed-capsule".to_string()),
+            Some("test deploy".to_string()),
+        )
+        .await;
 
-    logger.log(
-        AuditOperation::CapsuleStop,
-        AuditStatus::Success,
-        Some("signed-capsule".to_string()),
-        Some("test stop".to_string()),
-    ).await;
+    logger
+        .log(
+            AuditOperation::CapsuleStart,
+            AuditStatus::Success,
+            Some("signed-capsule".to_string()),
+            Some("test start".to_string()),
+        )
+        .await;
+
+    logger
+        .log(
+            AuditOperation::CapsuleStop,
+            AuditStatus::Success,
+            Some("signed-capsule".to_string()),
+            Some("test stop".to_string()),
+        )
+        .await;
 
     // Create signer
     let signer = CapsuleSigner::new("audit-batch-signer");
 
     // Sign the daily batch
-    let signature = logger.sign_daily_batch(&today, &signer)
+    let signature = logger
+        .sign_daily_batch(&today, &signer)
         .expect("signing should succeed");
 
     assert!(!signature.is_empty(), "Signature should not be empty");
@@ -426,8 +496,14 @@ async fn test_audit_batch_signing() {
         .expect("query signature");
 
     assert!(!stored_merkle.is_empty(), "Merkle root should be stored");
-    assert_eq!(stored_sig, signature, "Stored signature should match returned");
-    assert!(stored_fingerprint.starts_with("ed25519:"), "Fingerprint should have ed25519 prefix");
+    assert_eq!(
+        stored_sig, signature,
+        "Stored signature should match returned"
+    );
+    assert!(
+        stored_fingerprint.starts_with("ed25519:"),
+        "Fingerprint should have ed25519 prefix"
+    );
 
     // Verify events count
     let events_count: i64 = conn
@@ -440,8 +516,10 @@ async fn test_audit_batch_signing() {
 
     assert_eq!(events_count, 3, "Should have 3 events in batch");
 
-    println!("✅ Audit batch signing verified: {} events, signature stored", events_count);
+    println!(
+        "✅ Audit batch signing verified: {} events, signature stored",
+        events_count
+    );
     println!("   Merkle root: {}...", &stored_merkle[..16]);
     println!("   Signer: {}", stored_fingerprint);
 }
-

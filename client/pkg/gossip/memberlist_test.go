@@ -192,7 +192,11 @@ func TestEventDelegateNotifyJoin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+	}()
 
 	// Create event delegate
 	delegate := &eventDelegate{manager: mgr}
@@ -249,7 +253,11 @@ func TestEventDelegateNotifyLeave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+	}()
 
 	// Create event delegate
 	delegate := &eventDelegate{manager: mgr}
@@ -312,7 +320,11 @@ func TestCheckDeadNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+	}()
 
 	// Manually trigger dead node check
 	mgr.checkDeadNodes()
@@ -371,7 +383,11 @@ func TestPerformHeartbeat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+	}()
 
 	// Manually trigger heartbeat
 	mgr.performHeartbeat()
@@ -439,7 +455,11 @@ func TestTriggerElection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	defer mgr.Shutdown()
+	defer func() {
+		if err := mgr.Shutdown(); err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+	}()
 
 	err = mgr.TriggerElection()
 	if err != nil {

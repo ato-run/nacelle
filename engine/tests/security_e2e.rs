@@ -17,8 +17,8 @@
 
 #![cfg(unix)]
 
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 // ============================================================================
 // Prerequisites Check
@@ -26,8 +26,7 @@ use std::collections::HashMap;
 
 mod prereqs {
     pub fn is_root() -> bool {
-        std::env::var("USER").unwrap_or_default() == "root"
-            || std::env::var("SUDO_USER").is_ok()
+        std::env::var("USER").unwrap_or_default() == "root" || std::env::var("SUDO_USER").is_ok()
     }
 
     pub fn has_iptables() -> bool {
@@ -75,7 +74,7 @@ mod prereqs {
 /// Helper to create a minimal test manifest
 fn create_test_manifest(name: &str) -> libadep_core::capsule_v1::CapsuleManifestV1 {
     use libadep_core::capsule_v1::*;
-    
+
     CapsuleManifestV1 {
         schema_version: "1.0".to_string(),
         name: name.to_string(),
@@ -113,19 +112,17 @@ fn test_egress_fail_closed_blocks_disallowed_traffic() {
         return;
     }
 
-    use libadep_core::capsule_v1::{NetworkConfig, EgressIdRule, EgressIdType};
     use capsuled_engine::security::egress_policy::generate_fw_rules;
+    use libadep_core::capsule_v1::{EgressIdRule, EgressIdType, NetworkConfig};
 
     // Create manifest with restricted egress (only internal network)
     let mut manifest = create_test_manifest("test-egress-blocked");
     manifest.network = Some(NetworkConfig {
         egress_allow: vec![],
-        egress_id_allow: vec![
-            EgressIdRule {
-                rule_type: EgressIdType::Cidr,
-                value: "10.0.0.0/8".to_string(), // Only internal
-            },
-        ],
+        egress_id_allow: vec![EgressIdRule {
+            rule_type: EgressIdType::Cidr,
+            value: "10.0.0.0/8".to_string(), // Only internal
+        }],
     });
 
     // Generate iptables rules
@@ -142,13 +139,15 @@ fn test_egress_fail_closed_blocks_disallowed_traffic() {
         "Missing default DROP"
     );
     assert!(
-        rules.iter().any(|r| r.contains("10.0.0.0/8") && r.contains("ACCEPT")), 
+        rules
+            .iter()
+            .any(|r| r.contains("10.0.0.0/8") && r.contains("ACCEPT")),
         "Missing internal network allow rule"
     );
-    
+
     // Verify blocked destination is NOT in allow rules
     assert!(
-        !rules.iter().any(|r| r.contains("8.8.8.8")), 
+        !rules.iter().any(|r| r.contains("8.8.8.8")),
         "External DNS should not be explicitly allowed"
     );
 
@@ -168,36 +167,40 @@ fn test_egress_allows_permitted_traffic() {
         return;
     }
 
-    use libadep_core::capsule_v1::{NetworkConfig, EgressIdRule, EgressIdType};
     use capsuled_engine::security::egress_policy::generate_fw_rules;
+    use libadep_core::capsule_v1::{EgressIdRule, EgressIdType, NetworkConfig};
 
     // Create manifest allowing specific external IP
     let mut manifest = create_test_manifest("test-egress-allowed");
     manifest.network = Some(NetworkConfig {
         egress_allow: vec![],
-        egress_id_allow: vec![
-            EgressIdRule {
-                rule_type: EgressIdType::Ip,
-                value: "1.1.1.1".to_string(), // Cloudflare DNS
-            },
-        ],
+        egress_id_allow: vec![EgressIdRule {
+            rule_type: EgressIdType::Ip,
+            value: "1.1.1.1".to_string(), // Cloudflare DNS
+        }],
     });
 
     let rules = generate_fw_rules(&manifest);
 
     // Verify allowed IP is in rules
     assert!(
-        rules.iter().any(|r| r.contains("1.1.1.1") && r.contains("ACCEPT")),
+        rules
+            .iter()
+            .any(|r| r.contains("1.1.1.1") && r.contains("ACCEPT")),
         "Allowed IP should have ACCEPT rule"
     );
-    
+
     // Verify loopback and established are always allowed
     assert!(
-        rules.iter().any(|r| r.contains("-o lo") && r.contains("ACCEPT")),
+        rules
+            .iter()
+            .any(|r| r.contains("-o lo") && r.contains("ACCEPT")),
         "Loopback should be allowed"
     );
     assert!(
-        rules.iter().any(|r| r.contains("ESTABLISHED") || r.contains("RELATED")),
+        rules
+            .iter()
+            .any(|r| r.contains("ESTABLISHED") || r.contains("RELATED")),
         "Established connections should be allowed"
     );
 
@@ -212,9 +215,9 @@ fn test_egress_allows_permitted_traffic() {
 #[ignore]
 fn test_signature_verification_priority_over_egress() {
     prereqs::print_status();
-    
+
     use capsuled_engine::security::verifier::ManifestVerifier;
-    use libadep_core::capsule_v1::{NetworkConfig, EgressIdRule, EgressIdType};
+    use libadep_core::capsule_v1::{EgressIdRule, EgressIdType, NetworkConfig};
 
     // Create verifier with a FAKE trusted key to enable signature enforcement
     // When a trusted key is configured, the verifier will reject invalid signatures
@@ -224,17 +227,15 @@ fn test_signature_verification_priority_over_egress() {
     let mut manifest = create_test_manifest("test-sig-priority");
     manifest.network = Some(NetworkConfig {
         egress_allow: vec![],
-        egress_id_allow: vec![
-            EgressIdRule {
-                rule_type: EgressIdType::Cidr,
-                value: "0.0.0.0/0".to_string(), // Wide open (should never apply if sig fails)
-            },
-        ],
+        egress_id_allow: vec![EgressIdRule {
+            rule_type: EgressIdType::Cidr,
+            value: "0.0.0.0/0".to_string(), // Wide open (should never apply if sig fails)
+        }],
     });
 
     // Serialize manifest
     let manifest_json = serde_json::to_string(&manifest).expect("serialize manifest");
-    
+
     // Invalid signature (random bytes - too short to be valid format)
     let invalid_signature = vec![0u8; 64];
 
@@ -244,15 +245,15 @@ fn test_signature_verification_priority_over_egress() {
     // 2. Signature key doesn't match trusted key
     // 3. Cryptographic verification fails
     let result = verifier.verify(manifest_json.as_bytes(), &invalid_signature, "");
-    
+
     assert!(
         result.is_err(),
         "Invalid signature should cause verification failure"
     );
-    
+
     let err_msg = result.unwrap_err().to_string();
     println!("Verification error: {}", err_msg);
-    
+
     // Verify the error is about signature format or verification, not something else
     assert!(
         err_msg.contains("signature") || err_msg.contains("Invalid") || err_msg.contains("format"),
@@ -278,13 +279,13 @@ fn test_storage_vram_lifecycle_cleanup() {
         return;
     }
 
-    use capsuled_engine::storage::{StorageManager, StorageConfig};
+    use capsuled_engine::storage::{StorageConfig, StorageManager};
 
     let config = StorageConfig {
         enabled: true,
         default_vg: "test_vg".to_string(),
         key_directory: PathBuf::from("/tmp/security_e2e_keys"),
-        enable_encryption: false, // Start simple
+        enable_encryption: false,             // Start simple
         default_size_bytes: 50 * 1024 * 1024, // 50MB
         mount_base: PathBuf::from("/tmp/security_e2e_mounts"),
     };
@@ -299,21 +300,21 @@ fn test_storage_vram_lifecycle_cleanup() {
         .expect("provision");
 
     assert!(
-        PathBuf::from(&storage.device_path).exists() || 
-        storage.device_path.starts_with("/dev/mapper"), 
+        PathBuf::from(&storage.device_path).exists()
+            || storage.device_path.starts_with("/dev/mapper"),
         "Device path should exist"
     );
 
     // Phase 2: Mount
     println!("Phase 2: Mounting volume...");
     manager.mount_volume(&mut storage).expect("Mount failed");
-    
-    let mount_path = storage.mount_point.clone().expect("Mount point should be set");
+
+    let mount_path = storage
+        .mount_point
+        .clone()
+        .expect("Mount point should be set");
     println!("  Mount point: {:?}", mount_path);
-    assert!(
-        mount_path.exists(),
-        "Mount point should exist after mount"
-    );
+    assert!(mount_path.exists(), "Mount point should exist after mount");
 
     // Phase 3: Write data
     println!("Phase 3: Writing test data...");
@@ -323,22 +324,32 @@ fn test_storage_vram_lifecycle_cleanup() {
 
     // Phase 4: Unmount
     println!("Phase 4: Unmounting...");
-    manager.unmount_volume(capsule_id, &storage.lv_name).expect("Unmount failed");
-    
+    manager
+        .unmount_volume(capsule_id, &storage.lv_name)
+        .expect("Unmount failed");
+
     // Mount point directory should be removed
-    assert!(!mount_path.exists(), "Mount point should be removed after unmount");
+    assert!(
+        !mount_path.exists(),
+        "Mount point should be removed after unmount"
+    );
 
     // Phase 5: Cleanup
     println!("Phase 5: Cleaning up resources...");
-    manager.cleanup_capsule_storage(capsule_id).expect("Cleanup failed");
-    
+    manager
+        .cleanup_capsule_storage(capsule_id)
+        .expect("Cleanup failed");
+
     // Verify LV no longer exists
     let lv_check = std::process::Command::new("lvs")
         .arg(format!("test_vg/{}", storage.lv_name))
         .output()
         .expect("lvs command");
-    
-    assert!(!lv_check.status.success(), "LV should be deleted after cleanup");
+
+    assert!(
+        !lv_check.status.success(),
+        "LV should be deleted after cleanup"
+    );
 
     println!("✅ Storage lifecycle cleanup verified");
 }
@@ -351,16 +362,16 @@ fn test_storage_vram_lifecycle_cleanup() {
 #[ignore]
 fn test_combined_security_flow() {
     prereqs::print_status();
-    
+
     // This test verifies the logical flow:
     // 1. Signature check FIRST
     // 2. If passed, egress rules generated
     // 3. Storage provisioned
     // 4. Capsule runs
     // 5. On stop: VRAM scrub + storage cleanup
-    
-    use capsuled_engine::security::verifier::ManifestVerifier;
+
     use capsuled_engine::security::egress_policy::generate_fw_rules;
+    use capsuled_engine::security::verifier::ManifestVerifier;
 
     // Step 1: Create manifest
     let manifest = create_test_manifest("combined-flow-test");
@@ -376,12 +387,9 @@ fn test_combined_security_flow() {
 
     // Step 3: Generate egress rules (should be default DROP with essentials)
     let rules = generate_fw_rules(&manifest);
+    assert!(!rules.is_empty(), "Should generate base firewall rules");
     assert!(
-        !rules.is_empty(),
-        "Should generate base firewall rules"
-    );
-    assert!(
-        rules.iter().any(|r| r.contains("-P OUTPUT DROP")), 
+        rules.iter().any(|r| r.contains("-P OUTPUT DROP")),
         "Default DROP should always be present"
     );
 

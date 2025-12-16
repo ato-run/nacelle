@@ -143,7 +143,7 @@ func TestStreamLogsHandler_FollowMode(t *testing.T) {
 	defer conn.Close()
 
 	// Set read deadline
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(3*time.Second)))
 
 	// Read multiple messages (should get historical + follow updates)
 	messageCount := 0

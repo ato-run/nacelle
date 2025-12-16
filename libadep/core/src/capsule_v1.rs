@@ -76,40 +76,40 @@ pub enum Platform {
 pub struct CapsuleManifestV1 {
     /// Schema version (must be "1.0")
     pub schema_version: String,
-    
+
     /// Unique capsule identifier (kebab-case)
     pub name: String,
-    
+
     /// Semantic version
     pub version: String,
-    
+
     /// Capsule type
     #[serde(rename = "type")]
     pub capsule_type: CapsuleType,
-    
+
     /// Human-readable metadata
     #[serde(default)]
     pub metadata: CapsuleMetadataV1,
-    
+
     /// Capsule capabilities (for inference type)
     #[serde(default)]
     pub capabilities: Option<CapsuleCapabilities>,
-    
+
     /// System requirements
     #[serde(default)]
     pub requirements: CapsuleRequirements,
-    
+
     /// Execution configuration
     pub execution: CapsuleExecution,
 
     /// Persistent storage volumes
     #[serde(default)]
     pub storage: CapsuleStorage,
-    
+
     /// Routing configuration
     #[serde(default)]
     pub routing: CapsuleRouting,
-    
+
     /// Network configuration
     #[serde(default)]
     pub network: Option<NetworkConfig>,
@@ -141,19 +141,19 @@ pub struct CapsuleMetadataV1 {
     /// Display name for UI
     #[serde(default)]
     pub display_name: Option<String>,
-    
+
     /// Description
     #[serde(default)]
     pub description: Option<String>,
-    
+
     /// Author or organization
     #[serde(default)]
     pub author: Option<String>,
-    
+
     /// Icon URL
     #[serde(default)]
     pub icon: Option<String>,
-    
+
     /// Tags for categorization
     #[serde(default)]
     pub tags: Vec<String>,
@@ -165,15 +165,15 @@ pub struct CapsuleCapabilities {
     /// Supports chat completions
     #[serde(default)]
     pub chat: bool,
-    
+
     /// Supports function/tool calling
     #[serde(default)]
     pub function_calling: bool,
-    
+
     /// Supports vision/image input
     #[serde(default)]
     pub vision: bool,
-    
+
     /// Maximum context window size
     #[serde(default)]
     pub context_length: Option<u32>,
@@ -185,19 +185,19 @@ pub struct CapsuleRequirements {
     /// Supported platforms
     #[serde(default)]
     pub platform: Vec<Platform>,
-    
+
     /// Minimum VRAM required (e.g., "6GB")
     #[serde(default)]
     pub vram_min: Option<String>,
-    
+
     /// Recommended VRAM (e.g., "8GB")
     #[serde(default)]
     pub vram_recommended: Option<String>,
-    
+
     /// Disk space required (e.g., "5GB")
     #[serde(default)]
     pub disk: Option<String>,
-    
+
     /// Other Capsule dependencies
     #[serde(default)]
     pub dependencies: Vec<String>,
@@ -207,23 +207,35 @@ impl CapsuleRequirements {
     /// Parse vram_min into bytes
     pub fn vram_min_bytes(&self) -> Result<Option<u64>, CapsuleError> {
         match &self.vram_min {
-            Some(s) => Ok(Some(parse_memory_string(s).map_err(|e| CapsuleError::InvalidMemoryString(e.to_string()))?)),
+            Some(s) => {
+                Ok(Some(parse_memory_string(s).map_err(|e| {
+                    CapsuleError::InvalidMemoryString(e.to_string())
+                })?))
+            }
             None => Ok(None),
         }
     }
-    
+
     /// Parse vram_recommended into bytes
     pub fn vram_recommended_bytes(&self) -> Result<Option<u64>, CapsuleError> {
         match &self.vram_recommended {
-            Some(s) => Ok(Some(parse_memory_string(s).map_err(|e| CapsuleError::InvalidMemoryString(e.to_string()))?)),
+            Some(s) => {
+                Ok(Some(parse_memory_string(s).map_err(|e| {
+                    CapsuleError::InvalidMemoryString(e.to_string())
+                })?))
+            }
             None => Ok(None),
         }
     }
-    
+
     /// Parse disk into bytes
     pub fn disk_bytes(&self) -> Result<Option<u64>, CapsuleError> {
         match &self.disk {
-            Some(s) => Ok(Some(parse_memory_string(s).map_err(|e| CapsuleError::InvalidMemoryString(e.to_string()))?)),
+            Some(s) => {
+                Ok(Some(parse_memory_string(s).map_err(|e| {
+                    CapsuleError::InvalidMemoryString(e.to_string())
+                })?))
+            }
             None => Ok(None),
         }
     }
@@ -235,7 +247,7 @@ pub struct SignalConfig {
     /// Signal for graceful stop (default: SIGTERM)
     #[serde(default = "default_stop_signal")]
     pub stop: String,
-    
+
     /// Signal for force kill (default: SIGKILL)
     #[serde(default = "default_kill_signal")]
     pub kill: String,
@@ -254,26 +266,26 @@ fn default_kill_signal() -> String {
 pub struct CapsuleExecution {
     /// Runtime type
     pub runtime: RuntimeType,
-    
+
     /// Entry point (script, binary, or Docker image)
     pub entrypoint: String,
-    
+
     /// Port the service listens on
     #[serde(default)]
     pub port: Option<u16>,
-    
+
     /// Health check endpoint
     #[serde(default)]
     pub health_check: Option<String>,
-    
+
     /// Startup timeout in seconds
     #[serde(default = "default_startup_timeout")]
     pub startup_timeout: u32,
-    
+
     /// Environment variables
     #[serde(default)]
     pub env: HashMap<String, String>,
-    
+
     /// Signal configuration
     #[serde(default)]
     pub signals: SignalConfig,
@@ -289,11 +301,11 @@ pub struct CapsuleRouting {
     /// Weight for routing decision
     #[serde(default)]
     pub weight: RouteWeight,
-    
+
     /// Whether to fallback to cloud when local resources are insufficient
     #[serde(default = "default_true")]
     pub fallback_to_cloud: bool,
-    
+
     /// Cloud Capsule ID to use as fallback
     #[serde(default)]
     pub cloud_capsule: Option<String>,
@@ -309,7 +321,7 @@ pub struct ModelConfig {
     /// Model source (e.g., "hf:org/model")
     #[serde(default)]
     pub source: Option<String>,
-    
+
     /// Quantization format
     #[serde(default)]
     pub quantization: Option<Quantization>,
@@ -321,7 +333,7 @@ pub struct NetworkConfig {
     /// List of allowlisted domains (L7/Proxy)
     #[serde(default)]
     pub egress_allow: Vec<String>,
-    
+
     /// List of allowlisted IPs/CIDRs (L3/Firewall)
     #[serde(default)]
     pub egress_id_allow: Vec<EgressIdRule>,
@@ -333,7 +345,7 @@ pub struct EgressIdRule {
     /// Type of rule (ip, cidr, spiffe - though spiffe might be L7, treating as ID here)
     #[serde(rename = "type")]
     pub rule_type: EgressIdType,
-    
+
     /// Value (e.g., "192.168.1.1", "10.0.0.0/8")
     pub value: String,
 }
@@ -344,36 +356,37 @@ pub enum EgressIdType {
     Ip,
     Cidr,
     /// SPIFFE ID (future use, currently placeholder for L3 mapping)
-    Spiffe, 
+    Spiffe,
 }
 
 impl CapsuleManifestV1 {
     /// Parse from TOML string
     pub fn from_toml(content: &str) -> Result<Self, CapsuleError> {
-        toml::from_str(content).map_err(|e| CapsuleError::ParseError(format!("TOML parse error: {}", e)))
+        toml::from_str(content)
+            .map_err(|e| CapsuleError::ParseError(format!("TOML parse error: {}", e)))
     }
-    
+
     /// Parse from JSON string
     pub fn from_json(content: &str) -> Result<Self, CapsuleError> {
-        serde_json::from_str(content).map_err(|e| CapsuleError::ParseError(format!("JSON parse error: {}", e)))
+        serde_json::from_str(content)
+            .map_err(|e| CapsuleError::ParseError(format!("JSON parse error: {}", e)))
     }
-    
+
     /// Serialize to JSON
     pub fn to_json(&self) -> Result<String, CapsuleError> {
         serde_json::to_string_pretty(self).map_err(|e| CapsuleError::SerializeError(e.to_string()))
     }
-    
+
     /// Serialize to TOML
     pub fn to_toml(&self) -> Result<String, CapsuleError> {
         toml::to_string_pretty(self).map_err(|e| CapsuleError::SerializeError(e.to_string()))
     }
-    
+
     /// Load from file (auto-detects format by extension)
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, CapsuleError> {
         let path = path.as_ref();
-        let content = fs::read_to_string(path)
-            .map_err(|e| CapsuleError::IoError(e.to_string()))?;
-        
+        let content = fs::read_to_string(path).map_err(|e| CapsuleError::IoError(e.to_string()))?;
+
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         match ext {
             "toml" => Self::from_toml(&content),
@@ -384,16 +397,18 @@ impl CapsuleManifestV1 {
             }
         }
     }
-    
+
     /// Validate the manifest
     pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
-        
+
         // Schema version must be "1.0"
         if self.schema_version != "1.0" {
-            errors.push(ValidationError::InvalidSchemaVersion(self.schema_version.clone()));
+            errors.push(ValidationError::InvalidSchemaVersion(
+                self.schema_version.clone(),
+            ));
         }
-        
+
         // Name must be kebab-case
         if !is_kebab_case(&self.name) {
             errors.push(ValidationError::InvalidName(self.name.clone()));
@@ -403,7 +418,7 @@ impl CapsuleManifestV1 {
         if !(3..=64).contains(&self.name.len()) {
             errors.push(ValidationError::InvalidName(self.name.clone()));
         }
-        
+
         // Version must be semver
         if !is_semver(&self.version) {
             errors.push(ValidationError::InvalidVersion(self.version.clone()));
@@ -434,17 +449,17 @@ impl CapsuleManifestV1 {
                 });
             }
         }
-        
+
         // Inference type should have capabilities
         if self.capsule_type == CapsuleType::Inference && self.capabilities.is_none() {
             errors.push(ValidationError::MissingCapabilities);
         }
-        
+
         // Inference type should have model config
         if self.capsule_type == CapsuleType::Inference && self.model.is_none() {
             errors.push(ValidationError::MissingModelConfig);
         }
-        
+
         // Port must be valid if specified
         if let Some(port) = self.execution.port {
             if port == 0 {
@@ -473,35 +488,35 @@ impl CapsuleManifestV1 {
                 }
             }
         }
-        
+
         if errors.is_empty() {
             Ok(())
         } else {
             Err(errors)
         }
     }
-    
+
     /// Check if this Capsule can run on the current platform
     pub fn supports_current_platform(&self) -> bool {
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         {
-            self.requirements.platform.is_empty() || 
-                self.requirements.platform.contains(&Platform::DarwinArm64)
+            self.requirements.platform.is_empty()
+                || self.requirements.platform.contains(&Platform::DarwinArm64)
         }
         #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
         {
-            self.requirements.platform.is_empty() || 
-                self.requirements.platform.contains(&Platform::DarwinX86_64)
+            self.requirements.platform.is_empty()
+                || self.requirements.platform.contains(&Platform::DarwinX86_64)
         }
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
         {
-            self.requirements.platform.is_empty() || 
-                self.requirements.platform.contains(&Platform::LinuxAmd64)
+            self.requirements.platform.is_empty()
+                || self.requirements.platform.contains(&Platform::LinuxAmd64)
         }
         #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
         {
-            self.requirements.platform.is_empty() || 
-                self.requirements.platform.contains(&Platform::LinuxArm64)
+            self.requirements.platform.is_empty()
+                || self.requirements.platform.contains(&Platform::LinuxArm64)
         }
         #[cfg(not(any(
             all(target_os = "macos", target_arch = "aarch64"),
@@ -513,17 +528,17 @@ impl CapsuleManifestV1 {
             false
         }
     }
-    
+
     /// Get effective display name
     pub fn display_name(&self) -> &str {
         self.metadata.display_name.as_deref().unwrap_or(&self.name)
     }
-    
+
     /// Check if this is an inference Capsule
     pub fn is_inference(&self) -> bool {
         self.capsule_type == CapsuleType::Inference
     }
-    
+
     /// Check if cloud fallback is enabled
     pub fn can_fallback_to_cloud(&self) -> bool {
         self.routing.fallback_to_cloud && self.routing.cloud_capsule.is_some()
@@ -569,10 +584,16 @@ impl std::fmt::Display for ValidationError {
                 write!(f, "Invalid port {}", p)
             }
             ValidationError::StorageOnlyForDocker => {
-                write!(f, "Storage volumes are only supported for execution.runtime=docker")
+                write!(
+                    f,
+                    "Storage volumes are only supported for execution.runtime=docker"
+                )
             }
             ValidationError::InvalidStorageVolume => {
-                write!(f, "Invalid storage volume (requires unique name and absolute mount_path)")
+                write!(
+                    f,
+                    "Invalid storage volume (requires unique name and absolute mount_path)"
+                )
             }
         }
     }
@@ -594,7 +615,9 @@ fn is_kebab_case(s: &str) -> bool {
         return false;
     }
     // Only lowercase, digits, and hyphens allowed
-    chars.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-')
+    chars
+        .iter()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-')
 }
 
 /// Check if string is valid semver
@@ -602,18 +625,18 @@ fn is_semver(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
     let version_part = parts[0];
     let version_nums: Vec<&str> = version_part.split('.').collect();
-    
+
     if version_nums.len() != 3 {
         return false;
     }
-    
+
     version_nums.iter().all(|n| n.parse::<u32>().is_ok())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     const VALID_TOML: &str = r#"
 schema_version = "1.0"
 name = "mlx-qwen3-8b"
@@ -657,11 +680,11 @@ cloud_capsule = "vllm-qwen3-8b"
 source = "hf:org/model"
 quantization = "4bit"
 "#;
-    
+
     #[test]
     fn test_parse_valid_toml() {
         let manifest = CapsuleManifestV1::from_toml(VALID_TOML).unwrap();
-        
+
         assert_eq!(manifest.name, "mlx-qwen3-8b");
         assert_eq!(manifest.version, "1.0.0");
         assert_eq!(manifest.capsule_type, CapsuleType::Inference);
@@ -670,19 +693,21 @@ quantization = "4bit"
         assert!(manifest.capabilities.as_ref().unwrap().chat);
         assert_eq!(manifest.routing.weight, RouteWeight::Light);
     }
-    
+
     #[test]
     fn test_validate_valid_manifest() {
         let manifest = CapsuleManifestV1::from_toml(VALID_TOML).unwrap();
         assert!(manifest.validate().is_ok());
     }
-    
+
     #[test]
     fn test_validate_invalid_schema_version() {
         let toml = VALID_TOML.replace("schema_version = \"1.0\"", "schema_version = \"2.0\"");
         let manifest = CapsuleManifestV1::from_toml(&toml).unwrap();
         let errors = manifest.validate().unwrap_err();
-        assert!(errors.iter().any(|e| matches!(e, ValidationError::InvalidSchemaVersion(_))));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidSchemaVersion(_))));
     }
 
     #[test]
@@ -690,46 +715,50 @@ quantization = "4bit"
         let toml = VALID_TOML.replace("vram_min = \"6GB\"", "vram_min = \"6XB\"");
         let manifest = CapsuleManifestV1::from_toml(&toml).unwrap();
         let errs = manifest.validate().unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidMemoryString { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidMemoryString { .. })));
     }
-    
+
     #[test]
     fn test_validate_invalid_name() {
         let toml = VALID_TOML.replace("name = \"mlx-qwen3-8b\"", "name = \"Invalid Name!\"");
         let manifest = CapsuleManifestV1::from_toml(&toml).unwrap();
         let errors = manifest.validate().unwrap_err();
-        assert!(errors.iter().any(|e| matches!(e, ValidationError::InvalidName(_))));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidName(_))));
     }
-    
+
     #[test]
     fn test_to_json_roundtrip() {
         let manifest = CapsuleManifestV1::from_toml(VALID_TOML).unwrap();
         let json = manifest.to_json().unwrap();
         let manifest2 = CapsuleManifestV1::from_json(&json).unwrap();
-        
+
         assert_eq!(manifest.name, manifest2.name);
         assert_eq!(manifest.version, manifest2.version);
     }
-    
+
     #[test]
     fn test_display_name() {
         let manifest = CapsuleManifestV1::from_toml(VALID_TOML).unwrap();
         assert_eq!(manifest.display_name(), "Qwen3 8B (MLX)");
     }
-    
+
     #[test]
     fn test_can_fallback_to_cloud() {
         let manifest = CapsuleManifestV1::from_toml(VALID_TOML).unwrap();
         assert!(manifest.can_fallback_to_cloud());
     }
-    
+
     #[test]
     fn test_vram_parsing() {
         let manifest = CapsuleManifestV1::from_toml(VALID_TOML).unwrap();
         let vram_min = manifest.requirements.vram_min_bytes().unwrap();
         assert_eq!(vram_min, Some(6 * 1024 * 1024 * 1024)); // 6GB
     }
-    
+
     #[test]
     fn test_is_kebab_case() {
         assert!(is_kebab_case("valid-name"));
@@ -740,7 +769,7 @@ quantization = "4bit"
         assert!(!is_kebab_case("invalid-"));
         assert!(!is_kebab_case(""));
     }
-    
+
     #[test]
     fn test_is_semver() {
         assert!(is_semver("1.0.0"));

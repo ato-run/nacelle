@@ -13,8 +13,8 @@ fn go_runplan_output(manifest: &str) -> serde_json::Value {
         .parent()
         .expect("onescluster root")
         .to_path_buf();
-    // Go module root lives at capsuled/client (module: github.com/onescluster/coordinator)
-    let go_workdir = repo_root.join("capsuled/client");
+    // Go module root lives at client (module: github.com/onescluster/coordinator)
+    let go_workdir = repo_root.join("client");
 
     let output = Command::new("go")
         .arg("run")

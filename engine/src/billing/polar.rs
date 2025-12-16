@@ -62,7 +62,9 @@ impl PolarWebhookConfig {
     /// Decode the secret for HMAC verification
     fn decode_secret(&self) -> Result<Vec<u8>> {
         let secret = self.secret.strip_prefix("whsec_").unwrap_or(&self.secret);
-        BASE64.decode(secret).context("Failed to decode webhook secret")
+        BASE64
+            .decode(secret)
+            .context("Failed to decode webhook secret")
     }
 }
 
@@ -200,9 +202,7 @@ impl PolarWebhookHandler {
             .ok_or_else(|| anyhow!("Missing {} header", HEADER_WEBHOOK_SIGNATURE))?;
 
         // Validate timestamp to prevent replay attacks
-        let timestamp: u64 = timestamp_str
-            .parse()
-            .context("Invalid timestamp format")?;
+        let timestamp: u64 = timestamp_str.parse().context("Invalid timestamp format")?;
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -229,8 +229,7 @@ impl PolarWebhookHandler {
         let secret = self.config.decode_secret()?;
 
         // Create HMAC
-        let mut mac = HmacSha256::new_from_slice(&secret)
-            .context("Failed to create HMAC")?;
+        let mut mac = HmacSha256::new_from_slice(&secret).context("Failed to create HMAC")?;
         mac.update(signed_content.as_bytes());
         let expected_signature = mac.finalize().into_bytes();
 
@@ -243,8 +242,8 @@ impl PolarWebhookHandler {
                 // Decode and compare using constant-time comparison
                 // to prevent timing attacks
                 if let Ok(received_sig) = BASE64.decode(sig_value) {
-                    if received_sig.len() == expected_signature.len() 
-                        && bool::from(received_sig.ct_eq(&expected_signature[..])) 
+                    if received_sig.len() == expected_signature.len()
+                        && bool::from(received_sig.ct_eq(&expected_signature[..]))
                     {
                         debug!("Webhook signature verified successfully");
                         return Ok(());
@@ -431,10 +430,10 @@ mod tests {
             status: &str,
             _period_end: Option<&str>,
         ) -> Result<()> {
-            self.subscriptions
-                .lock()
-                .unwrap()
-                .insert(id.to_string(), (customer_id.to_string(), status.to_string()));
+            self.subscriptions.lock().unwrap().insert(
+                id.to_string(),
+                (customer_id.to_string(), status.to_string()),
+            );
             Ok(())
         }
 
@@ -449,12 +448,7 @@ mod tests {
             Ok(self.subscriptions.lock().unwrap().get(id).cloned())
         }
 
-        async fn upsert_customer(
-            &self,
-            id: &str,
-            email: &str,
-            _name: Option<&str>,
-        ) -> Result<()> {
+        async fn upsert_customer(&self, id: &str, email: &str, _name: Option<&str>) -> Result<()> {
             self.customers
                 .lock()
                 .unwrap()
@@ -501,7 +495,10 @@ mod tests {
 
         let mut headers = HeaderMap::new();
         headers.insert(HEADER_WEBHOOK_ID, msg_id.parse().unwrap());
-        headers.insert(HEADER_WEBHOOK_TIMESTAMP, timestamp.to_string().parse().unwrap());
+        headers.insert(
+            HEADER_WEBHOOK_TIMESTAMP,
+            timestamp.to_string().parse().unwrap(),
+        );
         headers.insert(HEADER_WEBHOOK_SIGNATURE, signature.parse().unwrap());
 
         let result = handler.verify_signature(&headers, body.as_bytes());
@@ -523,8 +520,14 @@ mod tests {
 
         let mut headers = HeaderMap::new();
         headers.insert(HEADER_WEBHOOK_ID, msg_id.parse().unwrap());
-        headers.insert(HEADER_WEBHOOK_TIMESTAMP, timestamp.to_string().parse().unwrap());
-        headers.insert(HEADER_WEBHOOK_SIGNATURE, "v1,invalid_signature".parse().unwrap());
+        headers.insert(
+            HEADER_WEBHOOK_TIMESTAMP,
+            timestamp.to_string().parse().unwrap(),
+        );
+        headers.insert(
+            HEADER_WEBHOOK_SIGNATURE,
+            "v1,invalid_signature".parse().unwrap(),
+        );
 
         let result = handler.verify_signature(&headers, body.as_bytes());
         assert!(result.is_err(), "Signature verification should fail");
@@ -548,7 +551,10 @@ mod tests {
 
         let mut headers = HeaderMap::new();
         headers.insert(HEADER_WEBHOOK_ID, msg_id.parse().unwrap());
-        headers.insert(HEADER_WEBHOOK_TIMESTAMP, timestamp.to_string().parse().unwrap());
+        headers.insert(
+            HEADER_WEBHOOK_TIMESTAMP,
+            timestamp.to_string().parse().unwrap(),
+        );
         headers.insert(HEADER_WEBHOOK_SIGNATURE, signature.parse().unwrap());
 
         let result = handler.verify_signature(&headers, body.as_bytes());
@@ -609,6 +615,9 @@ mod tests {
         assert!(result.is_ok());
 
         let customers = store.customers.lock().unwrap();
-        assert_eq!(customers.get("cus_456"), Some(&"test@example.com".to_string()));
+        assert_eq!(
+            customers.get("cus_456"),
+            Some(&"test@example.com".to_string())
+        );
     }
 }

@@ -1,5 +1,5 @@
 //! Docker CLI Runtime for macOS Docker Desktop.
-//! 
+//!
 //! This runtime uses the `docker` CLI directly to run containers,
 //! which works on macOS where low-level OCI runtimes (runc/youki) are not available.
 
@@ -8,7 +8,7 @@ use std::process::Stdio;
 
 use async_trait::async_trait;
 use tokio::process::Command;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use crate::runtime::traits::Runtime;
 use crate::runtime::{LaunchRequest, LaunchResult, RuntimeError};
@@ -34,7 +34,7 @@ impl Default for DockerCliRuntime {
 impl Runtime for DockerCliRuntime {
     async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
         let workload_id = request.workload_id;
-        
+
         // Extract image and port from spec
         let mut image = String::new();
         let mut host_port: u16 = 0;
@@ -48,14 +48,15 @@ impl Runtime for DockerCliRuntime {
             if let Some(args) = process.args() {
                 command_args = args.to_vec();
             }
-            
+
             // Get env vars including PORT
             if let Some(env) = process.env() {
                 for e in env {
                     if let Some((k, v)) = e.split_once('=') {
                         if k == "PORT" && host_port == 0 {
                             if let Ok(p) = v.parse::<u16>() {
-                                if p > 1024 {  // Only accept non-privileged ports as host port
+                                if p > 1024 {
+                                    // Only accept non-privileged ports as host port
                                     host_port = p;
                                     info!("[DockerCliRuntime] Got PORT={} from OCI spec", p);
                                 }
@@ -71,26 +72,44 @@ impl Runtime for DockerCliRuntime {
         if let Some(manifest_json) = request.manifest_json {
             if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(manifest_json) {
                 // Get image
-                if let Some(img) = manifest.get("compute").and_then(|c| c.get("image")).and_then(|i| i.as_str()) {
+                if let Some(img) = manifest
+                    .get("compute")
+                    .and_then(|c| c.get("image"))
+                    .and_then(|i| i.as_str())
+                {
                     image = img.to_string();
                 }
-                
+
                 // Get container port from manifest's port field
-                if let Some(port) = manifest.get("compute").and_then(|c| c.get("port")).and_then(|p| p.as_u64()) {
+                if let Some(port) = manifest
+                    .get("compute")
+                    .and_then(|c| c.get("port"))
+                    .and_then(|p| p.as_u64())
+                {
                     container_port = port as u16;
-                    info!("[DockerCliRuntime] Got container port={} from manifest", container_port);
+                    info!(
+                        "[DockerCliRuntime] Got container port={} from manifest",
+                        container_port
+                    );
                 }
-                
+
                 // Get PORT from env vars in manifest (if not found in spec)
                 if host_port == 0 {
-                    if let Some(env_list) = manifest.get("compute").and_then(|c| c.get("env")).and_then(|e| e.as_array()) {
+                    if let Some(env_list) = manifest
+                        .get("compute")
+                        .and_then(|c| c.get("env"))
+                        .and_then(|e| e.as_array())
+                    {
                         for e in env_list {
                             if let Some(s) = e.as_str() {
                                 if let Some((k, v)) = s.split_once('=') {
                                     if k == "PORT" {
                                         if let Ok(p) = v.parse::<u16>() {
                                             host_port = p;
-                                            info!("[DockerCliRuntime] Got PORT={} from manifest JSON", p);
+                                            info!(
+                                                "[DockerCliRuntime] Got PORT={} from manifest JSON",
+                                                p
+                                            );
                                         }
                                     }
                                 }
@@ -104,21 +123,24 @@ impl Runtime for DockerCliRuntime {
         // Validate required fields
         if image.is_empty() {
             return Err(RuntimeError::InvalidConfig(
-                "No Docker image specified in manifest".to_string()
+                "No Docker image specified in manifest".to_string(),
             ));
         }
 
         if host_port == 0 {
             // Try to fallback to container_port as host_port for local dev
-            warn!("[DockerCliRuntime] PORT not found in env, falling back to container_port {}", container_port);
+            warn!(
+                "[DockerCliRuntime] PORT not found in env, falling back to container_port {}",
+                container_port
+            );
             host_port = container_port;
         }
 
         // Create log directory and file
         let log_dir = std::env::temp_dir().join("capsuled").join("logs");
-        std::fs::create_dir_all(&log_dir).map_err(|e| RuntimeError::Io { 
-            path: log_dir.clone(), 
-            source: e 
+        std::fs::create_dir_all(&log_dir).map_err(|e| RuntimeError::Io {
+            path: log_dir.clone(),
+            source: e,
         })?;
         let log_path = log_dir.join(format!("{}.log", workload_id));
 
@@ -126,16 +148,17 @@ impl Runtime for DockerCliRuntime {
         // docker run -d --name <WORKLOAD_ID> -p <HOST_PORT>:<CONTAINER_PORT> [-e K=V ...] <IMAGE> [CMD...]
         let mut cmd = Command::new("docker");
         cmd.arg("run")
-           .arg("-d")
-           .arg("--name")
-           .arg(workload_id)
-           .arg("-p")
-           .arg(format!("{}:{}", host_port, container_port));
+            .arg("-d")
+            .arg("--name")
+            .arg(workload_id)
+            .arg("-p")
+            .arg(format!("{}:{}", host_port, container_port));
 
         // Ensure host.docker.internal resolves on Linux.
         #[cfg(target_os = "linux")]
         {
-            cmd.arg("--add-host").arg("host.docker.internal:host-gateway");
+            cmd.arg("--add-host")
+                .arg("host.docker.internal:host-gateway");
         }
 
         // Add environment variables
@@ -145,15 +168,13 @@ impl Runtime for DockerCliRuntime {
 
         // If a per-capsule egress token exists, inject authenticated proxy env vars.
         if let Some(proxy_port) = self.egress_proxy_port {
-            let token = env_vars
-                .iter()
-                .find_map(|(k, v)| {
-                    if k == crate::security::ENV_KEY_EGRESS_TOKEN {
-                        Some(v.clone())
-                    } else {
-                        None
-                    }
-                });
+            let token = env_vars.iter().find_map(|(k, v)| {
+                if k == crate::security::ENV_KEY_EGRESS_TOKEN {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            });
 
             if let Some(token) = token {
                 let proxy_url = format!(
@@ -180,14 +201,16 @@ impl Runtime for DockerCliRuntime {
             workload_id, host_port, container_port, image, command_args
         );
 
-        cmd.stdout(Stdio::piped())
-           .stderr(Stdio::piped());
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
         // Execute docker run
-        let output = cmd.output().await.map_err(|e| RuntimeError::CommandExecution {
-            operation: "docker run".to_string(),
-            source: e,
-        })?;
+        let output = cmd
+            .output()
+            .await
+            .map_err(|e| RuntimeError::CommandExecution {
+                operation: "docker run".to_string(),
+                source: e,
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -221,10 +244,7 @@ impl Runtime for DockerCliRuntime {
         let pid: u32 = inspect_output
             .and_then(|o| {
                 if o.status.success() {
-                    String::from_utf8_lossy(&o.stdout)
-                        .trim()
-                        .parse()
-                        .ok()
+                    String::from_utf8_lossy(&o.stdout).trim().parse().ok()
                 } else {
                     None
                 }
@@ -240,8 +260,10 @@ impl Runtime for DockerCliRuntime {
         }
 
         // Write log marker
-        let log_content = format!("[DockerCliRuntime] Container started: {}\nImage: {}\nPorts: {}:{}\n", 
-            container_id, image, host_port, container_port);
+        let log_content = format!(
+            "[DockerCliRuntime] Container started: {}\nImage: {}\nPorts: {}:{}\n",
+            container_id, image, host_port, container_port
+        );
         std::fs::write(&log_path, log_content).ok();
 
         Ok(LaunchResult {
@@ -263,13 +285,16 @@ impl Runtime for DockerCliRuntime {
 
         match output {
             Ok(o) if o.status.success() => {
-                info!("[DockerCliRuntime] Container {} stopped via name", workload_id);
+                info!(
+                    "[DockerCliRuntime] Container {} stopped via name",
+                    workload_id
+                );
             }
             _ => {
                 // Fallback: try container ID from state file
                 let state_dir = std::env::temp_dir().join("capsuled").join("state");
                 let container_id_file = state_dir.join(format!("{}.container_id", workload_id));
-                
+
                 if let Ok(container_id) = std::fs::read_to_string(&container_id_file) {
                     let container_id = container_id.trim();
                     let _ = Command::new("docker")
@@ -277,8 +302,11 @@ impl Runtime for DockerCliRuntime {
                         .arg(container_id)
                         .output()
                         .await;
-                    info!("[DockerCliRuntime] Container {} stopped via ID {}", workload_id, container_id);
-                    
+                    info!(
+                        "[DockerCliRuntime] Container {} stopped via ID {}",
+                        workload_id, container_id
+                    );
+
                     // Remove container
                     let _ = Command::new("docker")
                         .arg("rm")

@@ -1,12 +1,12 @@
-use crate::adep::{CapsuleExecution, StorageVolume, RuntimeType};
+use crate::adep::{CapsuleExecution, RuntimeType, StorageVolume};
 use crate::security;
+use crate::workload::manifest_loader::ResourceRequirements;
 use libadep_core::capsule_v1::CapsuleManifestV1;
 use oci_spec::runtime::{
     HookBuilder, HooksBuilder, Linux, LinuxBuilder, LinuxNamespaceBuilder, LinuxNamespaceType,
     Mount, MountBuilder, ProcessBuilder, RootBuilder, Spec, SpecBuilder,
 };
 use std::path::{Path, PathBuf};
-use crate::workload::manifest_loader::ResourceRequirements;
 
 /// Validate volume mounts for security
 fn validate_mounts(volumes: &[StorageVolume], allowed_paths: &[String]) -> Result<(), String> {
@@ -23,22 +23,23 @@ fn validate_mounts(volumes: &[StorageVolume], allowed_paths: &[String]) -> Resul
 
 fn derive_args(execution: &CapsuleExecution, extra_args: Option<&[String]>) -> Vec<String> {
     if execution.runtime == RuntimeType::Native {
-         let parts = shell_words::split(&execution.entrypoint).unwrap_or_else(|_| vec![execution.entrypoint.clone()]);
-         if parts.is_empty() {
-             return vec![];
-         }
-         
-         if let Some(extra) = extra_args {
-             if !extra.is_empty() {
-                 let mut new_args = vec![parts[0].clone()];
-                 new_args.extend_from_slice(extra);
-                 new_args
-             } else {
-                 parts
-             }
-         } else {
-             parts
-         }
+        let parts = shell_words::split(&execution.entrypoint)
+            .unwrap_or_else(|_| vec![execution.entrypoint.clone()]);
+        if parts.is_empty() {
+            return vec![];
+        }
+
+        if let Some(extra) = extra_args {
+            if !extra.is_empty() {
+                let mut new_args = vec![parts[0].clone()];
+                new_args.extend_from_slice(extra);
+                new_args
+            } else {
+                parts
+            }
+        } else {
+            parts
+        }
     } else if let Some(extra) = extra_args {
         if !extra.is_empty() {
             extra.to_vec()
@@ -62,7 +63,11 @@ pub fn build_oci_spec(
     manifest: &CapsuleManifestV1,
 ) -> Result<Spec, String> {
     // --- 1. Build Process Configuration ---
-    let mut process_envs: Vec<String> = execution.env.iter().map(|(k,v)| format!("{}={}", k, v)).collect();
+    let mut process_envs: Vec<String> = execution
+        .env
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect();
 
     if let Some(uuids) = gpu_uuids {
         if !uuids.is_empty() {
@@ -108,16 +113,16 @@ pub fn build_oci_spec(
     // Inject IPTables rules via a prestart hook
     let fw_rules = security::egress_policy::generate_fw_rules(manifest);
     let mut all_hooks = hooks.unwrap_or_default();
-    
+
     if !fw_rules.is_empty() {
-        // We need to execute these rules. 
+        // We need to execute these rules.
         // Strategy: Use `sh -c "iptables ... && iptables ..."`
         // Or multiple hooks? OCI hooks are executed in order.
         // Single hook is reliable atomic script.
-        
+
         let script = fw_rules.join(" && ");
         let fw_hook = HookBuilder::default()
-            .path(PathBuf::from("/bin/sh")) // Assumes /bin/sh exists in container or runtime env? 
+            .path(PathBuf::from("/bin/sh")) // Assumes /bin/sh exists in container or runtime env?
             // WAIT. Prestart hooks run in the runtime namespace but potentially with host fs?
             // "The Prestart hooks MUST be called after the start operation is called but before the user-specified program command is executed."
             // "On Linux, ... hooks are executed in the runtime namespace."
@@ -126,97 +131,84 @@ pub fn build_oci_spec(
             // RunC spec:
             // "Prestart: List of hooks to be run before the container process is executed. On Linux, they are run after the container namespaces are created."
             // If the path is /bin/sh, it depends on whether we are pivoting root.
-            
-            // Standard OCI behavior: path must be absolute and resolve in the HOST filesystem, 
+            // Standard OCI behavior: path must be absolute and resolve in the HOST filesystem,
             // or the hook is executed in the host namespace but with references to container ns?
             // Actually, usually Prestart hooks are for setting up networking from the HOST side (e.g. CNI).
-            
             // BUT here we want to run `iptables` INSIDE the container's new network namespace.
             // To do that from a Host Hook, we need `nsenter`.
-            
             // Simpler approach for "Capsuled":
             // Can we assume the container has `iptables`? Probably not (distroless?).
             // So we MUST run from Host side using `nsenter`.
-            
             // However, `spec_builder` builds the config. The RUNTIME executes the hooks.
             // If we define a hook, the runtime (runc/crun) executes it.
             // Runc hooks execute in the HOST implementation context, usually.
-            
             // Let's assume we invoke a helper binary or script on the HOST that `nsenter`s.
             // For MVP: We will assume we can use `nsenter` found on the host.
             // Command: `nsenter -t <PID> -n iptables ...`
             // Constraint: Usage of <PID>. OCI Hooks receive state as JSON on stdin, which includes `pid`.
             // So we need a standardized hook script that reads stdin, gets PID, and runs the rules.
-            
             // Implementing a custom binary just for this is heavy for this step.
             // A shell script hook is easier.
             // `sh -c 'read state; pid=$(echo $state | jq -r .pid); nsenter -t $pid -n -- iptables ...'`
-            
             // We need `jq`. If minimal host, might fail.
             // Better: Use `capsuled-engine` itself as the hook executable?
             // "capsuled-engine hook --mode=egress --rules=..."
             // This is clean.
-            
             // For now, let's try a direct `sh` approach if we can trust `pid` is available or passed?
             // Spec says "The state of the container MUST be passed to hooks over stdin".
-            
             // Refined Plan:
-            // Construct a command that reads stdin, ignores it (if we can't parse easily), 
+            // Construct a command that reads stdin, ignores it (if we can't parse easily),
             // WAIT. If we don't know PID, we can't nsenter.
             // We MUST parse stdin to get PID.
-            
             // Alternative: `ip netns exec`? No, we don't have named netns for anonymous containers usually.
-            
             // CRITICAL: We need a way to apply these rules.
             // If `Capsuled` is the one calling `runc start`, it knows the PID *after* create but *before* start?
             // No, `runc create` creates the process (paused). `runc start` unpauses.
             // Prestart hooks run during `runc create` (or start, but before user code).
-            
             // Let's use `nsenter` assuming `jq` is available on the "Host" (Dev setup).
             // Fallback: A simple rust binary `capsuled-hook` that deserializes OCI state.
             // Let's stick to generating the Spec logic first.
-            
             // NOTE: In `adep_spec...`, requirement is "Mandatory L3 Egress Control".
-            // Since we are `capsuled-engine` (Rust), maybe we can apply the logic OURSELVES 
+            // Since we are `capsuled-engine` (Rust), maybe we can apply the logic OURSELVES
             // in `container_runtime.rs` *after* Create and *before* Start?
             // We control the lifecycle in `container.rs`.
-            // If we are using `libcontainer` or calling `runc` directly? 
+            // If we are using `libcontainer` or calling `runc` directly?
             // `ContainerRuntime` likely calls Docker or Runc.
             // If Docker: Docker handles hooks via `--hook`? No, Docker doesn't support OCI hooks nicely per container without runtime config.
             // BUT `capsuled` seems to use `DockerCliRuntime` or `ContainerRuntime`.
             // If `DockerCliRuntime` (shelling out to docker run): We can't easily inject OCI hooks without modifying daemon.json.
             // We might have to rely on `docker run --cap-add=NET_ADMIN` and injecting a startup script wrapper?
-            
             // Checking `container_runtime.rs`:
             // Use `view_file` to see how it runs containers.
             // If it uses `runc` directly, we have full control.
             // If it uses `docker`, we are limited.
-            
             // Assumption: `oci/spec_builder.rs` implies we are building a Bundle for `runc` or similar.
             // So we are likely in a "Native" or "Runc-based" path.
             // I will inject the hook assuming `runc` behavior (Host execution, State on Stdin).
-            
             // Let's add a todo warning about Hook Execution Prerequisite (jq/nsenter).
-             .args(vec![
+            .args(vec![
                 "sh".to_string(),
                 "-c".to_string(),
-                format!("
+                format!(
+                    "
                     # Parse PID from Stdin (OCI State)
                     pid=$(grep -o '\"pid\":[0-9]*' | cut -d: -f2)
                     if [ -z \"$pid\" ]; then exit 0; fi
                     
                     nsenter -t $pid -n -- sh -c '{}'
-                ", script)
+                ",
+                    script
+                ),
             ])
             .build()
             .map_err(|e| format!("Failed to build firewall hook: {}", e))?;
-            
-         // Append to existing hooks
-         let mut current_prestart = all_hooks.prestart().as_ref().cloned().unwrap_or_default();
-         current_prestart.push(fw_hook);
-         all_hooks.set_prestart(Some(current_prestart));
+
+        // Append to existing hooks
+        let mut current_prestart = all_hooks.prestart().as_ref().cloned().unwrap_or_default();
+        current_prestart.push(fw_hook);
+        all_hooks.set_prestart(Some(current_prestart));
     }
-    
+
     let hooks = Some(all_hooks);
 
     // --- 3. Build Mounts ---
@@ -227,7 +219,7 @@ pub fn build_oci_spec(
         let (source_path, mount_type) = if vol.name.starts_with("bind:") {
             (vol.name.strip_prefix("bind:").unwrap().to_string(), "bind")
         } else {
-             continue; 
+            continue;
         };
 
         if mount_type == "bind" {
@@ -297,36 +289,78 @@ fn build_default_mounts() -> Vec<Mount> {
             .destination(PathBuf::from("/proc"))
             .typ("proc".to_string())
             .source(PathBuf::from("proc"))
-            .options(vec!["nosuid".to_string(), "noexec".to_string(), "nodev".to_string()])
-            .build().unwrap(),
+            .options(vec![
+                "nosuid".to_string(),
+                "noexec".to_string(),
+                "nodev".to_string(),
+            ])
+            .build()
+            .unwrap(),
         MountBuilder::default()
             .destination(PathBuf::from("/dev"))
             .typ("tmpfs".to_string())
             .source(PathBuf::from("tmpfs"))
-            .options(vec!["nosuid".to_string(), "strictatime".to_string(), "mode=755".to_string(), "size=65536k".to_string()])
-            .build().unwrap(),
+            .options(vec![
+                "nosuid".to_string(),
+                "strictatime".to_string(),
+                "mode=755".to_string(),
+                "size=65536k".to_string(),
+            ])
+            .build()
+            .unwrap(),
         MountBuilder::default()
             .destination(PathBuf::from("/dev/pts"))
             .typ("devpts".to_string())
             .source(PathBuf::from("devpts"))
-            .options(vec!["nosuid".to_string(), "noexec".to_string(), "newinstance".to_string(), "ptmxmode=0666".to_string(), "mode=0620".to_string()])
-            .build().unwrap(),
+            .options(vec![
+                "nosuid".to_string(),
+                "noexec".to_string(),
+                "newinstance".to_string(),
+                "ptmxmode=0666".to_string(),
+                "mode=0620".to_string(),
+            ])
+            .build()
+            .unwrap(),
         MountBuilder::default()
             .destination(PathBuf::from("/sys"))
             .typ("sysfs".to_string())
             .source(PathBuf::from("sysfs"))
-            .options(vec!["nosuid".to_string(), "noexec".to_string(), "nodev".to_string(), "ro".to_string()])
-            .build().unwrap(),
+            .options(vec![
+                "nosuid".to_string(),
+                "noexec".to_string(),
+                "nodev".to_string(),
+                "ro".to_string(),
+            ])
+            .build()
+            .unwrap(),
     ]
 }
 
 fn build_default_linux() -> Linux {
-     let namespaces = vec![
-        LinuxNamespaceBuilder::default().typ(LinuxNamespaceType::Pid).build().unwrap(),
-        LinuxNamespaceBuilder::default().typ(LinuxNamespaceType::Network).build().unwrap(),
-        LinuxNamespaceBuilder::default().typ(LinuxNamespaceType::Ipc).build().unwrap(),
-        LinuxNamespaceBuilder::default().typ(LinuxNamespaceType::Uts).build().unwrap(),
-        LinuxNamespaceBuilder::default().typ(LinuxNamespaceType::Mount).build().unwrap(),
+    let namespaces = vec![
+        LinuxNamespaceBuilder::default()
+            .typ(LinuxNamespaceType::Pid)
+            .build()
+            .unwrap(),
+        LinuxNamespaceBuilder::default()
+            .typ(LinuxNamespaceType::Network)
+            .build()
+            .unwrap(),
+        LinuxNamespaceBuilder::default()
+            .typ(LinuxNamespaceType::Ipc)
+            .build()
+            .unwrap(),
+        LinuxNamespaceBuilder::default()
+            .typ(LinuxNamespaceType::Uts)
+            .build()
+            .unwrap(),
+        LinuxNamespaceBuilder::default()
+            .typ(LinuxNamespaceType::Mount)
+            .build()
+            .unwrap(),
     ];
-    LinuxBuilder::default().namespaces(namespaces).build().unwrap()
+    LinuxBuilder::default()
+        .namespaces(namespaces)
+        .build()
+        .unwrap()
 }

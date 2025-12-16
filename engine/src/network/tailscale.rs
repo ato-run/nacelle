@@ -103,7 +103,7 @@ impl Drop for TailscaleManager {
     fn drop(&mut self) {
         info!("Stopping Tailscale process...");
         self.process_running.store(false, Ordering::Relaxed);
-        
+
         // Explicitly run tailscale down to cleanup network
         let _ = Command::new("tailscale")
             .arg("down")

@@ -6,7 +6,7 @@ use std::path::Path;
 use anyhow::{anyhow, bail, Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Verifier};
+use ed25519_dalek::{Signature, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -57,7 +57,8 @@ impl StoredKey {
         if self.key_type.as_str() != "ed25519" {
             bail!("unsupported key_type {}; expected ed25519", self.key_type);
         }
-        let secret_bytes = BASE64.decode(&self.secret_key)
+        let secret_bytes = BASE64
+            .decode(&self.secret_key)
             .map_err(|err| anyhow!("failed to decode secret key: {err}"))?;
         if secret_bytes.len() != 32 {
             bail!("secret key must be 32 bytes, got {}", secret_bytes.len());
@@ -65,7 +66,7 @@ impl StoredKey {
         let secret_fixed: [u8; 32] = secret_bytes.as_slice().try_into().expect("length checked");
         let signing_key = SigningKey::from_bytes(&secret_fixed);
         let verifying_key = signing_key.verifying_key();
-        
+
         let public_encoded = BASE64.encode(verifying_key.as_bytes());
         if public_encoded != self.public_key {
             bail!("public key mismatch between stored public and derived secret");
@@ -219,8 +220,8 @@ pub fn verify_signature_file(sig: &SignatureFile, message: &[u8]) -> Result<()> 
     if sig.key_type != KEY_TYPE_ED25519 {
         bail!("unsupported key_type {}", sig.key_type);
     }
-    let verifying =
-        VerifyingKey::from_bytes(&sig.public_key).map_err(|_| anyhow!("failed to parse signature public key"))?;
+    let verifying = VerifyingKey::from_bytes(&sig.public_key)
+        .map_err(|_| anyhow!("failed to parse signature public key"))?;
     verifying
         .verify(message, &sig.signature)
         .map_err(|_| anyhow!("signature verification failed"))

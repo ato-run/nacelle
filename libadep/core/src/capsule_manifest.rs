@@ -59,27 +59,27 @@ pub struct RuntimeConfig {
 pub struct NativeRuntimeConfig {
     /// Runtime type: "mlx", "llama", "vllm", or custom
     pub runtime: String,
-    
+
     /// Optional model path or ID
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
-    
+
     /// Optional model quantization format (e.g., "4bit", "8bit")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quantization: Option<String>,
-    
+
     /// Optional context window size
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_size: Option<u32>,
-    
+
     /// Optional port override
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
-    
+
     /// Additional arguments passed to the runtime
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub args: Option<Vec<String>>,
-    
+
     /// Environment variables for the runtime
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env: Option<std::collections::HashMap<String, String>>,
@@ -250,7 +250,10 @@ impl CapsuleManifest {
 
     /// Check if this manifest requires llama.cpp runtime
     pub fn requires_llama(&self) -> bool {
-        matches!(self.effective_runtime(), Some("llama" | "llama-server" | "llama.cpp"))
+        matches!(
+            self.effective_runtime(),
+            Some("llama" | "llama-server" | "llama.cpp")
+        )
     }
 
     /// Check if this manifest requires vLLM runtime

@@ -637,7 +637,9 @@ pub fn parse_developer_key(value: &str) -> Result<[u8; 32]> {
     let value = value
         .strip_prefix("ed25519:")
         .ok_or_else(|| anyhow!("developer_key must start with ed25519:"))?;
-    let decoded = BASE64.decode(value).map_err(|err| anyhow!("failed to decode developer_key: {err}"))?;
+    let decoded = BASE64
+        .decode(value)
+        .map_err(|err| anyhow!("failed to decode developer_key: {err}"))?;
     if decoded.len() != 32 {
         bail!(
             "developer_key must decode to 32 bytes, got {}",
@@ -925,8 +927,8 @@ fn validate_egress_trust(trust: &EgressTrust, context: &str) -> Result<()> {
             );
         }
         TrustMode::SpkiPin => {
-            use base64::engine::Engine;
             use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+            use base64::engine::Engine;
 
             let digest = trust.spki_sha256.as_deref().ok_or_else(|| {
                 anyhow!(
@@ -938,7 +940,10 @@ fn validate_egress_trust(trust: &EgressTrust, context: &str) -> Result<()> {
                 .or_else(|_| STANDARD.decode(digest))
                 .or_else(|_| URL_SAFE_NO_PAD.decode(digest))
                 .with_context(|| {
-                    format!("{}: trust.spki_sha256 must be hex or base64 encoded", context)
+                    format!(
+                        "{}: trust.spki_sha256 must be hex or base64 encoded",
+                        context
+                    )
                 })?;
             ensure!(
                 decoded.len() == 32,

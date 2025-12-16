@@ -66,7 +66,7 @@ impl BenchmarkResult {
 fn bench_sequential_write() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("bench_write");
-    
+
     const BLOCK_SIZE: usize = 4096;
     const NUM_BLOCKS: u32 = 10000; // ~40MB
     let data = vec![0xABu8; BLOCK_SIZE];
@@ -80,8 +80,8 @@ fn bench_sequential_write() {
     let elapsed = start.elapsed();
 
     let total_bytes = BLOCK_SIZE as u64 * NUM_BLOCKS as u64;
-    let result = BenchmarkResult::new("Sequential Write", NUM_BLOCKS, elapsed)
-        .with_throughput(total_bytes);
+    let result =
+        BenchmarkResult::new("Sequential Write", NUM_BLOCKS, elapsed).with_throughput(total_bytes);
     result.print();
 
     // Assert minimum performance (1 MB/s is extremely conservative)
@@ -92,10 +92,10 @@ fn bench_sequential_write() {
 fn bench_sequential_read() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("bench_read");
-    
+
     const BLOCK_SIZE: usize = 4096;
     const NUM_BLOCKS: u32 = 10000;
-    
+
     // Create test file
     let data = vec![0xCDu8; BLOCK_SIZE];
     let mut file = fs::File::create(&file_path).unwrap();
@@ -115,8 +115,8 @@ fn bench_sequential_read() {
     let elapsed = start.elapsed();
 
     let total_bytes = BLOCK_SIZE as u64 * NUM_BLOCKS as u64;
-    let result = BenchmarkResult::new("Sequential Read", NUM_BLOCKS, elapsed)
-        .with_throughput(total_bytes);
+    let result =
+        BenchmarkResult::new("Sequential Read", NUM_BLOCKS, elapsed).with_throughput(total_bytes);
     result.print();
 
     assert!(result.throughput.unwrap() > 1.0, "Read throughput too low");
@@ -126,11 +126,11 @@ fn bench_sequential_read() {
 fn bench_random_read() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("bench_random");
-    
+
     const BLOCK_SIZE: usize = 4096;
     const FILE_BLOCKS: usize = 1000;
     const READ_OPS: u32 = 1000;
-    
+
     // Create test file
     let data = vec![0xEFu8; BLOCK_SIZE * FILE_BLOCKS];
     fs::write(&file_path, &data).unwrap();
@@ -161,7 +161,10 @@ fn bench_random_read() {
     result.print();
 
     // Random reads should complete in reasonable time (< 100ms per op average)
-    assert!(result.avg_time < Duration::from_millis(100), "Random read too slow");
+    assert!(
+        result.avg_time < Duration::from_millis(100),
+        "Random read too slow"
+    );
 }
 
 // ============================================================================
@@ -187,8 +190,8 @@ fn bench_cache_write() {
     let elapsed = start.elapsed();
 
     let total_bytes = LAYER_SIZE as u64 * NUM_LAYERS as u64;
-    let result = BenchmarkResult::new("Cache Write", NUM_LAYERS, elapsed)
-        .with_throughput(total_bytes);
+    let result =
+        BenchmarkResult::new("Cache Write", NUM_LAYERS, elapsed).with_throughput(total_bytes);
     result.print();
 
     assert!(result.throughput.unwrap() > 10.0, "Cache write too slow");
@@ -221,8 +224,8 @@ fn bench_cache_read_hit() {
     let elapsed = start.elapsed();
 
     let total_bytes = LAYER_SIZE as u64 * NUM_LAYERS as u64;
-    let result = BenchmarkResult::new("Cache Read (Hit)", NUM_LAYERS, elapsed)
-        .with_throughput(total_bytes);
+    let result =
+        BenchmarkResult::new("Cache Read (Hit)", NUM_LAYERS, elapsed).with_throughput(total_bytes);
     result.print();
 
     assert!(result.throughput.unwrap() > 50.0, "Cache read too slow");
@@ -257,7 +260,10 @@ fn bench_cache_lookup() {
     result.print();
 
     // Lookups should be very fast (< 1ms average)
-    assert!(result.avg_time < Duration::from_millis(1), "Cache lookup too slow");
+    assert!(
+        result.avg_time < Duration::from_millis(1),
+        "Cache lookup too slow"
+    );
 }
 
 // ============================================================================
@@ -300,8 +306,8 @@ fn bench_tar_extraction() {
     let elapsed = start.elapsed();
 
     let total_bytes = (FILE_SIZE as u64) * (NUM_FILES as u64);
-    let result = BenchmarkResult::new("Tar Extraction", NUM_FILES, elapsed)
-        .with_throughput(total_bytes);
+    let result =
+        BenchmarkResult::new("Tar Extraction", NUM_FILES, elapsed).with_throughput(total_bytes);
     result.print();
 
     // Verify extraction
@@ -397,7 +403,7 @@ vram_min = "2GB"
     // Benchmark TOML parsing
     let start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _manifest: Result<libadep_core::capsule_v1::CapsuleManifestV1, _> = 
+        let _manifest: Result<libadep_core::capsule_v1::CapsuleManifestV1, _> =
             libadep_core::capsule_v1::CapsuleManifestV1::from_toml(SAMPLE_TOML);
     }
     let parse_time = start.elapsed();
@@ -424,7 +430,10 @@ vram_min = "2GB"
     let total_avg = parse_avg + validate_avg + runplan_avg;
 
     println!("\n=== Cold Start Preparation Benchmark ===");
-    println!("  TOML Parse:    {:?} avg ({} iterations)", parse_avg, ITERATIONS);
+    println!(
+        "  TOML Parse:    {:?} avg ({} iterations)",
+        parse_avg, ITERATIONS
+    );
     println!("  Validation:    {:?} avg", validate_avg);
     println!("  RunPlan Gen:   {:?} avg", runplan_avg);
     println!("  ---------------------------------");

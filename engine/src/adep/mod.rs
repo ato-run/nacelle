@@ -4,6 +4,6 @@
 //! This replaces the legacy AdepManifest structure.
 
 pub use libadep_core::capsule_v1::{
-    CapsuleManifestV1, CapsuleRequirements, CapsuleExecution, CapsuleStorage, StorageVolume,
-    RuntimeType, Platform, CapsuleType,
+    CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleStorage, CapsuleType,
+    Platform, RuntimeType, StorageVolume,
 };

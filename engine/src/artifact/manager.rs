@@ -1,14 +1,14 @@
+use futures::StreamExt;
+use reqwest::Client;
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use sha2::{Sha256, Digest};
-use reqwest::Client;
-use thiserror::Error;
 use tracing::{info, warn};
-use futures::StreamExt;
 
-use crate::artifact::registry::Registry;
 use crate::artifact::cache::{ArtifactCache, CachedRuntime};
+use crate::artifact::registry::Registry;
 
 #[derive(Debug, Error)]
 pub enum ArtifactError {
@@ -59,12 +59,12 @@ impl ArtifactManager {
     }
 
     /// Resolve a CAS URI (cas://<hash>) to a local file path
-    /// 
+    ///
     /// CAS URIs follow the format: cas://<sha256-hash>
     /// The blob is located at: <cas_root>/blobs/<hash[0:2]>/<hash>
     pub fn resolve_cas_uri(&self, uri: &str) -> Result<PathBuf, ArtifactError> {
         const CAS_PREFIX: &str = "cas://";
-        
+
         if !uri.starts_with(CAS_PREFIX) {
             return Err(ArtifactError::InvalidUri(format!(
                 "URI must start with '{}', got: {}",
@@ -73,7 +73,7 @@ impl ArtifactManager {
         }
 
         let hash = uri.strip_prefix(CAS_PREFIX).unwrap();
-        
+
         // Validate hash format (64 hex chars for SHA-256)
         if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
             return Err(ArtifactError::InvalidUri(format!(
@@ -82,9 +82,11 @@ impl ArtifactManager {
             )));
         }
 
-        let cas_root = self.config.cas_root.as_ref().ok_or_else(|| {
-            ArtifactError::CasError("CAS root not configured".to_string())
-        })?;
+        let cas_root = self
+            .config
+            .cas_root
+            .as_ref()
+            .ok_or_else(|| ArtifactError::CasError("CAS root not configured".to_string()))?;
 
         // CAS storage layout: blobs/<prefix>/<hash>
         let prefix = &hash[0..2];
@@ -106,9 +108,18 @@ impl ArtifactManager {
         uri.starts_with("cas://")
     }
 
-    pub async fn ensure_runtime(&self, name: &str, version: &str, _progress_tx: Option<tokio::sync::mpsc::Sender<String>>) -> Result<PathBuf, ArtifactError> {
+    pub async fn ensure_runtime(
+        &self,
+        name: &str,
+        version: &str,
+        _progress_tx: Option<tokio::sync::mpsc::Sender<String>>,
+    ) -> Result<PathBuf, ArtifactError> {
         let target_os = if cfg!(target_os = "macos") {
-            if cfg!(target_arch = "aarch64") { "mac-arm64" } else { "mac-x64" }
+            if cfg!(target_arch = "aarch64") {
+                "mac-arm64"
+            } else {
+                "mac-x64"
+            }
         } else {
             "linux-x64" // Fallback
         };
@@ -129,28 +140,36 @@ impl ArtifactManager {
         // Fetch registry
         info!("Fetching registry from {}", self.config.registry_url);
         let registry = self.fetch_registry().await.unwrap_or_else(|_| {
-             warn!("Failed to fetch registry, using hardcoded fallback");
-             self.get_fallback_registry()
+            warn!("Failed to fetch registry, using hardcoded fallback");
+            self.get_fallback_registry()
         });
 
-        let runtime_def = registry.runtimes.get(name)
+        let runtime_def = registry
+            .runtimes
+            .get(name)
             .ok_or_else(|| ArtifactError::NotFound(format!("Runtime {} not found", name)))?;
-        
-        let version_def = runtime_def.versions.get(version)
-            .ok_or_else(|| ArtifactError::NotFound(format!("Version {} not found for {}", version, name)))?;
-            
-        let artifact_info = version_def.get(target_os)
-            .ok_or_else(|| ArtifactError::NotFound(format!("Platform {} not supported for {}@{}", target_os, name, version)))?;
+
+        let version_def = runtime_def.versions.get(version).ok_or_else(|| {
+            ArtifactError::NotFound(format!("Version {} not found for {}", version, name))
+        })?;
+
+        let artifact_info = version_def.get(target_os).ok_or_else(|| {
+            ArtifactError::NotFound(format!(
+                "Platform {} not supported for {}@{}",
+                target_os, name, version
+            ))
+        })?;
 
         let install_dir = self.cache.get_runtime_path(name, version, target_os);
 
         // Download and install
         self.download_and_install(
-            &artifact_info.url, 
-            &artifact_info.sha256, 
-            &install_dir, 
-            &artifact_info.binary_path
-        ).await?;
+            &artifact_info.url,
+            &artifact_info.sha256,
+            &install_dir,
+            &artifact_info.binary_path,
+        )
+        .await?;
 
         Ok(install_dir.join(&artifact_info.binary_path))
     }
@@ -160,15 +179,19 @@ impl ArtifactManager {
     }
 
     pub async fn clear_cache(&self, name: &str) -> Result<(), ArtifactError> {
-        self.cache.clear_cache(name).await.map_err(ArtifactError::Io)
+        self.cache
+            .clear_cache(name)
+            .await
+            .map_err(ArtifactError::Io)
     }
 
     async fn fetch_registry(&self) -> Result<Registry, ArtifactError> {
         if self.config.registry_url.starts_with("file://") {
             let path = self.config.registry_url.strip_prefix("file://").unwrap();
             let content = fs::read_to_string(path).await?;
-            let registry: Registry = serde_json::from_str(&content)
-                .map_err(|e| ArtifactError::RegistryError(format!("Failed to parse registry JSON: {}", e)))?;
+            let registry: Registry = serde_json::from_str(&content).map_err(|e| {
+                ArtifactError::RegistryError(format!("Failed to parse registry JSON: {}", e))
+            })?;
             Ok(registry)
         } else {
             let resp = self.client.get(&self.config.registry_url).send().await?;
@@ -181,22 +204,24 @@ impl ArtifactManager {
         // Return empty registry or minimal fallback if needed, but prefer erroring if registry is missing
         // to ensure we are using the real one.
         // For now, let's keep it empty to force proper configuration.
-        Registry { runtimes: std::collections::HashMap::new() }
+        Registry {
+            runtimes: std::collections::HashMap::new(),
+        }
     }
 
     async fn download_and_install(
-        &self, 
-        url: &str, 
-        expected_sha256: &str, 
+        &self,
+        url: &str,
+        expected_sha256: &str,
         install_dir: &Path,
-        binary_rel_path: &str
+        binary_rel_path: &str,
     ) -> Result<(), ArtifactError> {
         info!("Downloading {} to {:?}", url, install_dir);
-        
+
         let response = self.client.get(url).send().await?;
         let mut stream = response.bytes_stream();
         let mut hasher = Sha256::new();
-        
+
         let temp_dir = std::env::temp_dir().join("gumball_downloads");
         fs::create_dir_all(&temp_dir).await?;
         let temp_file_path = temp_dir.join(format!("download_{}.zip", uuid::Uuid::new_v4()));
@@ -207,20 +232,20 @@ impl ArtifactManager {
             file.write_all(&chunk).await?;
             hasher.update(&chunk);
         }
-        
+
         file.flush().await?;
-        
+
         let hash_result = format!("{:x}", hasher.finalize());
         if expected_sha256 != "SKIP_VERIFY" && hash_result != expected_sha256 {
-            return Err(ArtifactError::HashMismatch { 
-                expected: expected_sha256.to_string(), 
-                actual: hash_result 
+            return Err(ArtifactError::HashMismatch {
+                expected: expected_sha256.to_string(),
+                actual: hash_result,
             });
         }
 
         let file_std = std::fs::File::open(&temp_file_path)?;
         let mut archive = zip::ZipArchive::new(file_std)?;
-        
+
         fs::create_dir_all(install_dir).await?;
         archive.extract(install_dir)?;
 

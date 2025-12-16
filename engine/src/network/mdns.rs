@@ -36,7 +36,10 @@ impl MdnsAnnouncer {
         )
         .map_err(|e| anyhow::anyhow!("Invalid service info: {}", e))?;
 
-        info!("mDNS: Attempting to register service type '{}' instance '{}' host '{}' port {}", service_type, instance_name, host_name, port);
+        info!(
+            "mDNS: Attempting to register service type '{}' instance '{}' host '{}' port {}",
+            service_type, instance_name, host_name, port
+        );
 
         self.daemon
             .register(my_service.clone())
@@ -45,7 +48,10 @@ impl MdnsAnnouncer {
         let mut services = self.registered_services.lock().unwrap();
         services.insert(hostname.to_string(), my_service);
 
-        info!("mDNS: Successfully registered {}.local on port {}", hostname, port);
+        info!(
+            "mDNS: Successfully registered {}.local on port {}",
+            hostname, port
+        );
         Ok(())
     }
 

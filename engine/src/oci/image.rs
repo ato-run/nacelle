@@ -16,13 +16,13 @@ use super::registry::{ImageRef, ManifestLayer, RegistryClient, RegistryError};
 pub enum ImageError {
     #[error("Registry error: {0}")]
     Registry(#[from] RegistryError),
-    
+
     #[error("Layer error: {0}")]
     Layer(#[from] LayerError),
-    
+
     #[error("Cache error: {0}")]
     Cache(#[from] CacheError),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -60,29 +60,31 @@ impl ImageManager {
             rootfs_dir,
         }
     }
-    
+
     /// Pull an image and prepare its rootfs
     pub async fn pull_image(&self, image: &str) -> ImageResult<PulledImage> {
         info!("Pulling image: {}", image);
-        
+
         // Parse image reference
         let image_ref = ImageRef::parse(image)?;
-        
+
         // Create registry client and authenticate
         let mut client = RegistryClient::new();
         client.authenticate(&image_ref).await?;
-        
+
         // Get manifest
         let manifest = client.get_manifest(&image_ref).await?;
         info!("Manifest has {} layers", manifest.layers.len());
-        
+
         // Download layers (using cache)
-        let layer_paths = self.download_layers(&client, &image_ref, &manifest.layers).await?;
-        
+        let layer_paths = self
+            .download_layers(&client, &image_ref, &manifest.layers)
+            .await?;
+
         // Prepare rootfs directory
         let rootfs_name = self.generate_rootfs_name(&manifest.config.digest);
         let rootfs_path = self.rootfs_dir.join(&rootfs_name);
-        
+
         // Check if rootfs already exists
         if rootfs_path.exists() {
             info!("Rootfs already exists: {}", rootfs_path.display());
@@ -90,9 +92,9 @@ impl ImageManager {
             // Extract and merge layers
             self.extractor.merge_layers(&layer_paths, &rootfs_path)?;
         }
-        
+
         let total_size: u64 = manifest.layers.iter().map(|l| l.size).sum();
-        
+
         Ok(PulledImage {
             image_ref: image.to_string(),
             rootfs_path,
@@ -101,7 +103,7 @@ impl ImageManager {
             total_size,
         })
     }
-    
+
     /// Download layers, using cache when available
     async fn download_layers(
         &self,
@@ -110,7 +112,7 @@ impl ImageManager {
         layers: &[ManifestLayer],
     ) -> ImageResult<Vec<PathBuf>> {
         let mut layer_paths = Vec::with_capacity(layers.len());
-        
+
         for (i, layer) in layers.iter().enumerate() {
             info!(
                 "Processing layer {}/{}: {} ({} bytes)",
@@ -119,73 +121,75 @@ impl ImageManager {
                 &layer.digest[..20.min(layer.digest.len())],
                 layer.size
             );
-            
+
             // Check cache
             if let Ok(cached_path) = self.cache.get_layer(&layer.digest) {
                 debug!("Layer found in cache: {}", layer.digest);
                 layer_paths.push(cached_path);
                 continue;
             }
-            
+
             // Download layer
             let temp_path = std::env::temp_dir()
                 .join("capsuled")
                 .join("downloads")
                 .join(layer.digest.replace("sha256:", ""));
-            
-            client.download_blob(image_ref, &layer.digest, &temp_path).await?;
-            
+
+            client
+                .download_blob(image_ref, &layer.digest, &temp_path)
+                .await?;
+
             // Read and cache
             let data = tokio::fs::read(&temp_path).await?;
             let image_str = format!("{}:{}", image_ref.repository, image_ref.tag);
             let cached_path = self.cache.put_layer(&layer.digest, &data, &image_str)?;
-            
+
             // Cleanup temp file
             let _ = tokio::fs::remove_file(&temp_path).await;
-            
+
             layer_paths.push(cached_path);
         }
-        
+
         Ok(layer_paths)
     }
-    
+
     /// Generate a unique rootfs directory name from digest
     fn generate_rootfs_name(&self, digest: &str) -> String {
         let clean = digest.replace("sha256:", "");
         format!("rootfs_{}", &clean[..12.min(clean.len())])
     }
-    
+
     /// Check if an image's rootfs is already prepared
     pub fn is_image_prepared(&self, _image: &str) -> bool {
         // This would need manifest to get digest, simplified for now
         false
     }
-    
+
     /// Get rootfs path for an image if it exists
     pub fn get_rootfs(&self, digest: &str) -> Option<PathBuf> {
         let name = self.generate_rootfs_name(digest);
         let path = self.rootfs_dir.join(&name);
-        
+
         if path.exists() {
             Some(path)
         } else {
             None
         }
     }
-    
+
     /// Delete a rootfs
     pub fn delete_rootfs(&self, digest: &str) -> ImageResult<()> {
         let name = self.generate_rootfs_name(digest);
         let path = self.rootfs_dir.join(&name);
-        
+
         if path.exists() {
             std::fs::remove_dir_all(&path)?;
             info!("Deleted rootfs: {}", path.display());
         }
-        
+
         Ok(())
     }
-    
+
     /// Get cache statistics
     pub fn cache_stats(&self) -> ImageResult<CacheStats> {
         let size = self.cache.cache_size()?;
@@ -193,12 +197,12 @@ impl ImageManager {
             total_size_bytes: size,
         })
     }
-    
+
     /// Evict old cache entries
     pub fn evict_cache(&self, target_size: u64) -> ImageResult<u64> {
         Ok(self.cache.evict_lru(target_size)?)
     }
-    
+
     /// Clear all cache
     pub fn clear_cache(&self) -> ImageResult<()> {
         Ok(self.cache.clear()?)
@@ -215,27 +219,21 @@ pub struct CacheStats {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_generate_rootfs_name() {
         let temp = TempDir::new().unwrap();
-        let manager = ImageManager::new(
-            temp.path().join("cache"),
-            temp.path().join("rootfs"),
-        );
-        
+        let manager = ImageManager::new(temp.path().join("cache"), temp.path().join("rootfs"));
+
         let name = manager.generate_rootfs_name("sha256:abc123def456789");
         assert_eq!(name, "rootfs_abc123def456");
     }
-    
+
     #[test]
     fn test_get_rootfs_nonexistent() {
         let temp = TempDir::new().unwrap();
-        let manager = ImageManager::new(
-            temp.path().join("cache"),
-            temp.path().join("rootfs"),
-        );
-        
+        let manager = ImageManager::new(temp.path().join("cache"), temp.path().join("rootfs"));
+
         assert!(manager.get_rootfs("sha256:nonexistent").is_none());
     }
 }

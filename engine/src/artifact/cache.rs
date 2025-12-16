@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::SystemTime;
-use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ impl ArtifactCache {
         let mut cached = Vec::new();
         // TODO: Walk directory structure to find cached runtimes
         // ~/.gumball/runtimes/{name}/{version}/{platform}/
-        
+
         let mut entries = match fs::read_dir(&self.base_path).await {
             Ok(e) => e,
             Err(_) => return cached,
@@ -53,18 +53,29 @@ impl ArtifactCache {
                         while let Ok(Some(ver_entry)) = ver_entries.next_entry().await {
                             if let Ok(ver_type) = ver_entry.file_type().await {
                                 if ver_type.is_dir() {
-                                    let version = ver_entry.file_name().to_string_lossy().to_string();
+                                    let version =
+                                        ver_entry.file_name().to_string_lossy().to_string();
                                     // Iterate platforms
-                                    if let Ok(mut plat_entries) = fs::read_dir(ver_entry.path()).await {
-                                        while let Ok(Some(plat_entry)) = plat_entries.next_entry().await {
+                                    if let Ok(mut plat_entries) =
+                                        fs::read_dir(ver_entry.path()).await
+                                    {
+                                        while let Ok(Some(plat_entry)) =
+                                            plat_entries.next_entry().await
+                                        {
                                             if let Ok(plat_type) = plat_entry.file_type().await {
                                                 if plat_type.is_dir() {
-                                                    let platform = plat_entry.file_name().to_string_lossy().to_string();
+                                                    let platform = plat_entry
+                                                        .file_name()
+                                                        .to_string_lossy()
+                                                        .to_string();
                                                     let path = plat_entry.path();
-                                                    
+
                                                     // Basic metadata (could be improved)
                                                     let metadata = fs::metadata(&path).await.ok();
-                                                    let last_used = metadata.as_ref().and_then(|m| m.accessed().ok()).unwrap_or(SystemTime::now());
+                                                    let last_used = metadata
+                                                        .as_ref()
+                                                        .and_then(|m| m.accessed().ok())
+                                                        .unwrap_or(SystemTime::now());
                                                     let size_bytes = 0; // TODO: Calculate size
 
                                                     cached.push(CachedRuntime {
@@ -86,7 +97,7 @@ impl ArtifactCache {
                 }
             }
         }
-        
+
         cached
     }
 

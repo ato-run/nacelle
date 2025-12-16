@@ -8,12 +8,10 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
 
-use crate::runtime::traits::Runtime;
-use crate::runtime::{
-    LaunchRequest, LaunchResult, RuntimeConfig, RuntimeError,
-};
 use crate::artifact::ArtifactManager;
 use crate::process_supervisor::ProcessSupervisor;
+use crate::runtime::traits::Runtime;
+use crate::runtime::{LaunchRequest, LaunchResult, RuntimeConfig, RuntimeError};
 use std::sync::Arc;
 
 /// Container runtime wrapper that launches workloads using runc/youki.
@@ -38,7 +36,10 @@ impl ContainerRuntime {
         } else {
             None
         };
-        Self { config, native_runtime }
+        Self {
+            config,
+            native_runtime,
+        }
     }
 
     pub fn config(&self) -> &RuntimeConfig {
@@ -305,7 +306,7 @@ impl ContainerRuntime {
 impl Runtime for ContainerRuntime {
     async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
         if let Some(native) = &self.native_runtime {
-             return native.launch(request).await;
+            return native.launch(request).await;
         }
 
         let bundle_path = self
@@ -464,8 +465,8 @@ impl From<RuntimeError> for CommandOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oci_spec::runtime::{ProcessBuilder, RootBuilder, SpecBuilder};
     use crate::runtime::RuntimeKind;
+    use oci_spec::runtime::{ProcessBuilder, RootBuilder, SpecBuilder};
     use std::path::PathBuf;
     use tempfile::TempDir;
 

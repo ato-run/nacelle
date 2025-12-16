@@ -12,7 +12,7 @@ use tracing::info;
 
 /// Default allowed DNS resolvers for capsules
 pub const DEFAULT_ALLOWED_RESOLVERS: &[&str] = &[
-    "127.0.0.1",      // Loopback
+    "127.0.0.1",       // Loopback
     "100.100.100.100", // Tailscale MagicDNS
 ];
 
@@ -112,7 +112,9 @@ mod tests {
         assert!(config.enabled);
         assert!(config.log_blocked);
         assert!(config.allowed_resolvers.contains(&"127.0.0.1".to_string()));
-        assert!(config.allowed_resolvers.contains(&"100.100.100.100".to_string()));
+        assert!(config
+            .allowed_resolvers
+            .contains(&"100.100.100.100".to_string()));
     }
 
     #[test]
@@ -125,10 +127,18 @@ mod tests {
         assert_eq!(rules.len(), 8);
 
         // Check structure
-        assert!(rules.iter().any(|r| r.contains("127.0.0.1") && r.contains("udp")));
-        assert!(rules.iter().any(|r| r.contains("100.100.100.100") && r.contains("tcp")));
-        assert!(rules.iter().any(|r| r.contains("LOG") && r.contains("ADEP-DNS-BLOCKED")));
-        assert!(rules.iter().any(|r| r.contains("-j DROP") && r.contains("--dport 53")));
+        assert!(rules
+            .iter()
+            .any(|r| r.contains("127.0.0.1") && r.contains("udp")));
+        assert!(rules
+            .iter()
+            .any(|r| r.contains("100.100.100.100") && r.contains("tcp")));
+        assert!(rules
+            .iter()
+            .any(|r| r.contains("LOG") && r.contains("ADEP-DNS-BLOCKED")));
+        assert!(rules
+            .iter()
+            .any(|r| r.contains("-j DROP") && r.contains("--dport 53")));
     }
 
     #[test]

@@ -127,7 +127,7 @@ impl SubscriptionStore for InMemorySubscriptionStore {
         let status = status.parse()?;
 
         let mut subs = self.subscriptions.write().await;
-        
+
         if let Some(existing) = subs.get_mut(id) {
             existing.status = status;
             existing.current_period_end = period_end.map(String::from);

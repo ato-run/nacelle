@@ -33,13 +33,9 @@ impl Runtime for DevRuntime {
     async fn launch(&self, request: LaunchRequest<'_>) -> Result<LaunchResult, RuntimeError> {
         // Determine directory to serve
         let serve_dir = std::env::current_dir().unwrap_or_default();
-        
-        let candidate_paths = vec![
-            "examples/apps",
-            "../examples/apps",
-            "../../examples/apps",
-        ];
-        
+
+        let candidate_paths = vec!["examples/apps", "../examples/apps", "../../examples/apps"];
+
         let mut app_dir = None;
         for path in candidate_paths {
             let candidate = serve_dir.join(path).join(request.workload_id);
@@ -48,12 +44,14 @@ impl Runtime for DevRuntime {
                 break;
             }
         }
-        
+
         let (working_dir, _is_temp) = if let Some(dir) = app_dir {
             info!("Serving custom app UI from {:?}", dir);
             (dir, false)
         } else {
-            let temp_dir = std::env::temp_dir().join("capsuled_mock_apps").join(request.workload_id);
+            let temp_dir = std::env::temp_dir()
+                .join("capsuled_mock_apps")
+                .join(request.workload_id);
             if let Err(e) = std::fs::create_dir_all(&temp_dir) {
                 warn!("Failed to create temp dir: {}", e);
                 (serve_dir, false)
@@ -88,16 +86,29 @@ impl Runtime for DevRuntime {
 
         // Create log file
         let log_dir = std::env::temp_dir().join("capsuled").join("logs");
-        std::fs::create_dir_all(&log_dir).map_err(|e| RuntimeError::Io { path: log_dir.clone(), source: e })?;
+        std::fs::create_dir_all(&log_dir).map_err(|e| RuntimeError::Io {
+            path: log_dir.clone(),
+            source: e,
+        })?;
         let log_path_buf = log_dir.join(format!("{}.log", request.workload_id));
-        let log_file = std::fs::File::create(&log_path_buf).map_err(|e| RuntimeError::Io { path: log_path_buf.clone(), source: e })?;
-        
+        let log_file = std::fs::File::create(&log_path_buf).map_err(|e| RuntimeError::Io {
+            path: log_path_buf.clone(),
+            source: e,
+        })?;
+
         let (stdout, stderr) = {
-            let stderr = log_file.try_clone().ok().map(Stdio::from).unwrap_or(Stdio::null());
+            let stderr = log_file
+                .try_clone()
+                .ok()
+                .map(Stdio::from)
+                .unwrap_or(Stdio::null());
             (Stdio::from(log_file), stderr)
         };
 
-        info!("Spawning dev runtime (python3 http.server) on port {}", port);
+        info!(
+            "Spawning dev runtime (python3 http.server) on port {}",
+            port
+        );
         let mut cmd = Command::new("python3");
         cmd.arg("-m")
             .arg("http.server")
@@ -130,18 +141,18 @@ impl Runtime for DevRuntime {
                 format!("http://127.0.0.1:{}", proxy_port)
             };
             cmd.env("HTTP_PROXY", &proxy_url)
-               .env("HTTPS_PROXY", &proxy_url)
-               .env("ALL_PROXY", &proxy_url);
+                .env("HTTPS_PROXY", &proxy_url)
+                .env("ALL_PROXY", &proxy_url);
         }
 
         match cmd.spawn() {
             Ok(child) => {
-                let pid = child.id().ok_or_else(|| RuntimeError::CommandFailure { 
-                    operation: "spawn".to_string(), 
-                    exit_code: None, 
-                    stderr: "Failed to get PID".to_string() 
+                let pid = child.id().ok_or_else(|| RuntimeError::CommandFailure {
+                    operation: "spawn".to_string(),
+                    exit_code: None,
+                    stderr: "Failed to get PID".to_string(),
                 })?;
-                
+
                 info!("Dev runtime started with PID {}", pid);
 
                 // Write PID file
@@ -162,11 +173,11 @@ impl Runtime for DevRuntime {
                     // Here we use tokio::process::Command.
                     // We can use `into_std` but that consumes the child.
                     // But we need to return PID.
-                    // 
+                    //
                     // Actually, `ProcessSupervisor::register` takes `u32` (PID) or `Child`?
                     // Let's check `process_supervisor.rs`.
                 }
-                
+
                 Ok(LaunchResult {
                     pid,
                     bundle_path: PathBuf::from("/"),
@@ -186,38 +197,47 @@ impl Runtime for DevRuntime {
         // `CapsuleManager` has the PID.
         // If `Runtime::stop` is called, we might need to kill by PID if we knew it.
         // But `Runtime` trait doesn't take PID.
-        // 
+        //
         // For now, we assume `CapsuleManager` handles the kill if `Runtime::stop` doesn't do it?
         // No, `CapsuleManager` calls `stop_capsule` which calls `Runtime::stop`.
-        // 
+        //
         // We should probably write a PID file for DevRuntime too to be consistent.
-        let pid_file = std::env::temp_dir().join("capsuled").join("state").join(format!("{}.pid", workload_id));
+        let pid_file = std::env::temp_dir()
+            .join("capsuled")
+            .join("state")
+            .join(format!("{}.pid", workload_id));
         if pid_file.exists() {
-             if let Ok(content) = std::fs::read_to_string(&pid_file) {
+            if let Ok(content) = std::fs::read_to_string(&pid_file) {
                 if let Ok(pid) = content.trim().parse::<i32>() {
-                     use nix::sys::signal::{self, Signal};
-                     use nix::unistd::Pid;
+                    use nix::sys::signal::{self, Signal};
+                    use nix::unistd::Pid;
 
-                     info!("Attempting to stop dev runtime PID {} [VERIFY_NEW_CODE]", pid);
-                     
-                     // Check if process exists first (signal 0)
-                     match signal::kill(Pid::from_raw(pid), None) {
-                         Ok(_) => {
-                             info!("Process {} exists, sending SIGTERM...", pid);
-                             match signal::kill(Pid::from_raw(pid), Signal::SIGTERM) {
-                                 Ok(_) => {
-                                     info!("Successfully sent SIGTERM to PID {}", pid);
-                                 },
-                                 Err(e) => {
-                                     warn!("Failed to send SIGTERM to PID {}: {}", pid, e);
-                                 }
-                             }
-                         },
-                         Err(e) => {
-                             warn!("Process {} does not exist or cannot be signaled (check): {}", pid, e);
-                             // If it doesn't exist (ESRCH), we can consider it stopped, but let's log it.
-                         }
-                     }
+                    info!(
+                        "Attempting to stop dev runtime PID {} [VERIFY_NEW_CODE]",
+                        pid
+                    );
+
+                    // Check if process exists first (signal 0)
+                    match signal::kill(Pid::from_raw(pid), None) {
+                        Ok(_) => {
+                            info!("Process {} exists, sending SIGTERM...", pid);
+                            match signal::kill(Pid::from_raw(pid), Signal::SIGTERM) {
+                                Ok(_) => {
+                                    info!("Successfully sent SIGTERM to PID {}", pid);
+                                }
+                                Err(e) => {
+                                    warn!("Failed to send SIGTERM to PID {}: {}", pid, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Process {} does not exist or cannot be signaled (check): {}",
+                                pid, e
+                            );
+                            // If it doesn't exist (ESRCH), we can consider it stopped, but let's log it.
+                        }
+                    }
                 }
             }
         }

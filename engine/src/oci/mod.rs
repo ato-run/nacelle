@@ -1,3 +1,7 @@
+pub mod cache;
+pub mod image;
+pub mod layer;
+pub mod registry;
 /// OCI (Open Container Initiative) runtime specification module
 ///
 /// This module handles:
@@ -6,13 +10,9 @@
 /// - Layer extraction and caching
 /// - Image management (pull, cache, rootfs preparation)
 pub mod spec_builder;
-pub mod registry;
-pub mod layer;
-pub mod cache;
-pub mod image;
 
+pub use cache::{CacheError, LayerCache};
+pub use image::{ImageError, ImageManager, PulledImage};
+pub use layer::{LayerError, LayerExtractor};
+pub use registry::{ImageManifest, ImageRef, RegistryClient, RegistryError};
 pub use spec_builder::build_oci_spec;
-pub use registry::{ImageRef, ImageManifest, RegistryClient, RegistryError};
-pub use layer::{LayerExtractor, LayerError};
-pub use cache::{LayerCache, CacheError};
-pub use image::{ImageManager, ImageError, PulledImage};

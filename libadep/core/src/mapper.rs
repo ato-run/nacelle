@@ -41,38 +41,42 @@ pub fn run_plan_to_proto(
     use onescluster_capsuled_proto::onescluster::common::v1 as proto;
 
     let runtime = match &plan.runtime {
-        crate::runplan::RunPlanRuntime::Docker(r) => proto::run_plan::Runtime::Docker(proto::DockerRuntime {
-            image: r.image.clone(),
-            digest: r.digest.clone().unwrap_or_default(),
-            command: r.command.clone(),
-            env: r.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-            working_dir: r.working_dir.clone().unwrap_or_default(),
-            user: r.user.clone().unwrap_or_default(),
-            ports: r
-                .ports
-                .iter()
-                .map(|p| proto::Port {
-                    container_port: p.container_port,
-                    host_port: p.host_port.unwrap_or_default(),
-                    protocol: p.protocol.clone().unwrap_or_default(),
-                })
-                .collect(),
-            mounts: r
-                .mounts
-                .iter()
-                .map(|m| proto::Mount {
-                    source: m.source.clone(),
-                    target: m.target.clone(),
-                    readonly: m.readonly,
-                })
-                .collect(),
-        }),
-        crate::runplan::RunPlanRuntime::Native(r) => proto::run_plan::Runtime::Native(proto::NativeRuntime {
-            binary_path: r.binary_path.clone(),
-            args: r.args.clone(),
-            env: r.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-            working_dir: r.working_dir.clone().unwrap_or_default(),
-        }),
+        crate::runplan::RunPlanRuntime::Docker(r) => {
+            proto::run_plan::Runtime::Docker(proto::DockerRuntime {
+                image: r.image.clone(),
+                digest: r.digest.clone().unwrap_or_default(),
+                command: r.command.clone(),
+                env: r.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                working_dir: r.working_dir.clone().unwrap_or_default(),
+                user: r.user.clone().unwrap_or_default(),
+                ports: r
+                    .ports
+                    .iter()
+                    .map(|p| proto::Port {
+                        container_port: p.container_port,
+                        host_port: p.host_port.unwrap_or_default(),
+                        protocol: p.protocol.clone().unwrap_or_default(),
+                    })
+                    .collect(),
+                mounts: r
+                    .mounts
+                    .iter()
+                    .map(|m| proto::Mount {
+                        source: m.source.clone(),
+                        target: m.target.clone(),
+                        readonly: m.readonly,
+                    })
+                    .collect(),
+            })
+        }
+        crate::runplan::RunPlanRuntime::Native(r) => {
+            proto::run_plan::Runtime::Native(proto::NativeRuntime {
+                binary_path: r.binary_path.clone(),
+                args: r.args.clone(),
+                env: r.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                working_dir: r.working_dir.clone().unwrap_or_default(),
+            })
+        }
         crate::runplan::RunPlanRuntime::PythonUv(r) => {
             proto::run_plan::Runtime::PythonUv(proto::PythonUvRuntime {
                 entrypoint: r.entrypoint.clone(),

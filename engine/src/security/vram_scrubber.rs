@@ -309,7 +309,11 @@ mod tests {
 
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].gpu_index, 0);
-        assert!(stats[0].message.as_ref().unwrap().contains("factory failure"));
+        assert!(stats[0]
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("factory failure"));
         assert_eq!(stats[0].bytes_scrubbed, 0);
     }
 }

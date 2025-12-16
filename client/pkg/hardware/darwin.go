@@ -215,7 +215,7 @@ func (m *DarwinMonitor) GetSystemSummary() (string, error) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("System Resources:\n"))
+	sb.WriteString("System Resources:\n")
 	sb.WriteString(fmt.Sprintf("  RAM:  %.1f GB / %.1f GB (%.1f%% used)\n",
 		float64(resources.TotalRAM-resources.AvailableRAM)/(1024*1024*1024),
 		float64(resources.TotalRAM)/(1024*1024*1024),

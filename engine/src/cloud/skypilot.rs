@@ -4,10 +4,10 @@ use tracing::{error, info};
 
 use crate::config::{CloudConfig, RcloneConfig};
 
-use std::process::Command;
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct SkyPilotClient {
@@ -43,9 +43,9 @@ impl SkyPilotClient {
     pub fn new(config: &CloudConfig) -> Result<Self> {
         let headscale_url = std::env::var("HEADSCALE_URL")
             .unwrap_or_else(|_| "https://headscale.gumball.net".to_string());
-        let headscale_api_key = std::env::var("HEADSCALE_API_KEY")
-            .unwrap_or_else(|_| "mock-key".to_string());
-        
+        let headscale_api_key =
+            std::env::var("HEADSCALE_API_KEY").unwrap_or_else(|_| "mock-key".to_string());
+
         // Use a temp dir for sky task files
         let work_dir = std::env::temp_dir().join("gumball_sky_tasks");
         std::fs::create_dir_all(&work_dir)?;
@@ -67,25 +67,32 @@ impl SkyPilotClient {
     pub async fn deploy(&self, manifest_str: &str) -> Result<String> {
         // 1. Generate Pre-Auth Key
         let auth_key = self.generate_pre_auth_key().await?;
-        
+
         // 2. Generate task.yaml with Auto-Join
         let task_yaml = self.generate_task_yaml(manifest_str, &auth_key)?;
-        
+
         // 3. Write to file
         let task_id = uuid::Uuid::new_v4().to_string();
         let file_path = self.work_dir.join(format!("{}.yaml", task_id));
         tokio::fs::write(&file_path, task_yaml).await?;
-        
+
         info!("Generated SkyPilot task file: {:?}", file_path);
 
         // 4. Execute 'sky launch'
         // sky launch -c <cluster_name> <file> --detach
         let cluster_name = format!("gumball-{}", &task_id[..8]);
-        
+
         info!("Launching SkyPilot cluster: {}", cluster_name);
-        
+
         let output = Command::new("sky")
-            .args(["launch", "-c", &cluster_name, file_path.to_str().unwrap(), "--detach", "-y"])
+            .args([
+                "launch",
+                "-c",
+                &cluster_name,
+                file_path.to_str().unwrap(),
+                "--detach",
+                "-y",
+            ])
             .output()
             .map_err(|e| anyhow!("Failed to execute sky launch: {}", e))?;
 
@@ -103,7 +110,7 @@ impl SkyPilotClient {
 
     async fn generate_pre_auth_key(&self) -> Result<String> {
         let url = format!("{}/api/v1/preauthkey", self.headscale_url);
-        
+
         let request = HeadscaleCreateKeyRequest {
             user: "default".to_string(), // TODO: Make configurable
             reusable: false,
@@ -114,9 +121,13 @@ impl SkyPilotClient {
 
         info!("Requesting Pre-Auth Key from Headscale: {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.headscale_api_key))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.headscale_api_key),
+            )
             .json(&request)
             .send()
             .await
@@ -140,20 +151,21 @@ impl SkyPilotClient {
 
     fn generate_task_yaml(&self, _manifest_str: &str, auth_key: &str) -> Result<String> {
         // Construct the YAML as per user request
-        
+
         // Prepare Rclone Envs
         let mut envs_section = String::new();
         let mut mount_cmd = String::new();
-        
+
         if let Some(rclone) = &self.rclone_config {
-            envs_section = format!(r#"
+            envs_section = format!(
+                r#"
 envs:
   RCLONE_CONFIG_REMOTE_TYPE: {}
   RCLONE_CONFIG_REMOTE_PROVIDER: {}
   RCLONE_CONFIG_REMOTE_ACCESS_KEY_ID: {}
   RCLONE_CONFIG_REMOTE_SECRET_ACCESS_KEY: {}
   RCLONE_CONFIG_REMOTE_ENDPOINT: {}
-"#, 
+"#,
                 rclone.config_type,
                 rclone.provider,
                 rclone.access_key_id,
@@ -169,10 +181,12 @@ envs:
   rclone mount remote:/models /data/models \
     --vfs-cache-mode full \
     --daemon
-            "#.to_string();
+            "#
+            .to_string();
         }
 
-        let yaml = format!(r#"
+        let yaml = format!(
+            r#"
 name: gumball-burst
 
 {}
@@ -205,7 +219,9 @@ run: |
     ls -F /data/models || echo "Empty or failed mount"
   fi
   # /usr/local/bin/capsuled-engine
-"#, envs_section, auth_key, self.headscale_url, mount_cmd);
+"#,
+            envs_section, auth_key, self.headscale_url, mount_cmd
+        );
 
         Ok(yaml)
     }
@@ -228,7 +244,7 @@ mod tests {
 
         let client = SkyPilotClient::new(&config).unwrap();
         let result = client.deploy("test-manifest-content").await;
-        
+
         match result {
             Ok(job_id) => println!("Deploy success: {}", job_id),
             Err(e) => panic!("Deploy failed: {}", e),

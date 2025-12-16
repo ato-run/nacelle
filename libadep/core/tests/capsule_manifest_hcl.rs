@@ -1,10 +1,10 @@
 //! Tests for HCL v3.0 manifest parsing
-//! 
+//!
 //! Run with: `cargo test --features hcl-support`
 
 #[cfg(feature = "hcl-support")]
 mod tests {
-    use libadep_core::capsule_manifest::{CapsuleManifest, NativeRuntimeConfig};
+    use libadep_core::capsule_manifest::CapsuleManifest;
 
     #[test]
     fn test_parse_minimal_hcl_manifest() {
@@ -41,16 +41,19 @@ resources {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         assert_eq!(manifest.capsule.name, "mlx-inference");
         assert!(manifest.native.is_some());
-        
+
         let native = manifest.native.as_ref().unwrap();
         assert_eq!(native.runtime, "mlx");
-        assert_eq!(native.model, Some("mlx-community/Qwen2.5-0.5B-Instruct-4bit".to_string()));
+        assert_eq!(
+            native.model,
+            Some("mlx-community/Qwen2.5-0.5B-Instruct-4bit".to_string())
+        );
         assert_eq!(native.context_size, Some(4096));
         assert_eq!(native.port, Some(8081));
-        
+
         assert!(manifest.requires_mlx());
         assert!(!manifest.requires_llama());
         assert!(!manifest.requires_vllm());
@@ -71,11 +74,11 @@ native {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         assert!(manifest.native.is_some());
         let native = manifest.native.as_ref().unwrap();
         assert_eq!(native.runtime, "llama");
-        
+
         assert!(manifest.requires_llama());
         assert!(!manifest.requires_mlx());
     }
@@ -99,12 +102,12 @@ resources {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         assert!(manifest.native.is_some());
         let native = manifest.native.as_ref().unwrap();
         assert_eq!(native.runtime, "vllm");
         assert_eq!(native.quantization, Some("awq".to_string()));
-        
+
         assert!(manifest.requires_vllm());
     }
 
@@ -123,12 +126,12 @@ permissions {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         assert!(manifest.permissions.network_allow.is_some());
         let network = manifest.permissions.network_allow.as_ref().unwrap();
         assert_eq!(network.len(), 2);
         assert!(network.contains(&"https://api.openai.com".to_string()));
-        
+
         let mcp = manifest.permissions.mcp_servers.as_ref().unwrap();
         assert!(mcp.contains(&"filesystem".to_string()));
     }
@@ -150,7 +153,7 @@ native {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         let native = manifest.native.as_ref().unwrap();
         let env = native.env.as_ref().unwrap();
         assert_eq!(env.get("MLX_METAL"), Some(&"1".to_string()));
@@ -174,7 +177,7 @@ runtime {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         // Native block should take precedence
         assert_eq!(manifest.effective_runtime(), Some("mlx"));
     }
@@ -220,13 +223,13 @@ routing {
 }
 "#;
         let manifest: CapsuleManifest = hcl::from_str(hcl_content).unwrap();
-        
+
         assert_eq!(manifest.capsule.name, "gumball-mlx");
         assert!(manifest.requires_mlx());
-        
+
         let native = manifest.native.as_ref().unwrap();
         assert_eq!(native.context_size, Some(32768));
-        
+
         assert_eq!(manifest.resources.cpu_cores, Some(4));
         assert_eq!(manifest.routing.internal_port, Some(8081));
     }

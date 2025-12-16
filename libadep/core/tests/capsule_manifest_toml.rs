@@ -61,13 +61,16 @@ gpu_memory_min = "4GB"
 base_model = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
     "#;
     let manifest = CapsuleManifest::from_toml_str(toml_data).unwrap();
-    
+
     assert_eq!(manifest.capsule.name, "mlx-server");
     assert!(manifest.native.is_some());
-    
+
     let native = manifest.native.unwrap();
     assert_eq!(native.runtime, "mlx");
-    assert_eq!(native.model.as_deref(), Some("mlx-community/Qwen2.5-0.5B-Instruct-4bit"));
+    assert_eq!(
+        native.model.as_deref(),
+        Some("mlx-community/Qwen2.5-0.5B-Instruct-4bit")
+    );
     assert_eq!(native.port, Some(8081));
     assert!(native.env.is_some());
 }

@@ -1,5 +1,8 @@
 use crate::proto::onescluster::common::v1 as common;
-use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleStorage, RuntimeType, CapsuleRouting, CapsuleType, StorageVolume};
+use libadep_core::capsule_v1::{
+    CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleRouting, CapsuleStorage,
+    CapsuleType, RuntimeType, StorageVolume,
+};
 use std::collections::HashMap;
 
 /// Result of converting a RunPlan proto into the canonical CapsuleManifestV1.
@@ -50,7 +53,7 @@ pub fn from_coordinator(plan: &common::RunPlan) -> RunPlanConversion {
             digest = docker.digest.clone();
 
             execution.runtime = RuntimeType::Docker;
-            execution.entrypoint = docker.image.clone();            
+            execution.entrypoint = docker.image.clone();
             execution.env = env.clone();
 
             if let Some(port) = first_port(&docker.ports) {
@@ -68,10 +71,10 @@ pub fn from_coordinator(plan: &common::RunPlan) -> RunPlanConversion {
                 .collect();
         }
         Some(common::run_plan::Runtime::PythonUv(py)) => {
-             execution.runtime = RuntimeType::PythonUv;
-             execution.entrypoint = py.entrypoint.clone();
-             execution.env = env.clone();
-             if let Some(port) = first_port(&py.ports) {
+            execution.runtime = RuntimeType::PythonUv;
+            execution.entrypoint = py.entrypoint.clone();
+            execution.env = env.clone();
+            if let Some(port) = first_port(&py.ports) {
                 execution.port = Some(port);
             }
         }
@@ -113,14 +116,22 @@ pub fn from_engine(plan: &common::RunPlan) -> RunPlanConversion {
 
 fn runtime_env(plan: &common::RunPlan) -> Option<HashMap<String, String>> {
     match &plan.runtime {
-        Some(common::run_plan::Runtime::Docker(docker)) => {
-             Some(docker.env.iter().map(|(k,v)| (k.clone(), v.clone())).collect())
-        }
-        Some(common::run_plan::Runtime::Native(native)) => {
-            Some(native.env.iter().map(|(k,v)| (k.clone(), v.clone())).collect())
-        }
+        Some(common::run_plan::Runtime::Docker(docker)) => Some(
+            docker
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        ),
+        Some(common::run_plan::Runtime::Native(native)) => Some(
+            native
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        ),
         Some(common::run_plan::Runtime::PythonUv(py)) => {
-            Some(py.env.iter().map(|(k,v)| (k.clone(), v.clone())).collect())
+            Some(py.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
         }
         None => None,
     }
@@ -128,7 +139,11 @@ fn runtime_env(plan: &common::RunPlan) -> Option<HashMap<String, String>> {
 
 fn first_port(ports: &[common::Port]) -> Option<u16> {
     ports.first().map(|p| {
-        if p.host_port != 0 { p.host_port as u16 } else { p.container_port as u16 }
+        if p.host_port != 0 {
+            p.host_port as u16
+        } else {
+            p.container_port as u16
+        }
     })
 }
 
@@ -155,7 +170,11 @@ mod tests {
             runtime: Some(run_plan::Runtime::Docker(common::DockerRuntime {
                 image: "nginx:latest".to_string(),
                 digest: "sha256:12345".to_string(),
-                command: vec!["/bin/sh".to_string(), "-c".to_string(), "echo hello".to_string()],
+                command: vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "echo hello".to_string(),
+                ],
                 env: HashMap::from([("KEY".to_string(), "VALUE".to_string())]),
                 working_dir: "/app".to_string(),
                 user: "1000".to_string(),
@@ -182,7 +201,7 @@ mod tests {
         // Check top-level
         assert_eq!(manifest.name, "Test Capsule");
         assert_eq!(manifest.version, "1.0.0");
-        
+
         // Check Execution
         assert_eq!(manifest.execution.runtime, RuntimeType::Docker);
         assert_eq!(manifest.execution.entrypoint, "nginx:latest");
@@ -222,7 +241,7 @@ mod tests {
         let manifest = conversion.adep;
 
         assert_eq!(manifest.execution.runtime, RuntimeType::Native);
-        
+
         // This test intentionally documents the behavior: args are NOT in the manifest.
         assert_eq!(manifest.execution.entrypoint, "/usr/bin/python3");
     }

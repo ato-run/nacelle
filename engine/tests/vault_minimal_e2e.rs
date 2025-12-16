@@ -1,12 +1,9 @@
 //! Phase 6A: Vault Minimal — HostPath bind mount による永続化の e2e テスト
-//! 
+//!
 //! 検証内容:
 //! 1. Deploy with [storage] → HostPath 作成 → mount → 書込み
 //! 2. Stop
 //! 3. Re-deploy with same [storage] → HostPath 再 mount → データ残存確認
-
-
-
 
 /// Test prerequisite check
 #[tokio::test]
@@ -71,7 +68,8 @@ async fn test_vault_minimal_hostpath_persistence() {
         println!("SKIP: missing adep_logic.wasm at {}", wasm_path.display());
         return;
     }
-    let wasm_host = Arc::new(AdepLogicHost::from_file(wasm_path.to_str().unwrap()).expect("wasm host"));
+    let wasm_host =
+        Arc::new(AdepLogicHost::from_file(wasm_path.to_str().unwrap()).expect("wasm host"));
 
     let tailscale_manager = Arc::new(TailscaleManager::start(None, None, None));
     let container_runtime = Arc::new(ContainerRuntime::new(
@@ -171,7 +169,9 @@ volumes = [
         digest: "".to_string(),
     };
 
-    let response = client.deploy_capsule(Request::new(deploy_req.clone())).await;
+    let response = client
+        .deploy_capsule(Request::new(deploy_req.clone()))
+        .await;
     assert!(
         response.is_ok(),
         "First deploy failed: {:?}",
@@ -233,11 +233,7 @@ volumes = [
     );
 
     let content = fs::read_to_string(&marker).expect("read marker");
-    assert_eq!(
-        content,
-        "persistent-data",
-        "Marker content mismatch"
-    );
+    assert_eq!(content, "persistent-data", "Marker content mismatch");
 
     println!("✓ Data persisted across deploy/stop/redeploy cycle");
 

@@ -2,21 +2,21 @@ use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{error, info, warn};
 
+use crate::artifact::ArtifactManager;
 use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
+use crate::proto::onescluster::common::v1 as common;
 use crate::proto::onescluster::engine::v1::{
     deploy_request::Manifest as DeployManifest,
     engine_server::{Engine, EngineServer},
-    CapsuleInfo, DeployRequest, DeployResponse, GetResourcesRequest, GetSystemStatusRequest,
-    EngineLogEntry, ResourceInfo, ResourceUsage, StopRequest, StopResponse, SystemStatus,
+    CapsuleInfo, DeployRequest, DeployResponse, EngineLogEntry, GetResourcesRequest,
+    GetSystemStatusRequest, ResourceInfo, ResourceUsage, StopRequest, StopResponse, SystemStatus,
     ValidateRequest, ValidationResult,
 };
-use crate::runtime::ContainerRuntime;
 use crate::runplan;
+use crate::runtime::ContainerRuntime;
 use crate::wasm_host::AdepLogicHost;
 use crate::workload;
-use crate::artifact::ArtifactManager;
-use crate::proto::onescluster::common::v1 as common;
 
 use libadep_core::capsule_v1::CapsuleManifestV1;
 
@@ -113,11 +113,8 @@ fn canonical_runplan_to_proto(plan: &libadep_core::runplan::RunPlan) -> common::
             })
         }
         libadep_core::runplan::RunPlanRuntime::PythonUv(py) => {
-            let env: HashMap<String, String> = py
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let env: HashMap<String, String> =
+                py.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             common::run_plan::Runtime::PythonUv(common::PythonUvRuntime {
                 entrypoint: py.entrypoint.clone(),
                 args: py.args.clone(),
@@ -147,8 +144,6 @@ fn canonical_runplan_to_proto(plan: &libadep_core::runplan::RunPlan) -> common::
         egress_allowlist: plan.egress_allowlist.clone(),
     }
 }
-
-
 
 fn try_canonical_toml_to_runplan_proto(toml_str: &str) -> Option<common::RunPlan> {
     let canonical = CapsuleManifestV1::from_toml(toml_str).ok()?;
@@ -199,8 +194,9 @@ impl Engine for EngineService {
                 info!("  Parsing TOML manifest");
                 // Canonical-first: capsule_v1 -> validated -> normalized RunPlan v0 -> same path as DeployManifest::RunPlan
                 if let Some(plan) = try_canonical_toml_to_runplan_proto(&toml_str) {
-                    if let Some(crate::proto::onescluster::common::v1::run_plan::Runtime::Docker(d)) =
-                        plan.runtime.as_ref()
+                    if let Some(crate::proto::onescluster::common::v1::run_plan::Runtime::Docker(
+                        d,
+                    )) = plan.runtime.as_ref()
                     {
                         if direct_command.is_none() && !d.command.is_empty() {
                             direct_command = Some(d.command.clone());
@@ -215,15 +211,19 @@ impl Engine for EngineService {
                         digest = converted.digest;
                     }
 
-                    serde_json::to_vec(&converted.adep)
-                        .map_err(|e| Status::internal(format!("Failed to serialize RunPlan: {}", e)))?
+                    serde_json::to_vec(&converted.adep).map_err(|e| {
+                        Status::internal(format!("Failed to serialize RunPlan: {}", e))
+                    })?
                 } else {
                     // Legacy fallback: Convert TOML to JSON for CapsuleManager
-                    let (manifest, _) = workload::manifest_loader::load_manifest_str(None, &toml_str)
-                        .map_err(|e| Status::invalid_argument(format!("Failed to parse TOML: {}", e)))?;
+                    let (manifest, _) =
+                        workload::manifest_loader::load_manifest_str(None, &toml_str).map_err(
+                            |e| Status::invalid_argument(format!("Failed to parse TOML: {}", e)),
+                        )?;
 
-                    serde_json::to_vec(&manifest)
-                        .map_err(|e| Status::internal(format!("Failed to serialize manifest: {}", e)))?
+                    serde_json::to_vec(&manifest).map_err(|e| {
+                        Status::internal(format!("Failed to serialize manifest: {}", e))
+                    })?
                 }
             }
             Some(DeployManifest::AdepJson(json_bytes)) => {
@@ -246,11 +246,18 @@ impl Engine for EngineService {
         let capsule_id = req.capsule_id.clone();
         let capsule_manager = self.capsule_manager.clone();
         tokio::spawn(async move {
-                // Note: manifest_signature field not in proto - signature verification is internal
-                let signature: Option<Vec<u8>> = None;
+            // Note: manifest_signature field not in proto - signature verification is internal
+            let signature: Option<Vec<u8>> = None;
 
-                match capsule_manager
-                .deploy_capsule(capsule_id.clone(), _manifest_bytes, oci_image, digest, direct_command, signature)
+            match capsule_manager
+                .deploy_capsule(
+                    capsule_id.clone(),
+                    _manifest_bytes,
+                    oci_image,
+                    digest,
+                    direct_command,
+                    signature,
+                )
                 .await
             {
                 Ok(status) => info!("Capsule {} deploy completed: {}", capsule_id, status),
@@ -263,7 +270,6 @@ impl Engine for EngineService {
             status: "starting".to_string(),
             local_url: String::new(),
         }))
-
     }
 
     /// Stop a running capsule
@@ -423,7 +429,11 @@ impl Engine for EngineService {
         }))
     }
 
-    type StreamLogsStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<EngineLogEntry, Status>> + Send + Sync + 'static>>;
+    type StreamLogsStream = std::pin::Pin<
+        Box<
+            dyn tokio_stream::Stream<Item = Result<EngineLogEntry, Status>> + Send + Sync + 'static,
+        >,
+    >;
 
     async fn stream_logs(
         &self,
@@ -436,7 +446,9 @@ impl Engine for EngineService {
         info!("StreamLogs request for capsule_id={}", capsule_id);
 
         // Get log path
-        let log_path = self.capsule_manager.get_capsule_log_path(&capsule_id)
+        let log_path = self
+            .capsule_manager
+            .get_capsule_log_path(&capsule_id)
             .ok_or_else(|| Status::not_found("Capsule not found or no log path"))?;
 
         // Create a channel for the stream
@@ -449,7 +461,12 @@ impl Engine for EngineService {
             let file = match tokio::fs::File::open(&log_path).await {
                 Ok(f) => f,
                 Err(e) => {
-                    let _ = tx.send(Err(Status::internal(format!("Failed to open log file: {}", e)))).await;
+                    let _ = tx
+                        .send(Err(Status::internal(format!(
+                            "Failed to open log file: {}",
+                            e
+                        ))))
+                        .await;
                     return;
                 }
             };
@@ -480,14 +497,18 @@ impl Engine for EngineService {
                         }
                     }
                     Err(e) => {
-                        let _ = tx.send(Err(Status::internal(format!("Error reading log: {}", e)))).await;
+                        let _ = tx
+                            .send(Err(Status::internal(format!("Error reading log: {}", e))))
+                            .await;
                         break;
                     }
                 }
             }
         });
 
-        Ok(Response::new(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))))
+        Ok(Response::new(Box::pin(
+            tokio_stream::wrappers::ReceiverStream::new(rx),
+        )))
     }
 }
 

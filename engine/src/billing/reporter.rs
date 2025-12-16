@@ -1,5 +1,5 @@
-use serde::Serialize;
 use reqwest::Client;
+use serde::Serialize;
 use std::time::SystemTime;
 use tracing::{error, info};
 
@@ -27,7 +27,13 @@ impl UsageReporter {
         }
     }
 
-    pub async fn report(&self, capsule_id: String, user_id: String, start: SystemTime, end: SystemTime) {
+    pub async fn report(
+        &self,
+        capsule_id: String,
+        user_id: String,
+        start: SystemTime,
+        end: SystemTime,
+    ) {
         let duration = match end.duration_since(start) {
             Ok(d) => d.as_secs_f64() / 3600.0, // hours
             Err(_) => return,
@@ -36,7 +42,7 @@ impl UsageReporter {
         if duration <= 0.0 {
             return;
         }
-        
+
         let req = ReportUsageRequest {
             capsule_id: capsule_id.clone(),
             user_id: user_id.clone(),
@@ -47,13 +53,20 @@ impl UsageReporter {
         };
 
         let url = format!("{}/api/v1/usage/report", self.coordinator_url);
-        
+
         match self.client.post(&url).json(&req).send().await {
             Ok(resp) => {
                 if !resp.status().is_success() {
-                    error!("Failed to report usage for capsule {}: status {}", capsule_id, resp.status());
+                    error!(
+                        "Failed to report usage for capsule {}: status {}",
+                        capsule_id,
+                        resp.status()
+                    );
                 } else {
-                    info!("Reported usage for capsule {}: {:.4} hours", capsule_id, duration);
+                    info!(
+                        "Reported usage for capsule {}: {:.4} hours",
+                        capsule_id, duration
+                    );
                 }
             }
             Err(e) => {

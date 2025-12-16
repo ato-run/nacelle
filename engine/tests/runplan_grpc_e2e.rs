@@ -22,7 +22,10 @@ use capsuled_engine::proto::onescluster::engine::v1::DeployRequest;
 use capsuled_engine::runtime::{ContainerRuntime, RuntimeConfig, RuntimeKind};
 use capsuled_engine::security::audit::AuditLogger;
 use capsuled_engine::wasm_host::AdepLogicHost;
-use capsuled_engine::{artifact::manager::{ArtifactConfig, ArtifactManager}, network::{service_registry::ServiceRegistry, tailscale::TailscaleManager}};
+use capsuled_engine::{
+    artifact::manager::{ArtifactConfig, ArtifactManager},
+    network::{service_registry::ServiceRegistry, tailscale::TailscaleManager},
+};
 use libadep_core::mapper::capsule_v1_toml_to_proto_run_plan;
 use tempfile::TempDir;
 use tokio::net::{UnixListener, UnixStream};
@@ -78,8 +81,7 @@ esac
         let audit_log = tmp.path().join("audit.log");
         let key_path = tmp.path().join("node_key.pem");
         let audit_logger = Arc::new(
-            AuditLogger::new(audit_log, key_path, "test-node".to_string())
-                .expect("audit logger"),
+            AuditLogger::new(audit_log, key_path, "test-node".to_string()).expect("audit logger"),
         );
 
         let gpu_detector = create_gpu_detector();
@@ -103,9 +105,8 @@ esac
         if !wasm_path.exists() {
             panic!("missing adep_logic.wasm at {}", wasm_path.display());
         }
-        let wasm_host = Arc::new(
-            AdepLogicHost::from_file(wasm_path.to_str().unwrap()).expect("wasm host"),
-        );
+        let wasm_host =
+            Arc::new(AdepLogicHost::from_file(wasm_path.to_str().unwrap()).expect("wasm host"));
 
         let tailscale_manager = Arc::new(TailscaleManager::start(None, None, None));
         let container_runtime = Arc::new(ContainerRuntime::new(
@@ -115,25 +116,25 @@ esac
             None,
         ));
 
-        let verifier = Arc::new(capsuled_engine::security::verifier::ManifestVerifier::new(None, false));
+        let verifier = Arc::new(capsuled_engine::security::verifier::ManifestVerifier::new(
+            None, false,
+        ));
 
-        let capsule_manager = Arc::new(
-            CapsuleManager::new(
-                audit_logger,
-                gpu_detector.clone(),
-                Some(service_registry.clone()),
-                None,
-                None,
-                None,
-                Some(artifact_manager.clone()),
-                None,
-                None,
-                verifier,
-                Some(runtime_config),
-                None,
-                None,
-            )
-        );
+        let capsule_manager = Arc::new(CapsuleManager::new(
+            audit_logger,
+            gpu_detector.clone(),
+            Some(service_registry.clone()),
+            None,
+            None,
+            None,
+            Some(artifact_manager.clone()),
+            None,
+            None,
+            verifier,
+            Some(runtime_config),
+            None,
+            None,
+        ));
 
         let engine_service = EngineService::new(
             capsule_manager,
@@ -236,14 +237,8 @@ async fn deploys_runplan_docker_with_ports_mounts_env() {
         .expect("deploy runplan")
         .into_inner();
 
-    assert_eq!(
-        response.capsule_id,
-        "capsule-runplan"
-    );
-    assert_eq!(
-        response.status,
-        "starting"
-    );
+    assert_eq!(response.capsule_id, "capsule-runplan");
+    assert_eq!(response.status, "starting");
 }
 
 #[tokio::test]
@@ -271,28 +266,26 @@ async fn deploys_legacy_adep_json_manifest() {
         .expect("deploy legacy adep_json")
         .into_inner();
 
-    assert_eq!(
-        response.capsule_id,
-        "capsule-legacy"
-    );
-    assert_eq!(
-        response.status,
-        "starting"
-    );
+    assert_eq!(response.capsule_id, "capsule-legacy");
+    assert_eq!(response.status, "starting");
 }
 
 #[tokio::test]
 async fn deploys_legacy_toml_content_manifest() {
     let mut harness = Harness::new().await;
 
+    // NOTE: This is a "legacy" request shape (TomlContent), not a legacy manifest schema.
+    // The engine expects capsule_v1 TOML for TomlContent.
     let adep_toml = r#"
-[capsule]
+schema_version = "1.0"
 name = "capsule-toml"
 version = "0.1.0"
+type = "app"
 
-[resources]
-cpu_cores = 1
-memory = "128MB"
+[execution]
+runtime = "docker"
+entrypoint = "ghcr.io/example/hello:latest"
+port = 8080
 "#;
 
     let req = DeployRequest {
@@ -310,14 +303,8 @@ memory = "128MB"
         .expect("deploy legacy toml_content")
         .into_inner();
 
-    assert_eq!(
-        response.capsule_id,
-        "capsule-toml"
-    );
-    assert_eq!(
-        response.status,
-        "starting"
-    );
+    assert_eq!(response.capsule_id, "capsule-toml");
+    assert_eq!(response.status, "starting");
 }
 
 #[tokio::test]
@@ -352,14 +339,8 @@ port = 8080
         .expect("deploy canonical capsule_v1 toml_content")
         .into_inner();
 
-    assert_eq!(
-        response.capsule_id,
-        "hello-docker"
-    );
-    assert_eq!(
-        response.status,
-        "starting"
-    );
+    assert_eq!(response.capsule_id, "hello-docker");
+    assert_eq!(response.status, "starting");
 }
 
 #[tokio::test]
@@ -385,14 +366,8 @@ async fn deploys_runplan_from_libadep_proto() {
         .expect("deploy runplan generated by libadep")
         .into_inner();
 
-    assert_eq!(
-        response.capsule_id,
-        "hello-docker"
-    );
-    assert_eq!(
-        response.status,
-        "starting"
-    );
+    assert_eq!(response.capsule_id, "hello-docker");
+    assert_eq!(response.status, "starting");
 }
 
 #[tokio::test]
@@ -421,12 +396,6 @@ async fn deploys_libadep_generated_proto_runplan() {
         .expect("deploy libadep-generated proto runplan")
         .into_inner();
 
-    assert_eq!(
-        response.capsule_id,
-        "libadep-proto-test"
-    );
-    assert_eq!(
-        response.status,
-        "starting"
-    );
+    assert_eq!(response.capsule_id, "libadep-proto-test");
+    assert_eq!(response.status, "starting");
 }

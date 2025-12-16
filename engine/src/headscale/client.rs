@@ -27,10 +27,7 @@ impl HeadscaleClient {
 
     /// Check if Tailscale CLI is available
     pub async fn check_installation(&self) -> Result<(), HeadscaleError> {
-        let output = Command::new("tailscale")
-            .arg("version")
-            .output()
-            .await?;
+        let output = Command::new("tailscale").arg("version").output().await?;
 
         if !output.status.success() {
             return Err(HeadscaleError::NotInstalled);
@@ -59,8 +56,7 @@ impl HeadscaleClient {
 
         // Add tags
         if !self.config.tags.is_empty() {
-            cmd.arg("--advertise-tags")
-            .arg(self.config.tags.join(","));
+            cmd.arg("--advertise-tags").arg(self.config.tags.join(","));
         }
 
         info!("Connecting to Headscale at {}", self.config.server_url);
@@ -89,36 +85,41 @@ impl HeadscaleClient {
             .await?;
 
         if !output.status.success() {
-            return Err(HeadscaleError::CommandFailed(
-                std::io::Error::other("status command failed")
-            ));
+            return Err(HeadscaleError::CommandFailed(std::io::Error::other(
+                "status command failed",
+            )));
         }
 
-        let status: TailscaleStatus = serde_json::from_slice(&output.stdout)
-            .map_err(|e| HeadscaleError::CommandFailed(
-                std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-            ))?;
+        let status: TailscaleStatus = serde_json::from_slice(&output.stdout).map_err(|e| {
+            HeadscaleError::CommandFailed(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        })?;
 
         Ok(TailnetInfo {
-            ip: status.self_node.tailscale_ips.first().cloned().unwrap_or_default(),
+            ip: status
+                .self_node
+                .tailscale_ips
+                .first()
+                .cloned()
+                .unwrap_or_default(),
             hostname: status.self_node.host_name,
             online: status.self_node.online,
-            peers: status.peer.into_values().map(|p| PeerInfo {
-                ip: p.tailscale_ips.first().cloned().unwrap_or_default(),
-                hostname: p.host_name,
-                online: p.online,
-                tags: p.tags,
-            }).collect(),
+            peers: status
+                .peer
+                .into_values()
+                .map(|p| PeerInfo {
+                    ip: p.tailscale_ips.first().cloned().unwrap_or_default(),
+                    hostname: p.host_name,
+                    online: p.online,
+                    tags: p.tags,
+                })
+                .collect(),
         })
     }
 
     /// Disconnect from Tailnet
     #[allow(dead_code)]
     pub async fn disconnect(&self) -> Result<(), HeadscaleError> {
-        let output = Command::new("tailscale")
-            .arg("down")
-            .output()
-            .await?;
+        let output = Command::new("tailscale").arg("down").output().await?;
 
         if !output.status.success() {
             warn!("Failed to disconnect cleanly");

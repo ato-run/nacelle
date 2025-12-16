@@ -1,6 +1,6 @@
+use libadep_core::capsule_v1::{CapsuleManifestV1, EgressIdType};
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
-use libadep_core::capsule_v1::{CapsuleManifestV1, EgressIdType};
 
 pub const META_KEY_EGRESS_ALLOWLIST: &str = "gumball.egress_allowlist";
 pub const ENV_KEY_EGRESS_TOKEN: &str = "GUMBALL_EGRESS_TOKEN";
@@ -24,13 +24,7 @@ impl EgressPolicyRegistry {
 
     pub fn register(&self, workload_id: &str, token: String, allowlist: Vec<String>) {
         let mut policies = self.policies.write().expect("poisoned policies lock");
-        policies.insert(
-            workload_id.to_string(),
-            Policy {
-                token,
-                allowlist,
-            },
-        );
+        policies.insert(workload_id.to_string(), Policy { token, allowlist });
     }
 
     pub fn unregister(&self, workload_id: &str) {
@@ -49,7 +43,7 @@ impl EgressPolicyRegistry {
 }
 
 /// Generate IPTables rules for L3 Egress Control based on Capsule Manifest
-/// 
+///
 /// Policy:
 /// - Default DROP (Fail-Closed)
 /// - Allow Loopback
@@ -63,15 +57,12 @@ pub fn generate_fw_rules(manifest: &CapsuleManifestV1) -> Vec<String> {
         "iptables -P OUTPUT DROP".to_string(),
         "iptables -P INPUT DROP".to_string(),
         "iptables -P FORWARD DROP".to_string(),
-
         // 2. Allow Loopback
         "iptables -A OUTPUT -o lo -j ACCEPT".to_string(),
         "iptables -A INPUT -i lo -j ACCEPT".to_string(),
-
         // 3. Allow Established connections
         "iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT".to_string(),
         "iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT".to_string(),
-
         // 4. Critical Services (DNS)
         "iptables -A OUTPUT -p udp --dport 53 -j ACCEPT".to_string(),
         "iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT".to_string(),
@@ -95,7 +86,7 @@ pub fn generate_fw_rules(manifest: &CapsuleManifestV1) -> Vec<String> {
             }
         }
     }
-    
+
     // 6. Debug / Logging (Optional - log dropped packets)
     // rules.push("iptables -A OUTPUT -j LOG --log-prefix 'Dropped Output: '".to_string());
 
@@ -104,7 +95,8 @@ pub fn generate_fw_rules(manifest: &CapsuleManifestV1) -> Vec<String> {
 
 fn is_safe_ip_string(s: &str) -> bool {
     // Only allow digits, dots, slash, colon (IPv6). No spaces or shell metas.
-    s.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '/' || c == ':')
+    s.chars()
+        .all(|c| c.is_ascii_digit() || c == '.' || c == '/' || c == ':')
 }
 
 pub fn parse_allowlist_csv(value: &str) -> Vec<String> {
@@ -177,8 +169,14 @@ mod tests {
 
     #[test]
     fn normalize_allowlist_entry_accepts_domains_and_urls() {
-        assert_eq!(normalize_allowlist_entry("example.com"), Some("example.com".into()));
-        assert_eq!(normalize_allowlist_entry("example.com."), Some("example.com".into()));
+        assert_eq!(
+            normalize_allowlist_entry("example.com"),
+            Some("example.com".into())
+        );
+        assert_eq!(
+            normalize_allowlist_entry("example.com."),
+            Some("example.com".into())
+        );
         assert_eq!(
             normalize_allowlist_entry("https://api.example.com/v1"),
             Some("api.example.com".into())
@@ -199,8 +197,14 @@ mod tests {
             normalize_allowlist_entry("http://127.0.0.1:8080"),
             Some("127.0.0.1".into())
         );
-        assert_eq!(normalize_allowlist_entry("*.example.com"), Some("example.com".into()));
-        assert_eq!(normalize_allowlist_entry(".example.com"), Some("example.com".into()));
+        assert_eq!(
+            normalize_allowlist_entry("*.example.com"),
+            Some("example.com".into())
+        );
+        assert_eq!(
+            normalize_allowlist_entry(".example.com"),
+            Some("example.com".into())
+        );
         assert_eq!(normalize_allowlist_entry("*"), None);
         assert_eq!(normalize_allowlist_entry(""), None);
     }
@@ -210,17 +214,16 @@ mod tests {
         let v = parse_allowlist_csv(
             " https://api.example.com/v1,example.com,api.example.com:443, ,*.example.com ",
         );
-        assert_eq!(v, vec!["api.example.com".to_string(), "example.com".to_string()]);
+        assert_eq!(
+            v,
+            vec!["api.example.com".to_string(), "example.com".to_string()]
+        );
     }
 
     #[test]
     fn registry_authorizes_by_username_and_token() {
         let reg = EgressPolicyRegistry::default();
-        reg.register(
-            "w1",
-            "t1".to_string(),
-            vec!["example.com".to_string()],
-        );
+        reg.register("w1", "t1".to_string(), vec!["example.com".to_string()]);
 
         assert_eq!(
             reg.allowlist_for_basic_auth("w1", "t1"),
@@ -229,12 +232,13 @@ mod tests {
         assert_eq!(reg.allowlist_for_basic_auth("w1", "wrong"), None);
         assert_eq!(reg.allowlist_for_basic_auth("missing", "t1"), None);
     }
-    
+
     #[test]
     fn test_generate_fw_rules() {
-        use libadep_core::capsule_v1::{NetworkConfig, EgressIdRule};
+        use libadep_core::capsule_v1::{EgressIdRule, NetworkConfig};
 
-        let mut manifest = CapsuleManifestV1::from_toml(r#"
+        let mut manifest = CapsuleManifestV1::from_toml(
+            r#"
 schema_version = "1.0"
 name = "test-cap"
 version = "0.0.1"
@@ -242,23 +246,34 @@ type = "tool"
 [execution]
 runtime = "native"
 entrypoint = "echo"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         // 1. Empty Network -> Default Drop
         let rules = generate_fw_rules(&manifest);
         assert!(rules.len() >= 6); // Basics
         assert!(rules.iter().any(|r| r.contains("-P OUTPUT DROP")));
-        
+
         // 2. With Allowlist
         manifest.network = Some(NetworkConfig {
             egress_allow: vec![],
             egress_id_allow: vec![
-                EgressIdRule { rule_type: EgressIdType::Ip, value: "1.1.1.1".to_string() },
-                EgressIdRule { rule_type: EgressIdType::Cidr, value: "10.0.0.0/8".to_string() },
-                EgressIdRule { rule_type: EgressIdType::Ip, value: "bad; rm -rf /".to_string() }, // Should be filtered
+                EgressIdRule {
+                    rule_type: EgressIdType::Ip,
+                    value: "1.1.1.1".to_string(),
+                },
+                EgressIdRule {
+                    rule_type: EgressIdType::Cidr,
+                    value: "10.0.0.0/8".to_string(),
+                },
+                EgressIdRule {
+                    rule_type: EgressIdType::Ip,
+                    value: "bad; rm -rf /".to_string(),
+                }, // Should be filtered
             ],
         });
-        
+
         let rules = generate_fw_rules(&manifest);
         assert!(rules.iter().any(|r| r.contains("-d 1.1.1.1")));
         assert!(rules.iter().any(|r| r.contains("-d 10.0.0.0/8")));

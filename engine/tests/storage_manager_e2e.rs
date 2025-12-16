@@ -43,8 +43,7 @@ impl Default for TestStorageConfig {
 /// Helper to check prerequisites
 mod prereqs {
     pub fn is_root() -> bool {
-        std::env::var("USER").unwrap_or_default() == "root" 
-            || std::env::var("SUDO_USER").is_ok()
+        std::env::var("USER").unwrap_or_default() == "root" || std::env::var("SUDO_USER").is_ok()
     }
 
     pub fn has_lvm_tools() -> bool {
@@ -92,17 +91,9 @@ mod prereqs {
 #[test]
 fn test_storage_config_defaults() {
     let config = TestStorageConfig::default();
-    assert_eq!(
-        config.default_vg,
-        "test_vg"
-    );
-    assert_eq!(
-        config.default_size_bytes,
-        100 * 1024 * 1024
-    );
-    assert!(
-        !config.enable_encryption
-    ); // Default off for safety
+    assert_eq!(config.default_vg, "test_vg");
+    assert_eq!(config.default_size_bytes, 100 * 1024 * 1024);
+    assert!(!config.enable_encryption); // Default off for safety
 }
 
 #[test]
@@ -119,12 +110,7 @@ fn test_capsule_id_sanitization() {
 
     for (input, expected) in test_cases {
         let sanitized = sanitize_lv_name(input);
-        assert_eq!(
-            sanitized,
-            expected,
-            "Failed for input: {}",
-            input
-        );
+        assert_eq!(sanitized, expected, "Failed for input: {}", input);
     }
 }
 
@@ -132,9 +118,15 @@ fn test_capsule_id_sanitization() {
 fn sanitize_lv_name(capsule_id: &str) -> String {
     let sanitized: String = capsule_id
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
-    
+
     if sanitized.starts_with('-') {
         format!("lv_{}", sanitized)
     } else {
@@ -161,9 +153,9 @@ fn test_storage_manager_provision_unencrypted() {
     }
 
     println!("Starting unencrypted storage test...");
-    
-    use capsuled_engine::storage::{StorageManager, StorageConfig};
-    
+
+    use capsuled_engine::storage::{StorageConfig, StorageManager};
+
     let config = StorageConfig {
         enabled: true,
         default_vg: "test_vg".to_string(),
@@ -178,40 +170,39 @@ fn test_storage_manager_provision_unencrypted() {
 
     // 1. Provision
     println!("Provisioning storage for {}", capsule_id);
-    let mut storage = manager.provision_capsule_storage(capsule_id, None, Some(false))
+    let mut storage = manager
+        .provision_capsule_storage(capsule_id, None, Some(false))
         .expect("Provision failed");
-    
+
     println!("Provisioned: {:?}", storage);
-    
+
     // 2. Mount
     println!("Mounting volume...");
     manager.mount_volume(&mut storage).expect("Mount failed");
-    
+
     let mount_path = storage.mount_point.clone().expect("Mount point missing");
-    assert!(
-        mount_path.exists()
-    );
+    assert!(mount_path.exists());
 
     // 3. Write Verification
     let test_file = mount_path.join("test.txt");
     std::fs::write(&test_file, "hello storage world").expect("Failed to write to volume");
-    assert!(
-        test_file.exists()
-    );
+    assert!(test_file.exists());
     println!("File written successfully");
 
     // 4. Unmount
     println!("Unmounting...");
-    manager.unmount_volume(capsule_id, &storage.lv_name).expect("Unmount failed");
+    manager
+        .unmount_volume(capsule_id, &storage.lv_name)
+        .expect("Unmount failed");
     // Mount point directory should be removed by unmount_volume
-    assert!(
-        !mount_path.exists()
-    ); 
+    assert!(!mount_path.exists());
 
     // 5. Cleanup
     println!("Cleaning up...");
-    manager.cleanup_capsule_storage(capsule_id).expect("Cleanup failed");
-    
+    manager
+        .cleanup_capsule_storage(capsule_id)
+        .expect("Cleanup failed");
+
     println!("✅ Provision unencrypted storage test passed");
 }
 
@@ -230,7 +221,7 @@ fn test_storage_manager_provision_encrypted() {
     // 4. Verify LUKS encryption was applied
     // 5. Verify mapper device exists
     // 6. Cleanup
-    
+
     println!("✅ Provision encrypted storage test would run here");
 }
 
@@ -247,7 +238,7 @@ fn test_storage_manager_cleanup_on_failure() {
     // 2. Provision storage (should succeed)
     // 3. Manually corrupt something or use mock to simulate failure
     // 4. Verify cleanup still works (with warnings logged)
-    
+
     println!("✅ Cleanup on failure test would run here");
 }
 
@@ -265,7 +256,7 @@ fn test_storage_manager_concurrent_operations() {
     // 3. Verify all volumes exist
     // 4. Cleanup all
     // 5. Verify all deleted
-    
+
     println!("✅ Concurrent operations test would run here");
 }
 
@@ -281,6 +272,6 @@ fn test_storage_manager_idempotent_cleanup() {
     // 1. Provision storage
     // 2. Cleanup once
     // 3. Cleanup again - should not error
-    
+
     println!("✅ Idempotent cleanup test would run here");
 }

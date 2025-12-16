@@ -1,7 +1,7 @@
-use std::process::Command;
-use serde_json::Value;
-use super::gpu_detector::{GpuDetector, GpuDetectionError};
+use super::gpu_detector::{GpuDetectionError, GpuDetector};
 use super::hardware_report::{GpuInfo, RigHardwareReport};
+use serde_json::Value;
+use std::process::Command;
 
 #[derive(Debug)]
 pub struct MacGpuDetector;
@@ -12,7 +12,9 @@ impl MacGpuDetector {
         if cfg!(target_os = "macos") {
             Ok(Self)
         } else {
-            Err(GpuDetectionError::SystemInfoFailed("Not running on macOS".to_string()))
+            Err(GpuDetectionError::SystemInfoFailed(
+                "Not running on macOS".to_string(),
+            ))
         }
     }
 
@@ -21,17 +23,23 @@ impl MacGpuDetector {
             .arg("-n")
             .arg("hw.memsize")
             .output()
-            .map_err(|e| GpuDetectionError::SystemInfoFailed(format!("Failed to execute sysctl: {}", e)))?;
+            .map_err(|e| {
+                GpuDetectionError::SystemInfoFailed(format!("Failed to execute sysctl: {}", e))
+            })?;
 
         if !output.status.success() {
-            return Err(GpuDetectionError::SystemInfoFailed("sysctl failed".to_string()));
+            return Err(GpuDetectionError::SystemInfoFailed(
+                "sysctl failed".to_string(),
+            ));
         }
 
-        let output_str = String::from_utf8(output.stdout)
-            .map_err(|e| GpuDetectionError::SystemInfoFailed(format!("Invalid UTF-8 in sysctl output: {}", e)))?;
+        let output_str = String::from_utf8(output.stdout).map_err(|e| {
+            GpuDetectionError::SystemInfoFailed(format!("Invalid UTF-8 in sysctl output: {}", e))
+        })?;
 
-        output_str.trim().parse::<u64>()
-            .map_err(|e| GpuDetectionError::SystemInfoFailed(format!("Failed to parse memory size: {}", e)))
+        output_str.trim().parse::<u64>().map_err(|e| {
+            GpuDetectionError::SystemInfoFailed(format!("Failed to parse memory size: {}", e))
+        })
     }
 
     fn get_serial_number() -> Option<String> {
@@ -61,12 +69,12 @@ impl MacGpuDetector {
             // Hash serial + model for deterministic UUID
             use std::collections::hash_map::DefaultHasher;
             use std::hash::{Hash, Hasher};
-            
+
             let mut hasher = DefaultHasher::new();
             serial.hash(&mut hasher);
             model.hash(&mut hasher);
             let hash = hasher.finish();
-            
+
             format!("GPU-{:016X}", hash)
         } else {
             // Fallback to model-based UUID
@@ -77,9 +85,7 @@ impl MacGpuDetector {
     fn estimate_vram_used_bytes(total_memory: u64) -> u64 {
         // For unified memory systems, estimate usage based on vm_stat
         // Parse vm_stat output to get memory statistics
-        let output = Command::new("vm_stat")
-            .output()
-            .ok();
+        let output = Command::new("vm_stat").output().ok();
 
         if let Some(output) = output {
             if output.status.success() {
@@ -87,11 +93,11 @@ impl MacGpuDetector {
                     // Parse page size and calculate used memory
                     // vm_stat shows statistics in pages, typically 4096 bytes
                     let page_size = 4096u64; // Default macOS page size
-                    
+
                     // Look for "Pages active:" and "Pages wired down:"
                     let mut active_pages = 0u64;
                     let mut wired_pages = 0u64;
-                    
+
                     for line in output_str.lines() {
                         if line.contains("Pages active:") {
                             if let Some(num) = line.split_whitespace().nth(2) {
@@ -103,12 +109,12 @@ impl MacGpuDetector {
                             }
                         }
                     }
-                    
+
                     // Estimate used memory as active + wired pages
                     // Apply a conservative 70% multiplier to estimate GPU portion
                     let used_memory = (active_pages + wired_pages) * page_size;
                     let estimated_gpu_used = (used_memory as f64 * 0.3) as u64; // 30% assumed for GPU
-                    
+
                     return estimated_gpu_used;
                 }
             }
@@ -136,34 +142,50 @@ impl GpuDetector for MacGpuDetector {
         let output = Command::new("system_profiler")
             .args(["SPDisplaysDataType", "-json"])
             .output()
-            .map_err(|e| GpuDetectionError::SystemInfoFailed(format!("Failed to execute system_profiler: {}", e)))?;
+            .map_err(|e| {
+                GpuDetectionError::SystemInfoFailed(format!(
+                    "Failed to execute system_profiler: {}",
+                    e
+                ))
+            })?;
 
         if !output.status.success() {
-            return Err(GpuDetectionError::SystemInfoFailed("system_profiler failed".to_string()));
+            return Err(GpuDetectionError::SystemInfoFailed(
+                "system_profiler failed".to_string(),
+            ));
         }
 
-        let output_str = String::from_utf8(output.stdout)
-            .map_err(|e| GpuDetectionError::SystemInfoFailed(format!("Invalid UTF-8 in system_profiler output: {}", e)))?;
+        let output_str = String::from_utf8(output.stdout).map_err(|e| {
+            GpuDetectionError::SystemInfoFailed(format!(
+                "Invalid UTF-8 in system_profiler output: {}",
+                e
+            ))
+        })?;
 
-        let v: Value = serde_json::from_str(&output_str)
-            .map_err(|e| GpuDetectionError::SystemInfoFailed(format!("Failed to parse JSON: {}", e)))?;
+        let v: Value = serde_json::from_str(&output_str).map_err(|e| {
+            GpuDetectionError::SystemInfoFailed(format!("Failed to parse JSON: {}", e))
+        })?;
 
         // Parse JSON: { "SPDisplaysDataType": [ { "sppci_model": "Apple M1", ... } ] }
         if let Some(items) = v.get("SPDisplaysDataType").and_then(|i| i.as_array()) {
             // We assume the first GPU is the main one on Apple Silicon
             if let Some(item) = items.first() {
-                let model = item.get("sppci_model")
+                let model = item
+                    .get("sppci_model")
                     .and_then(|s| s.as_str())
                     .unwrap_or("Unknown Apple GPU")
                     .to_string();
 
                 // Check if it's Apple Silicon
-                let is_apple_silicon = model.contains("Apple") || model.contains("M1") || model.contains("M2") || model.contains("M3");
+                let is_apple_silicon = model.contains("Apple")
+                    || model.contains("M1")
+                    || model.contains("M2")
+                    || model.contains("M3");
 
                 if is_apple_silicon {
                     // Generate a stable UUID based on serial number + model
                     let uuid = Self::generate_stable_uuid(&model);
-                    
+
                     // Estimate VRAM usage for unified memory
                     let vram_used = Self::estimate_vram_used_bytes(total_memory);
 
@@ -171,7 +193,7 @@ impl GpuDetector for MacGpuDetector {
                         index: 0,
                         device_name: model,
                         vram_total_bytes: total_memory, // Unified memory
-                        cuda_compute_capability: None, // Not CUDA
+                        cuda_compute_capability: None,  // Not CUDA
                         vram_used_bytes: Some(vram_used), // Estimated usage
                         uuid,
                     });

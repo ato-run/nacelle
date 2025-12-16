@@ -1,8 +1,8 @@
 use axum::{
-    extract::{State, Json, Path},
-    http::{Method, HeaderValue},
+    extract::{Json, Path, State},
+    http::{HeaderValue, Method},
     response::{IntoResponse, Sse},
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Router,
 };
 use futures::stream::Stream;
@@ -10,14 +10,17 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::auth::AuthManager;
 use crate::capsule_manager::CapsuleManager;
 use crate::hardware::GpuDetector;
-use crate::network::service_registry::ServiceRegistry;
 use crate::manifest::{Manifest, Resource};
-use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, RuntimeType, CapsuleRouting, CapsuleType};
+use crate::network::service_registry::ServiceRegistry;
+use libadep_core::capsule_v1::{
+    CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleRouting, CapsuleType,
+    RuntimeType,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -71,7 +74,6 @@ pub async fn start_api_server(
     gpu_detector: Arc<dyn GpuDetector>,
     auth_manager: Arc<AuthManager>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    
     let state = AppState {
         capsule_manager,
         service_registry,
@@ -86,7 +88,10 @@ pub async fn start_api_server(
             "https://app.gumball.net".parse::<HeaderValue>().unwrap(),
         ])
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
-        .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::AUTHORIZATION]);
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+        ]);
 
     let app = Router::new()
         .route("/v1/status", get(status_handler))
@@ -111,34 +116,40 @@ pub async fn start_api_server(
 async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
     info!("Handling status request - returning local_url");
     let gpu_report = state.gpu_detector.detect_gpus().ok();
-    
+
     let gpu_info = gpu_report.map(|report| GpuInfo {
         count: report.gpus.len(),
         total_vram_gb: report.total_vram_gb(),
         names: report.gpus.iter().map(|g| g.device_name.clone()).collect(),
     });
 
-    let capsules = state.capsule_manager.list_capsules().unwrap_or_default()
+    let capsules = state
+        .capsule_manager
+        .list_capsules()
+        .unwrap_or_default()
         .into_iter()
         .map(|c| {
-            let service = state.service_registry
+            let service = state
+                .service_registry
                 .get_services()
                 .iter()
                 .find(|s| s.name == c.id)
                 .cloned();
 
             let url = c.remote_url.clone().or_else(|| {
-                service.as_ref().map(|s| format!("http://localhost:{}", s.port))
+                service
+                    .as_ref()
+                    .map(|s| format!("http://localhost:{}", s.port))
             });
             let port = service.as_ref().map(|s| s.port);
-            
+
             let uptime = c.started_at.map(|start| {
                 std::time::SystemTime::now()
                     .duration_since(start)
                     .unwrap_or_default()
                     .as_secs()
             });
-            
+
             CapsuleInfo {
                 id: c.id,
                 status: c.status.to_string(),
@@ -164,11 +175,13 @@ async fn apply_handler(
     // 1. Parse HCL
     let manifest_hcl: Manifest = match hcl::from_str(&payload.hcl) {
         Ok(m) => m,
-        Err(e) => return Json(ApplyResponse {
-            capsule_id: "".to_string(),
-            status: format!("HCL Parse Error: {}", e),
-            local_url: "".to_string(),
-        }),
+        Err(e) => {
+            return Json(ApplyResponse {
+                capsule_id: "".to_string(),
+                status: format!("HCL Parse Error: {}", e),
+                local_url: "".to_string(),
+            })
+        }
     };
 
     // 2. Convert to CapsuleManifestV1 (Best Effort)
@@ -185,37 +198,39 @@ async fn apply_handler(
                 });
             }
         }
-        None => return Json(ApplyResponse {
-            capsule_id: "".to_string(),
-            status: "No container resource found in HCL".to_string(),
-            local_url: "".to_string(),
-        }),
+        None => {
+            return Json(ApplyResponse {
+                capsule_id: "".to_string(),
+                status: "No container resource found in HCL".to_string(),
+                local_url: "".to_string(),
+            })
+        }
     };
 
     // Check for compute resources
-    let compute_res = manifest_hcl.resource.get("compute")
+    let compute_res = manifest_hcl
+        .resource
+        .get("compute")
         .and_then(|c| c.values().next())
         .and_then(|r| match r {
             Resource::Compute(c) => Some(c),
             _ => None,
         });
 
-    let vram_string = compute_res
-        .and_then(|c| c.vram_min.as_ref())
-        .cloned();
+    let vram_string = compute_res.and_then(|c| c.vram_min.as_ref()).cloned();
 
     // Map Native vs Docker
     let (runtime_type, entrypoint) = if let Some(native_cfg) = &container_config.native {
-         (RuntimeType::Native, native_cfg.runtime.clone())
-         // TODO: What about native_cfg.args?
-         // Use the shell_words join or assume entrypoint has it?
-         // In runplan we assume binary_path has it. 
-         // Here HCL has `runtime` and `args` (Vec<String>).
-         // We should join them: "runtime arg1 arg2"
-         // let full_cmd = format!("{} {}", native_cfg.runtime, native_cfg.args.join(" "));
-         // (RuntimeType::Native, full_cmd)
+        (RuntimeType::Native, native_cfg.runtime.clone())
+        // TODO: What about native_cfg.args?
+        // Use the shell_words join or assume entrypoint has it?
+        // In runplan we assume binary_path has it.
+        // Here HCL has `runtime` and `args` (Vec<String>).
+        // We should join them: "runtime arg1 arg2"
+        // let full_cmd = format!("{} {}", native_cfg.runtime, native_cfg.args.join(" "));
+        // (RuntimeType::Native, full_cmd)
     } else {
-         (RuntimeType::Docker, container_config.image.clone())
+        (RuntimeType::Docker, container_config.image.clone())
     };
 
     let manifest = CapsuleManifestV1 {
@@ -238,30 +253,37 @@ async fn apply_handler(
             port: None, // HCL doesn't seem to have explicit port field in container block?
             health_check: None,
             startup_timeout: 60,
-            env: container_config.env.clone()
+            env: container_config
+                .env
+                .clone()
                 .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
                 .unwrap_or_default(),
             signals: Default::default(),
         },
         storage: Default::default(),
-            routing: CapsuleRouting::default(),
-            network: None,
-            model: None,
+        routing: CapsuleRouting::default(),
+        network: None,
+        model: None,
     };
 
     let adep_json = serde_json::to_vec(&manifest).unwrap_or_default();
 
     // 3. Deploy
-    match state.capsule_manager.deploy_capsule(
-        capsule_id.clone(),
-        adep_json,
-        container_config.image.clone(),
-        "".to_string(),
-        None,
-        None,
-    ).await {
+    match state
+        .capsule_manager
+        .deploy_capsule(
+            capsule_id.clone(),
+            adep_json,
+            container_config.image.clone(),
+            "".to_string(),
+            None,
+            None,
+        )
+        .await
+    {
         Ok(status) => {
-             let url = state.service_registry
+            let url = state
+                .service_registry
                 .get_services()
                 .iter()
                 .find(|s| s.name == capsule_id)
@@ -290,7 +312,9 @@ async fn destroy_handler(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match state.capsule_manager.stop_capsule(&id).await {
-        Ok(scrubbed) => Json(serde_json::json!({ "status": "destroyed", "id": id, "vram_scrubbed": scrubbed })),
+        Ok(scrubbed) => {
+            Json(serde_json::json!({ "status": "destroyed", "id": id, "vram_scrubbed": scrubbed }))
+        }
         Err(e) => Json(serde_json::json!({ "status": "error", "message": e.to_string() })),
     }
 }
@@ -300,11 +324,11 @@ async fn logs_handler(
     Path(id): Path<String>,
 ) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, axum::Error>>> {
     let log_path = state.capsule_manager.get_capsule_log_path(&id);
-    
+
     let stream = async_stream::stream! {
         if let Some(path_str) = log_path {
             let path = std::path::PathBuf::from(path_str);
-            
+
             // Wait for file
             let mut file = None;
             for _ in 0..20 {

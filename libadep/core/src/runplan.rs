@@ -118,14 +118,24 @@ impl CapsuleManifestV1 {
                     for vol in &self.storage.volumes {
                         let name = vol.name.trim();
                         let mount_path = vol.mount_path.trim();
-                        if name.is_empty() || mount_path.is_empty() || !mount_path.starts_with('/') || mount_path.contains("..") {
+                        if name.is_empty()
+                            || mount_path.is_empty()
+                            || !mount_path.starts_with('/')
+                            || mount_path.contains("..")
+                        {
                             return Err(CapsuleError::ValidationError(
-                                "invalid storage volume (requires name and absolute mount_path)".to_string(),
+                                "invalid storage volume (requires name and absolute mount_path)"
+                                    .to_string(),
                             ));
                         }
 
                         mounts.push(Mount {
-                            source: format!("{}/{}/{}", base.trim_end_matches('/'), self.name, name),
+                            source: format!(
+                                "{}/{}/{}",
+                                base.trim_end_matches('/'),
+                                self.name,
+                                name
+                            ),
                             target: mount_path.to_string(),
                             readonly: vol.read_only,
                         });
@@ -133,15 +143,15 @@ impl CapsuleManifestV1 {
                 }
 
                 RunPlanRuntime::Docker(DockerRuntime {
-                image: self.execution.entrypoint.clone(),
-                digest: None,
-                command: Vec::new(),
-                env: env.clone(),
-                working_dir: None,
-                user: None,
-                ports: ports.clone(),
-                mounts,
-            })
+                    image: self.execution.entrypoint.clone(),
+                    digest: None,
+                    command: Vec::new(),
+                    env: env.clone(),
+                    working_dir: None,
+                    user: None,
+                    ports: ports.clone(),
+                    mounts,
+                })
             }
             RuntimeType::Native => RunPlanRuntime::Native(NativeRuntime {
                 binary_path: self.execution.entrypoint.clone(),
@@ -180,14 +190,13 @@ fn ordered_env(env: &HashMap<String, String>) -> BTreeMap<String, String> {
 }
 
 fn port_list(port: Option<u16>) -> Vec<Port> {
-    port
-        .map(|p| Port {
-            container_port: p as u32,
-            host_port: None,
-            protocol: Some("tcp".to_string()),
-        })
-        .into_iter()
-        .collect()
+    port.map(|p| Port {
+        container_port: p as u32,
+        host_port: None,
+        protocol: Some("tcp".to_string()),
+    })
+    .into_iter()
+    .collect()
 }
 
 #[cfg(test)]

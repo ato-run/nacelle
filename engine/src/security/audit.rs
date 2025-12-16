@@ -161,7 +161,7 @@ impl AuditLogger {
     }
 
     /// Log an event with optional capsule_id and persist to database
-    /// 
+    ///
     /// This method is designed for fast cold-start performance:
     /// - Computes hash synchronously (fast, ~microseconds)
     /// - DB write uses spawn_blocking to avoid blocking the runtime
@@ -205,8 +205,13 @@ impl AuditLogger {
 
     /// Persist event to SQLite database
     fn persist_event(&self, event: &AuditEvent) -> Result<()> {
-        let db = self.db.as_ref().ok_or_else(|| anyhow!("Database not initialized"))?;
-        let conn = db.lock().map_err(|e| anyhow!("Database lock error: {}", e))?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not initialized"))?;
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow!("Database lock error: {}", e))?;
 
         conn.execute(
             r#"
@@ -233,8 +238,13 @@ impl AuditLogger {
     /// Get events for a specific date (for daily signing)
     #[allow(dead_code)]
     pub fn get_events_for_date(&self, date: &str) -> Result<Vec<(i64, String)>> {
-        let db = self.db.as_ref().ok_or_else(|| anyhow!("Database not initialized"))?;
-        let conn = db.lock().map_err(|e| anyhow!("Database lock error: {}", e))?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not initialized"))?;
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow!("Database lock error: {}", e))?;
 
         // Calculate timestamp range for the date (UTC)
         let start_ts = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
@@ -313,8 +323,13 @@ impl AuditLogger {
         let hashes: Vec<String> = events.iter().map(|(_, h)| h.clone()).collect();
         let merkle_root = Self::compute_merkle_root(&hashes);
 
-        let db = self.db.as_ref().ok_or_else(|| anyhow!("Database not initialized"))?;
-        let conn = db.lock().map_err(|e| anyhow!("Database lock error: {}", e))?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not initialized"))?;
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow!("Database lock error: {}", e))?;
 
         let first_id = events.first().map(|(id, _)| *id);
         let last_id = events.last().map(|(id, _)| *id);
@@ -325,13 +340,7 @@ impl AuditLogger {
                 (date, events_count, first_event_id, last_event_id, merkle_root)
             VALUES (?1, ?2, ?3, ?4, ?5)
             "#,
-            params![
-                date,
-                events.len() as i64,
-                first_id,
-                last_id,
-                merkle_root,
-            ],
+            params![date, events.len() as i64, first_id, last_id, merkle_root,],
         )
         .map_err(|e| anyhow!("Failed to create daily batch: {}", e))?;
 
@@ -339,7 +348,7 @@ impl AuditLogger {
     }
 
     /// Sign a daily audit batch using Ed25519 (RFC 9421 compliance)
-    /// 
+    ///
     /// This method:
     /// 1. Creates a batch if not exists
     /// 2. Signs the Merkle root with the provided signer
@@ -353,18 +362,24 @@ impl AuditLogger {
         let merkle_root = self.create_daily_batch(date)?;
 
         // Sign the Merkle root bytes
-        let merkle_bytes = hex::decode(&merkle_root)
-            .map_err(|e| anyhow!("Invalid merkle root hex: {}", e))?;
-        
-        let signature = signer.sign(&merkle_bytes)
+        let merkle_bytes =
+            hex::decode(&merkle_root).map_err(|e| anyhow!("Invalid merkle root hex: {}", e))?;
+
+        let signature = signer
+            .sign(&merkle_bytes)
             .map_err(|e| anyhow!("Signing failed: {}", e))?;
 
         // Get signer's public key fingerprint
         let signer_fingerprint = format!("ed25519:{}", signer.public_key());
 
         // Store signature in database
-        let db = self.db.as_ref().ok_or_else(|| anyhow!("Database not initialized"))?;
-        let conn = db.lock().map_err(|e| anyhow!("Database lock error: {}", e))?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not initialized"))?;
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow!("Database lock error: {}", e))?;
 
         let signed_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -378,7 +393,7 @@ impl AuditLogger {
             WHERE date = ?4
             "#,
             params![
-                signature.signature,  // Base64 encoded signature
+                signature.signature, // Base64 encoded signature
                 signed_at,
                 signer_fingerprint,
                 date,
@@ -404,8 +419,13 @@ impl AuditLogger {
         date: &str,
         verifier: &crate::security::signing::CapsuleVerifier,
     ) -> Result<()> {
-        let db = self.db.as_ref().ok_or_else(|| anyhow!("Database not initialized"))?;
-        let conn = db.lock().map_err(|e| anyhow!("Database lock error: {}", e))?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not initialized"))?;
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow!("Database lock error: {}", e))?;
 
         let (merkle_root, signature_b64): (String, String) = conn
             .query_row(
@@ -416,8 +436,8 @@ impl AuditLogger {
             .map_err(|e| anyhow!("Batch not found for {}: {}", date, e))?;
 
         // Decode merkle root
-        let merkle_bytes = hex::decode(&merkle_root)
-            .map_err(|e| anyhow!("Invalid merkle root: {}", e))?;
+        let merkle_bytes =
+            hex::decode(&merkle_root).map_err(|e| anyhow!("Invalid merkle root: {}", e))?;
 
         // Create signature struct for verification
         let sig = crate::security::signing::CapsuleSignature {
@@ -430,7 +450,8 @@ impl AuditLogger {
             transparency_log_url: None,
         };
 
-        verifier.verify(&merkle_bytes, &sig)
+        verifier
+            .verify(&merkle_bytes, &sig)
             .map_err(|e| anyhow!("Signature verification failed: {}", e))?;
 
         tracing::info!("Verified audit batch signature for {}", date);
@@ -455,11 +476,7 @@ mod tests {
 
     #[test]
     fn test_compute_merkle_root() {
-        let hashes = vec![
-            "a".repeat(64),
-            "b".repeat(64),
-            "c".repeat(64),
-        ];
+        let hashes = vec!["a".repeat(64), "b".repeat(64), "c".repeat(64)];
         let root = AuditLogger::compute_merkle_root(&hashes);
         assert_eq!(root.len(), 64); // SHA-256 hex = 64 chars
     }

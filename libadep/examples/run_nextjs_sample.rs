@@ -12,7 +12,7 @@
 //! Then visit http://localhost:3000 in your browser.
 //! Press Ctrl+C to stop the capsule.
 
-use libadep::{create_runtime, AdepContainerRuntime, CapsuleManifest};
+use libadep::{create_runtime, CapsuleManifest};
 use std::path::PathBuf;
 use std::time::Duration;
 

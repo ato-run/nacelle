@@ -1,14 +1,9 @@
 use super::*;
 use crate::artifact::manager::{ArtifactConfig, ArtifactError};
-use axum::{
-    routing::get,
-    Router,
-    response::IntoResponse,
-    body::Body,
-};
-use tokio::net::TcpListener;
-use sha2::{Sha256, Digest};
+use axum::{body::Body, response::IntoResponse, routing::get, Router};
+use sha2::{Digest, Sha256};
 use std::io::Write;
+use tokio::net::TcpListener;
 
 async fn start_mock_server() -> (String, tokio::task::JoinHandle<()>) {
     let app = Router::new()
@@ -59,10 +54,10 @@ async fn mock_runtime_zip() -> impl IntoResponse {
     // Create a dummy zip file
     let mut buf = Vec::new();
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-    
-    let options = zip::write::FileOptions::<()>::default()
-        .compression_method(zip::CompressionMethod::Stored);
-    
+
+    let options =
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+
     zip.start_file("bin/test-binary", options).unwrap();
     zip.write_all(b"#!/bin/sh\necho 'Hello'").unwrap();
     zip.finish().unwrap();
@@ -73,12 +68,12 @@ async fn mock_runtime_zip() -> impl IntoResponse {
 fn calculate_zip_hash() -> String {
     let mut buf = Vec::new();
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-    let options = zip::write::FileOptions::<()>::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
     zip.start_file("bin/test-binary", options).unwrap();
     zip.write_all(b"#!/bin/sh\necho 'Hello'").unwrap();
     zip.finish().unwrap();
-    
+
     let mut hasher = Sha256::new();
     hasher.update(&buf);
     format!("{:x}", hasher.finalize())
@@ -112,9 +107,10 @@ async fn test_registry_parsing() {
 async fn test_ensure_runtime_success() {
     let (base_url, _handle) = start_mock_server().await;
     let zip_hash = calculate_zip_hash();
-    
+
     // Create registry with correct hash and full URL
-    let registry_json = format!(r#"{{
+    let registry_json = format!(
+        r#"{{
         "runtimes": {{
             "test-runtime": {{
                 "versions": {{
@@ -138,11 +134,15 @@ async fn test_ensure_runtime_success() {
                 }}
             }}
         }}
-    }}"#, base_url, zip_hash, base_url, zip_hash, base_url, zip_hash);
+    }}"#,
+        base_url, zip_hash, base_url, zip_hash, base_url, zip_hash
+    );
 
     let temp_dir = tempfile::tempdir().unwrap();
     let registry_path = temp_dir.path().join("registry.json");
-    tokio::fs::write(&registry_path, registry_json).await.unwrap();
+    tokio::fs::write(&registry_path, registry_json)
+        .await
+        .unwrap();
 
     let config = ArtifactConfig {
         registry_url: format!("file://{}", registry_path.to_string_lossy()),
@@ -152,7 +152,7 @@ async fn test_ensure_runtime_success() {
 
     let manager = ArtifactManager::new(config).await.unwrap();
     let result = manager.ensure_runtime("test-runtime", "1.0.0", None).await;
-    
+
     assert!(result.is_ok());
     let path = result.unwrap();
     assert!(path.exists());
@@ -162,9 +162,10 @@ async fn test_ensure_runtime_success() {
 #[tokio::test]
 async fn test_hash_verification_failure() {
     let (base_url, _handle) = start_mock_server().await;
-    
+
     // Registry with WRONG hash
-    let registry_json = format!(r#"{{
+    let registry_json = format!(
+        r#"{{
         "runtimes": {{
             "test-runtime": {{
                 "versions": {{
@@ -188,11 +189,15 @@ async fn test_hash_verification_failure() {
                 }}
             }}
         }}
-    }}"#, base_url, base_url, base_url);
+    }}"#,
+        base_url, base_url, base_url
+    );
 
     let temp_dir = tempfile::tempdir().unwrap();
     let registry_path = temp_dir.path().join("registry.json");
-    tokio::fs::write(&registry_path, registry_json).await.unwrap();
+    tokio::fs::write(&registry_path, registry_json)
+        .await
+        .unwrap();
 
     let config = ArtifactConfig {
         registry_url: format!("file://{}", registry_path.to_string_lossy()),
@@ -202,7 +207,7 @@ async fn test_hash_verification_failure() {
 
     let manager = ArtifactManager::new(config).await.unwrap();
     let result = manager.ensure_runtime("test-runtime", "1.0.0", None).await;
-    
+
     assert!(result.is_err());
     match result.unwrap_err() {
         ArtifactError::HashMismatch { .. } => (),
@@ -214,8 +219,9 @@ async fn test_hash_verification_failure() {
 async fn test_cache_hit() {
     let (base_url, _handle) = start_mock_server().await;
     let zip_hash = calculate_zip_hash();
-    
-    let registry_json = format!(r#"{{
+
+    let registry_json = format!(
+        r#"{{
         "runtimes": {{
             "test-runtime": {{
                 "versions": {{
@@ -239,11 +245,15 @@ async fn test_cache_hit() {
                 }}
             }}
         }}
-    }}"#, base_url, zip_hash, base_url, zip_hash, base_url, zip_hash);
+    }}"#,
+        base_url, zip_hash, base_url, zip_hash, base_url, zip_hash
+    );
 
     let temp_dir = tempfile::tempdir().unwrap();
     let registry_path = temp_dir.path().join("registry.json");
-    tokio::fs::write(&registry_path, registry_json).await.unwrap();
+    tokio::fs::write(&registry_path, registry_json)
+        .await
+        .unwrap();
 
     let config = ArtifactConfig {
         registry_url: format!("file://{}", registry_path.to_string_lossy()),
@@ -252,14 +262,20 @@ async fn test_cache_hit() {
     };
 
     let manager = ArtifactManager::new(config).await.unwrap();
-    
+
     // First call: Download
-    let path1 = manager.ensure_runtime("test-runtime", "1.0.0", None).await.unwrap();
-    
+    let path1 = manager
+        .ensure_runtime("test-runtime", "1.0.0", None)
+        .await
+        .unwrap();
+
     // Second call: Cache hit
-    // We can verify it's a cache hit by stopping the server or checking logs, 
+    // We can verify it's a cache hit by stopping the server or checking logs,
     // but here we just ensure it returns success quickly and same path.
-    let path2 = manager.ensure_runtime("test-runtime", "1.0.0", None).await.unwrap();
-    
+    let path2 = manager
+        .ensure_runtime("test-runtime", "1.0.0", None)
+        .await
+        .unwrap();
+
     assert_eq!(path1, path2);
 }

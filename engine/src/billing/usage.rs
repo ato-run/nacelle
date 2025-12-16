@@ -160,7 +160,10 @@ impl UsageTracker {
             .await
             .insert(session_id.to_string(), session);
 
-        debug!("Started session {} for customer {}", session_id, customer_id);
+        debug!(
+            "Started session {} for customer {}",
+            session_id, customer_id
+        );
     }
 
     /// Stop tracking a capsule session and return GPU seconds used
@@ -218,9 +221,7 @@ impl UsageTracker {
 
         debug!(
             "Recorded request for customer {}: {} input, {} output tokens",
-            customer_id,
-            usage.input_tokens,
-            usage.output_tokens
+            customer_id, usage.input_tokens, usage.output_tokens
         );
 
         // Add to history (with bounded size)
@@ -235,11 +236,7 @@ impl UsageTracker {
 
     /// Get usage for a customer
     pub async fn get_customer_usage(&self, customer_id: &str) -> Option<CustomerUsage> {
-        self.customer_usage
-            .read()
-            .await
-            .get(customer_id)
-            .cloned()
+        self.customer_usage.read().await.get(customer_id).cloned()
     }
 
     /// Get all customer usage (for reporting)
@@ -274,7 +271,7 @@ impl UsageTracker {
     /// Export usage data for billing
     pub async fn export_for_billing(&self, customer_id: &str) -> Option<BillingExport> {
         let usage = self.get_customer_usage(customer_id).await?;
-        
+
         Some(BillingExport {
             customer_id: customer_id.to_string(),
             total_tokens: usage.total_input_tokens + usage.total_output_tokens,
@@ -324,7 +321,11 @@ pub struct RequestUsageBuilder {
 }
 
 impl RequestUsageBuilder {
-    pub fn new(request_id: impl Into<String>, customer_id: impl Into<String>, model: impl Into<String>) -> Self {
+    pub fn new(
+        request_id: impl Into<String>,
+        customer_id: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
         Self {
             request_id: request_id.into(),
             customer_id: customer_id.into(),
@@ -403,7 +404,9 @@ mod tests {
     async fn test_session_tracking() {
         let tracker = UsageTracker::new();
 
-        tracker.start_session("session_1", "cus_1", "llama-70b").await;
+        tracker
+            .start_session("session_1", "cus_1", "llama-70b")
+            .await;
         assert_eq!(tracker.active_session_count().await, 1);
 
         // Simulate some time passing
@@ -444,30 +447,34 @@ mod tests {
         let tracker = UsageTracker::new();
 
         // Request with model A
-        tracker.record_request(RequestUsage {
-            request_id: "req_1".to_string(),
-            customer_id: "cus_1".to_string(),
-            model: "model-a".to_string(),
-            input_tokens: 100,
-            output_tokens: 100,
-            total_tokens: 200,
-            duration_ms: 100,
-            is_cloud: false,
-            timestamp: 0,
-        }).await;
+        tracker
+            .record_request(RequestUsage {
+                request_id: "req_1".to_string(),
+                customer_id: "cus_1".to_string(),
+                model: "model-a".to_string(),
+                input_tokens: 100,
+                output_tokens: 100,
+                total_tokens: 200,
+                duration_ms: 100,
+                is_cloud: false,
+                timestamp: 0,
+            })
+            .await;
 
         // Request with model B
-        tracker.record_request(RequestUsage {
-            request_id: "req_2".to_string(),
-            customer_id: "cus_1".to_string(),
-            model: "model-b".to_string(),
-            input_tokens: 200,
-            output_tokens: 200,
-            total_tokens: 400,
-            duration_ms: 100,
-            is_cloud: false,
-            timestamp: 0,
-        }).await;
+        tracker
+            .record_request(RequestUsage {
+                request_id: "req_2".to_string(),
+                customer_id: "cus_1".to_string(),
+                model: "model-b".to_string(),
+                input_tokens: 200,
+                output_tokens: 200,
+                total_tokens: 400,
+                duration_ms: 100,
+                is_cloud: false,
+                timestamp: 0,
+            })
+            .await;
 
         let usage = tracker.get_customer_usage("cus_1").await.unwrap();
         assert_eq!(usage.by_model.len(), 2);
@@ -496,17 +503,19 @@ mod tests {
     async fn test_export_for_billing() {
         let tracker = UsageTracker::new();
 
-        tracker.record_request(RequestUsage {
-            request_id: "req_1".to_string(),
-            customer_id: "cus_1".to_string(),
-            model: "gpt-4".to_string(),
-            input_tokens: 1000,
-            output_tokens: 2000,
-            total_tokens: 3000,
-            duration_ms: 1000,
-            is_cloud: true,
-            timestamp: 0,
-        }).await;
+        tracker
+            .record_request(RequestUsage {
+                request_id: "req_1".to_string(),
+                customer_id: "cus_1".to_string(),
+                model: "gpt-4".to_string(),
+                input_tokens: 1000,
+                output_tokens: 2000,
+                total_tokens: 3000,
+                duration_ms: 1000,
+                is_cloud: true,
+                timestamp: 0,
+            })
+            .await;
 
         let export = tracker.export_for_billing("cus_1").await.unwrap();
         assert_eq!(export.customer_id, "cus_1");
@@ -520,17 +529,19 @@ mod tests {
     async fn test_reset_customer_usage() {
         let tracker = UsageTracker::new();
 
-        tracker.record_request(RequestUsage {
-            request_id: "req_1".to_string(),
-            customer_id: "cus_1".to_string(),
-            model: "gpt-4".to_string(),
-            input_tokens: 100,
-            output_tokens: 100,
-            total_tokens: 200,
-            duration_ms: 100,
-            is_cloud: false,
-            timestamp: 0,
-        }).await;
+        tracker
+            .record_request(RequestUsage {
+                request_id: "req_1".to_string(),
+                customer_id: "cus_1".to_string(),
+                model: "gpt-4".to_string(),
+                input_tokens: 100,
+                output_tokens: 100,
+                total_tokens: 200,
+                duration_ms: 100,
+                is_cloud: false,
+                timestamp: 0,
+            })
+            .await;
 
         assert!(tracker.get_customer_usage("cus_1").await.is_some());
 
