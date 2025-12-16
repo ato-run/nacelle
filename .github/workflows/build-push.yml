@@ -50,8 +50,8 @@ jobs:
       - name: Build & push Coordinator image
         uses: docker/build-push-action@v6
         with:
-          context: ./capsuled/client
-          file: ./capsuled/client/Dockerfile
+          context: .
+          file: ./client/Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.coordinator_tags }}
@@ -61,8 +61,8 @@ jobs:
       - name: Build & push Edge Router image
         uses: docker/build-push-action@v6
         with:
-          context: ./capsuled/client
-          file: ./capsuled/client/Dockerfile.edge-router
+          context: .
+          file: ./client/Dockerfile.edge-router
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.edge_router_tags }}
@@ -72,8 +72,8 @@ jobs:
       - name: Build & push Engine image
         uses: docker/build-push-action@v6
         with:
-          context: ./capsuled/engine
-          file: ./capsuled/engine/Dockerfile
+          context: .
+          file: ./engine/Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.engine_tags }}
