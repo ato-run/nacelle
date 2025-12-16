@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gumball.dev/schemas/capsule-v1.json",
+  "title": "Gumball Capsule Manifest Schema v1.0",
+  "description": "Schema for Capsule manifest files (capsule.toml / capsule.json)",
+  "type": "object",
+  "required": ["schema_version", "name", "version", "type"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version, must be '1.0'",
+      "const": "1.0"
+    },
+    "name": {
+      "type": "string",
+      "description": "Unique capsule identifier (kebab-case)",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$"
+    },
+    "type": {
+      "type": "string",
+      "description": "Capsule type",
+      "enum": ["inference", "tool", "app"]
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Human-readable metadata",
+      "properties": {
+        "display_name": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "icon": { "type": "string", "format": "uri" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "Capsule capabilities (for inference type)",
+      "properties": {
+        "chat": { "type": "boolean", "default": false },
+        "function_calling": { "type": "boolean", "default": false },
+        "vision": { "type": "boolean", "default": false },
+        "context_length": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "description": "System requirements",
+      "properties": {
+        "platform": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["darwin-arm64", "darwin-x86_64", "linux-amd64", "linux-arm64"]
+          }
+        },
+        "vram_min": { "type": "string", "pattern": "^\\d+(\\.\\d+)?\\s*(GB|MB|TB)$" },
+        "vram_recommended": { "type": "string", "pattern": "^\\d+(\\.\\d+)?\\s*(GB|MB|TB)$" },
+        "disk": { "type": "string", "pattern": "^\\d+(\\.\\d+)?\\s*(GB|MB|TB)$" },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Other Capsule IDs this depends on"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "description": "Execution configuration",
+      "required": ["runtime", "entrypoint"],
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "enum": ["python-uv", "docker", "native"],
+          "description": "Runtime type"
+        },
+        "entrypoint": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "health_check": { "type": "string" },
+        "startup_timeout": { "type": "integer", "minimum": 1, "default": 60 },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "signals": {
+          "type": "object",
+          "properties": {
+            "stop": { "type": "string", "default": "SIGTERM" },
+            "kill": { "type": "string", "default": "SIGKILL" }
+          }
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "description": "Routing configuration for local/cloud decision",
+      "properties": {
+        "weight": {
+          "type": "string",
+          "enum": ["light", "heavy"],
+          "default": "light"
+        },
+        "fallback_to_cloud": { "type": "boolean", "default": true },
+        "cloud_capsule": { "type": "string" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "description": "Model configuration (for inference type)",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Model source (e.g., 'hf:org/model')"
+        },
+        "quantization": {
+          "type": "string",
+          "enum": ["fp16", "bf16", "8bit", "4bit"]
+        }
+      }
+    }
+  }
+}
