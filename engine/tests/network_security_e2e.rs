@@ -27,7 +27,10 @@ fn test_dns_rule_generation_default_config() {
     let rules = generate_dns_rules(&config, "CAPSULE_OUT");
 
     // Verify rules are generated
-    assert!(!rules.is_empty(), "Should generate DNS rules");
+    assert!(
+        !rules.is_empty(),
+        "Should generate DNS rules"
+    );
 
     // Check for loopback allow
     assert!(
@@ -98,7 +101,10 @@ fn test_dns_disabled_generates_no_rules() {
     };
 
     let rules = generate_dns_rules(&config, "TEST");
-    assert!(rules.is_empty(), "Disabled config should generate no rules");
+    assert!(
+        rules.is_empty(),
+        "Disabled config should generate no rules"
+    );
 
     println!("✅ Disabled DNS control produces no rules");
 }
@@ -116,15 +122,27 @@ fn test_dns_and_egress_rule_combination() {
     let dns_rules = generate_dns_rules(&dns_config, "OUTPUT");
 
     // Verify DNS rules are generated
-    assert!(!dns_rules.is_empty(), "Should have DNS rules");
+    assert!(
+        !dns_rules.is_empty(),
+        "Should have DNS rules"
+    );
     
     // Verify we have both UDP and TCP rules
     let udp_count = dns_rules.iter().filter(|r| r.contains("-p udp")).count();
     let tcp_count = dns_rules.iter().filter(|r| r.contains("-p tcp")).count();
     
-    assert!(udp_count > 0, "Should have UDP rules");
-    assert!(tcp_count > 0, "Should have TCP rules");
-    assert!(udp_count == tcp_count, "Should have equal UDP/TCP rules");
+    assert!(
+        udp_count > 0,
+        "Should have UDP rules"
+    );
+    assert!(
+        tcp_count > 0,
+        "Should have TCP rules"
+    );
+    assert!(
+        udp_count == tcp_count,
+        "Should have equal UDP/TCP rules"
+    );
 
     println!(
         "✅ DNS rules: {} UDP + {} TCP = {} total",
@@ -166,13 +184,25 @@ fn test_is_resolver_allowed() {
 }
 
 // ============================================================================
-// Test 4: Rule Format Verification
-// ============================================================================
-
-#[test]
-fn test_iptables_rule_format() {
-    use capsuled_engine::security::dns_monitor::{generate_dns_rules, DnsConfig};
-
+// Test 4: Rule 
+            rule.starts_with("iptables"),
+            "Rule should start with iptables: {}",
+            rule
+        );
+        
+        // All rules should target the chain
+        assert!(
+            rule.contains("TEST_CHAIN"),
+            "Rule should target chain: {}",
+            rule
+        );
+        
+        // All rules should specify port 53
+        assert!(
+            rule.contains("--dport 53"),
+            "Rule should target port 53: {}",
+            rule
+        
     let config = DnsConfig::default();
     let rules = generate_dns_rules(&config, "TEST_CHAIN");
 
@@ -202,8 +232,12 @@ fn test_iptables_rule_format() {
 
 #[test]
 fn test_dns_config_clone_and_debug() {
-    use capsuled_engine::security::dns_monitor::DnsConfig;
-
+    use caps
+        debug_str.contains("DnsConfig")
+    );
+    assert!(
+        debug_str.contains("allowed_resolvers")
+    
     let config = DnsConfig::default();
     
     // Test Clone
@@ -233,6 +267,11 @@ async fn test_dns_block_audit_logging() {
     let log_path = tmp.path().join("dns_audit.log");
     let key_path = tmp.path().join("key.pem");
 
+            allowed,
+            *expected_allowed,
+            "Resolver {} check failed",
+            resolver
+        
     let logger = AuditLogger::new(log_path.clone(), key_path, "dns-test-node".to_string())
         .expect("logger");
 
@@ -252,7 +291,11 @@ async fn test_dns_block_audit_logging() {
 
         // Log blocked attempts
         if !allowed {
-            logger.log(
+            log
+        blocked_count,
+        2,
+        "Should have logged 2 blocked DNS attempts"
+    
                 AuditOperation::NetworkAccess,
                 AuditStatus::Failure,
                 Some("test-capsule".to_string()),

@@ -92,9 +92,17 @@ mod prereqs {
 #[test]
 fn test_storage_config_defaults() {
     let config = TestStorageConfig::default();
-    assert_eq!(config.default_vg, "test_vg");
-    assert_eq!(config.default_size_bytes, 100 * 1024 * 1024);
-    assert!(!config.enable_encryption); // Default off for safety
+    assert_eq!(
+        config.default_vg,
+        "test_vg"
+    );
+    assert_eq!(
+        config.default_size_bytes,
+        100 * 1024 * 1024
+    );
+    assert!(
+        !config.enable_encryption
+    ); // Default off for safety
 }
 
 #[test]
@@ -111,7 +119,12 @@ fn test_capsule_id_sanitization() {
 
     for (input, expected) in test_cases {
         let sanitized = sanitize_lv_name(input);
-        assert_eq!(sanitized, expected, "Failed for input: {}", input);
+        assert_eq!(
+            sanitized,
+            expected,
+            "Failed for input: {}",
+            input
+        );
     }
 }
 
@@ -171,19 +184,25 @@ fn test_storage_manager_provision_unencrypted() {
     println!("Provisioned: {:?}", storage);
     
     // 2. Mount
-    println!("Mounting volume...");
-    manager.mount_volume(&mut storage).expect("Mount failed");
-    
-    let mount_path = storage.mount_point.clone().expect("Mount point shoud be set");
-    println!("Mounted at: {:?}", mount_path);
-    assert!(mount_path.exists());
+    println!
+        mount_path.exists()
+    );
 
     // 3. Write Verification
     let test_file = mount_path.join("test.txt");
     std::fs::write(&test_file, "hello storage world").expect("Failed to write to volume");
-    assert!(test_file.exists());
+    assert!(
+        test_file.exists()
+    );
     println!("File written successfully");
 
+    // 4. Unmount
+    println!("Unmounting...");
+    manager.unmount_volume(capsule_id, &storage.lv_name).expect("Unmount failed");
+    // Mount point directory should be removed by unmount_volume
+    assert!(
+        !mount_path.exists()
+    
     // 4. Unmount
     println!("Unmounting...");
     manager.unmount_volume(capsule_id, &storage.lv_name).expect("Unmount failed");

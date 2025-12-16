@@ -137,13 +137,20 @@ fn test_egress_fail_closed_blocks_disallowed_traffic() {
     }
 
     // Verify structure
-    assert!(rules.iter().any(|r| r.contains("-P OUTPUT DROP")), "Missing default DROP");
-    assert!(rules.iter().any(|r| r.contains("10.0.0.0/8") && r.contains("ACCEPT")), 
-        "Missing internal network allow rule");
+    assert!(
+        rules.iter().any(|r| r.contains("-P OUTPUT DROP")),
+        "Missing default DROP"
+    );
+    assert!(
+        rules.iter().any(|r| r.contains("10.0.0.0/8") && r.contains("ACCEPT")), 
+        "Missing internal network allow rule"
+    );
     
     // Verify blocked destination is NOT in allow rules
-    assert!(!rules.iter().any(|r| r.contains("8.8.8.8")), 
-        "External DNS should not be explicitly allowed");
+    assert!(
+        !rules.iter().any(|r| r.contains("8.8.8.8")), 
+        "External DNS should not be explicitly allowed"
+    );
 
     println!("✅ Egress Fail-Closed rule generation verified");
 }
@@ -179,14 +186,20 @@ fn test_egress_allows_permitted_traffic() {
     let rules = generate_fw_rules(&manifest);
 
     // Verify allowed IP is in rules
-    assert!(rules.iter().any(|r| r.contains("1.1.1.1") && r.contains("ACCEPT")),
-        "Allowed IP should have ACCEPT rule");
+    assert!(
+        rules.iter().any(|r| r.contains("1.1.1.1") && r.contains("ACCEPT")),
+        "Allowed IP should have ACCEPT rule"
+    );
     
     // Verify loopback and established are always allowed
-    assert!(rules.iter().any(|r| r.contains("-o lo") && r.contains("ACCEPT")),
-        "Loopback should be allowed");
-    assert!(rules.iter().any(|r| r.contains("ESTABLISHED") || r.contains("RELATED")),
-        "Established connections should be allowed");
+    assert!(
+        rules.iter().any(|r| r.contains("-o lo") && r.contains("ACCEPT")),
+        "Loopback should be allowed"
+    );
+    assert!(
+        rules.iter().any(|r| r.contains("ESTABLISHED") || r.contains("RELATED")),
+        "Established connections should be allowed"
+    );
 
     println!("✅ Egress Allow rule generation verified");
 }
@@ -226,7 +239,10 @@ fn test_signature_verification_priority_over_egress() {
     let invalid_signature = vec![0u8; 64];
 
     // Verification should fail BEFORE egress rules are even considered
-    // Possible failures:
+    // Possi
+        result.is_err(),
+        "Invalid signature should cause verification failure"
+    
     // 1. Signature file too short (invalid format)
     // 2. Signature key doesn't match trusted key
     // 3. Cryptographic verification fails
@@ -280,16 +296,21 @@ fn test_storage_vram_lifecycle_cleanup() {
     println!("Phase 1: Provisioning storage...");
     let mut storage = manager
         .provision_capsule_storage(capsule_id, None, Some(false))
-        .expect("Provision failed");
-    
-    println!("  Device: {}", storage.device_path);
-    assert!(PathBuf::from(&storage.device_path).exists() || 
-            storage.device_path.starts_with("/dev/mapper"), 
-            "Device path should exist");
+        .exp
+        PathBuf::from(&storage.device_path).exists() || 
+        storage.device_path.starts_with("/dev/mapper"), 
+        "Device path should exist"
+    );
 
     // Phase 2: Mount
     println!("Phase 2: Mounting volume...");
     manager.mount_volume(&mut storage).expect("Mount failed");
+    
+    let mount_path = storage.mount_point.clone().expect("Mount point should be set");
+    println!("  Mount point: {:?}", mount_path);
+    assert!(
+        mount_path.exists(),
+        "Mount point should exist after mount"
     
     let mount_path = storage.mount_point.clone().expect("Mount point should be set");
     println!("  Mount point: {:?}", mount_path);
@@ -342,12 +363,20 @@ fn test_combined_security_flow() {
     use capsuled_engine::security::verifier::ManifestVerifier;
     use capsuled_engine::security::egress_policy::generate_fw_rules;
 
-    // Step 1: Create valid manifest
-    let manifest = create_test_manifest("combined-test");
+    // Step 
+        verify_result.is_ok(),
+        "Permissive verifier should pass empty signature"
+    );
 
-    // Step 2: Use permissive verifier (no signature required)
-    let verifier = ManifestVerifier::new(None, false);
-    let manifest_json = serde_json::to_string(&manifest).expect("serialize");
+    // Step 3: Generate egress rules (should be default DROP with essentials)
+    let rules = generate_fw_rules(&manifest);
+    assert!(
+        !rules.is_empty(),
+        "Should generate base firewall rules"
+    );
+    assert!(
+        rules.iter().any(|r| r.contains("-P OUTPUT DROP")), 
+        "Default DROP should always be present"
     
     let verify_result = verifier.verify(manifest_json.as_bytes(), &[], "");
     assert!(verify_result.is_ok(), "Permissive verifier should pass empty signature");

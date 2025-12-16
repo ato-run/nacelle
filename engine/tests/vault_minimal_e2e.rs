@@ -224,7 +224,11 @@ volumes = [
         capsule_id: capsule_id.to_string(),
     };
     let stop_response = client.stop_capsule(Request::new(stop_req)).await;
-    assert!(stop_response.is_ok(), "Stop failed: {:?}", stop_response.err());
+    assert!(
+        stop_response.is_ok(),
+        "Stop failed: {:?}",
+        stop_response.err()
+    );
 
     println!("✓ Capsule stopped");
 
@@ -249,7 +253,11 @@ volumes = [
     );
 
     let content = fs::read_to_string(&marker).expect("read marker");
-    assert_eq!(content, "persistent-data", "Marker content mismatch");
+    assert_eq!(
+        content,
+        "persistent-data",
+        "Marker content mismatch"
+    );
 
     println!("✓ Data persisted across deploy/stop/redeploy cycle");
 

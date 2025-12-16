@@ -53,14 +53,25 @@ async fn test_cas_uri_resolution_success() {
     let uri = format!("cas://{}", hash);
     let result = manager.resolve_cas_uri(&uri);
 
-    assert!(result.is_ok(), "CAS resolution should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CAS resolution should succeed: {:?}",
+        result.err()
+    );
     
     let resolved_path = result.unwrap();
-    assert!(resolved_path.exists(), "Resolved path should exist");
+    assert!(
+        resolved_path.exists(),
+        "Resolved path should exist"
+    );
     
     // Verify content matches
     let read_content = std::fs::read(&resolved_path).expect("read blob");
-    assert_eq!(read_content, blob_content, "Blob content should match");
+    assert_eq!(
+        read_content,
+        blob_content,
+        "Blob content should match"
+    );
 
     println!("✅ CAS URI resolution verified: {} -> {}", uri, resolved_path.display());
 }
@@ -86,7 +97,10 @@ async fn test_cas_uri_resolution_not_found() {
     let uri = format!("cas://{}", fake_hash);
     let result = manager.resolve_cas_uri(&uri);
 
-    assert!(result.is_err(), "Resolution should fail for non-existent blob");
+    assert!(
+        result.is_err(),
+        "Resolution should fail for non-existent blob"
+    );
     
     match result.unwrap_err() {
         ArtifactError::NotFound(_) => println!("✅ Correctly returned NotFound error"),
@@ -108,16 +122,22 @@ async fn test_cas_uri_validation() {
 
     let manager = ArtifactManager::new(config).await.expect("manager");
 
-    // Test invalid URI prefix
-    let result = manager.resolve_cas_uri("https://example.com/blob");
-    assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
+        matches!(result, Err(ArtifactError::InvalidUri(_)))
+    );
     println!("✅ Invalid prefix rejected");
 
     // Test invalid hash length
     let result = manager.resolve_cas_uri("cas://tooshort");
-    assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
+    assert!(
+        matches!(result, Err(ArtifactError::InvalidUri(_)))
+    );
     println!("✅ Invalid hash length rejected");
 
+    // Test non-hex characters
+    let result = manager.resolve_cas_uri(&format!("cas://{}", "g".repeat(64)));
+    assert!(
+        matches!(result, Err(ArtifactError::InvalidUri(_)))
+    
     // Test non-hex characters
     let result = manager.resolve_cas_uri(&format!("cas://{}", "g".repeat(64)));
     assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
@@ -133,7 +153,9 @@ async fn test_cas_root_not_configured() {
     let config = ArtifactConfig {
         registry_url: "file:///dev/null".to_string(),
         cache_path: tmp.path().join("cache"),
-        cas_root: None, // Not configured
+        cas_
+        matches!(result, Err(ArtifactError::CasError(_)))
+    
     };
 
     let manager = ArtifactManager::new(config).await.expect("manager");
@@ -166,16 +188,24 @@ async fn test_audit_log_persistence() {
         (AuditOperation::CapsuleStop, AuditStatus::Success, Some("test-capsule-001".to_string())),
         (AuditOperation::SignatureRejected, AuditStatus::Failure, Some("bad-capsule".to_string())),
     ];
-
-    for (op, status, capsule_id) in events.iter() {
-        logger.log(op.clone(), status.clone(), capsule_id.clone(), None).await;
-    }
-
-    // Verify database was created
-    let db_path = log_path.with_extension("db");
-    assert!(db_path.exists(), "Audit database should be created at {:?}", db_path);
+        db_path.exists(),
+        "Audit database should be created at {:?}",
+        db_path
+    );
 
     // Query the database directly
+    let conn = rusqlite::Connection::open(&db_path).expect("open db");
+
+    // Count events
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM audit_logs", [], |row| row.get(0))
+        .expect("count query");
+    
+    assert_eq!(
+        count,
+        5,
+        "Should have 5 audit events"
+    
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
 
     // Count events
@@ -199,7 +229,14 @@ async fn test_audit_log_persistence() {
                 row.get(3)?,
                 row.get(4)?,
             ))
-        })
+        hash.len(),
+        64,
+        "Hash should be 64 hex characters"
+    );
+    assert!(
+        hash.chars().all(|c| c.is_ascii_hexdigit()),
+        "Hash should be hex"
+    
         .expect("query")
         .map(|r| r.unwrap())
         .collect();
@@ -247,7 +284,11 @@ async fn test_audit_content_hash_uniqueness() {
     logger.log(
         AuditOperation::DeployCapsule, 
         AuditStatus::Success, 
-        Some("capsule-b".to_string()),
+        Some("c
+        hashes[0],
+        hashes[1],
+        "Different events should have different hashes"
+    
         Some("details-2".to_string()),
     ).await;
 
@@ -263,16 +304,31 @@ async fn test_audit_content_hash_uniqueness() {
         .map(|r| r.unwrap())
         .collect();
 
-    assert_eq!(hashes.len(), 2);
-    assert_ne!(hashes[0], hashes[1], "Different events should have different hashes");
+        root.len(),
+        64,
+        "Merkle root should be 64 hex chars"
+    );
+    assert!(
+        root.chars().all(|c| c.is_ascii_hexdigit()),
+        "Root should be hex"
+    );
 
-    println!("✅ Content hash uniqueness verified");
-}
+    // Verify determinism
+    let root2 = AuditLogger::compute_merkle_root(&hashes);
+    assert_eq!(
+        root,
+        root2,
+        "Merkle root should be deterministic"
+    );
 
-#[tokio::test]
-async fn test_audit_merkle_root_computation() {
-    use capsuled_engine::security::audit::AuditLogger;
-
+    // Verify different input gives different root
+    let hashes2 = vec!["x".repeat(64)];
+    let root3 = AuditLogger::compute_merkle_root(&hashes2);
+    assert_ne!(
+        root,
+        root3,
+        "Different inputs should give different roots"
+    
     // Test Merkle root computation
     let hashes = vec![
         "a".repeat(64),
