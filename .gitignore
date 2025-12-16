@@ -46,6 +46,10 @@ local-docs/
 # api_key
 api_key.*
 
+# Test output logs
+engine/check_*.txt
+engine/test_output_*.txt
+
 # IDE
 .vscode/
 .idea/
