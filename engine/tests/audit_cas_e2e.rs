@@ -52,25 +52,14 @@ async fn test_cas_uri_resolution_success() {
     let uri = format!("cas://{}", hash);
     let result = manager.resolve_cas_uri(&uri);
 
-    assert!(
-        result.is_ok(),
-        "CAS resolution should succeed: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "CAS resolution should succeed: {:?}", result.err());
     
     let resolved_path = result.unwrap();
-    assert!(
-        resolved_path.exists(),
-        "Resolved path should exist"
-    );
+    assert!(resolved_path.exists(), "Resolved path should exist");
     
     // Verify content matches
     let read_content = std::fs::read(&resolved_path).expect("read blob");
-    assert_eq!(
-        read_content,
-        blob_content,
-        "Blob content should match"
-    );
+    assert_eq!(read_content, blob_content, "Blob content should match");
 
     println!("✅ CAS URI resolution verified: {} -> {}", uri, resolved_path.display());
 }
@@ -96,10 +85,7 @@ async fn test_cas_uri_resolution_not_found() {
     let uri = format!("cas://{}", fake_hash);
     let result = manager.resolve_cas_uri(&uri);
 
-    assert!(
-        result.is_err(),
-        "Resolution should fail for non-existent blob"
-    );
+    assert!(result.is_err(), "Resolution should fail for non-existent blob");
     
     match result.unwrap_err() {
         ArtifactError::NotFound(_) => println!("✅ Correctly returned NotFound error"),
@@ -123,23 +109,17 @@ async fn test_cas_uri_validation() {
 
     // Test invalid URI prefix
     let result = manager.resolve_cas_uri("https://example.com/blob");
-    assert!(
-        matches!(result, Err(ArtifactError::InvalidUri(_)))
-    );
+    assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
     println!("✅ Invalid prefix rejected");
 
     // Test invalid hash length
     let result = manager.resolve_cas_uri("cas://tooshort");
-    assert!(
-        matches!(result, Err(ArtifactError::InvalidUri(_)))
-    );
+    assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
     println!("✅ Invalid hash length rejected");
 
     // Test non-hex characters
     let result = manager.resolve_cas_uri(&format!("cas://{}", "g".repeat(64)));
-    assert!(
-        matches!(result, Err(ArtifactError::InvalidUri(_)))
-    );
+    assert!(matches!(result, Err(ArtifactError::InvalidUri(_))));
     println!("✅ Non-hex characters rejected");
 }
 
@@ -158,9 +138,7 @@ async fn test_cas_root_not_configured() {
     let manager = ArtifactManager::new(config).await.expect("manager");
 
     let result = manager.resolve_cas_uri(&format!("cas://{}", "a".repeat(64)));
-    assert!(
-        matches!(result, Err(ArtifactError::CasError(_)))
-    );
+    assert!(matches!(result, Err(ArtifactError::CasError(_))));
     println!("✅ CAS root not configured error returned");
 }
 
@@ -194,11 +172,7 @@ async fn test_audit_log_persistence() {
 
     // Verify database was created
     let db_path = log_path.with_extension("db");
-    assert!(
-        db_path.exists(),
-        "Audit database should be created at {:?}",
-        db_path
-    );
+    assert!(db_path.exists(), "Audit database should be created at {:?}", db_path);
 
     // Query the database directly
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
@@ -208,11 +182,7 @@ async fn test_audit_log_persistence() {
         .query_row("SELECT COUNT(*) FROM audit_logs", [], |row| row.get(0))
         .expect("count query");
     
-    assert_eq!(
-        count,
-        5,
-        "Should have 5 audit events"
-    );
+    assert_eq!(count, 5, "Should have 5 audit events");
 
     // Verify each event has required fields
     let mut stmt = conn
@@ -244,15 +214,8 @@ async fn test_audit_log_persistence() {
     
     // Verify content_hash is SHA-256 (64 hex chars)
     let hash = rows[0].4.as_ref().expect("hash should exist");
-    assert_eq!(
-        hash.len(),
-        64,
-        "Hash should be 64 hex characters"
-    );
-    assert!(
-        hash.chars().all(|c| c.is_ascii_hexdigit()),
-        "Hash should be hex"
-    );
+    assert_eq!(hash.len(), 64, "Hash should be 64 hex characters");
+    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "Hash should be hex");
 
     // Verify failure event
     assert_eq!(rows[4].0, "signature_rejected");
@@ -301,11 +264,7 @@ async fn test_audit_content_hash_uniqueness() {
         .collect();
 
     assert_eq!(hashes.len(), 2);
-    assert_ne!(
-        hashes[0],
-        hashes[1],
-        "Different events should have different hashes"
-    );
+    assert_ne!(hashes[0], hashes[1], "Different events should have different hashes");
 
     println!("✅ Content hash uniqueness verified");
 }
@@ -324,32 +283,17 @@ async fn test_audit_merkle_root_computation() {
 
     let root = AuditLogger::compute_merkle_root(&hashes);
     
-    assert_eq!(
-        root.len(),
-        64,
-        "Merkle root should be 64 hex chars"
-    );
-    assert!(
-        root.chars().all(|c| c.is_ascii_hexdigit()),
-        "Root should be hex"
-    );
+    assert_eq!(root.len(), 64, "Merkle root should be 64 hex chars");
+    assert!(root.chars().all(|c| c.is_ascii_hexdigit()), "Root should be hex");
 
     // Verify determinism
     let root2 = AuditLogger::compute_merkle_root(&hashes);
-    assert_eq!(
-        root,
-        root2,
-        "Merkle root should be deterministic"
-    );
+    assert_eq!(root, root2, "Merkle root should be deterministic");
 
     // Verify different input gives different root
     let hashes2 = vec!["x".repeat(64)];
     let root3 = AuditLogger::compute_merkle_root(&hashes2);
-    assert_ne!(
-        root,
-        root3,
-        "Different inputs should give different roots"
-    );
+    assert_ne!(root, root3, "Different inputs should give different roots");
 
     println!("✅ Merkle root computation verified");
 }

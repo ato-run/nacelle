@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -63,7 +64,9 @@ func (h *CapsuleHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case t := <-ticker.C:
-			fmt.Fprintf(w, "data: Log entry at %s for capsule %s\n\n", t.Format(time.RFC3339), capsuleID)
+			if _, err := fmt.Fprintf(w, "data: Log entry at %s for capsule %s\n\n", t.Format(time.RFC3339), capsuleID); err != nil {
+				return
+			}
 			flusher.Flush()
 		}
 	}
@@ -126,7 +129,9 @@ func (h *CapsuleHandler) HandleGetCapsule(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(capsule)
+	if err := json.NewEncoder(w).Encode(capsule); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // HandleListCapsules lists all capsules
@@ -147,7 +152,9 @@ func (h *CapsuleHandler) HandleListCapsules(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // HandleDeleteCapsule deletes a specific capsule
@@ -211,7 +218,9 @@ func (h *CapsuleHandler) HandleDeleteCapsule(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // HandleStopCapsule stops a capsule
@@ -236,7 +245,9 @@ func (h *CapsuleHandler) HandleStopCapsule(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // HandleStartCapsule starts a capsule (Not implemented in CoordinatorService yet? Assuming it isn't or maps to Deploy)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 
@@ -69,7 +70,9 @@ func (h *BillingHandler) CreateCheckout(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	json.NewEncoder(w).Encode(CreateCheckoutResponse{URL: checkoutURL})
+	if err := json.NewEncoder(w).Encode(CreateCheckoutResponse{URL: checkoutURL}); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // POST /api/v1/billing/portal
@@ -83,7 +86,13 @@ func (h *BillingHandler) CreatePortalSession(w http.ResponseWriter, r *http.Requ
 	var req struct {
 		ReturnURL string `json:"return_url"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Log error but continue as this might be optional or handled? 
+		// Actually req.ReturnURL is needed. If decode fails, we might have issue.
+		// But existing code used _ = ... so it was ignored.
+		// Since user complained about unchecked error, we check it.
+		log.Printf("Warning: failed to decode request body: %v", err)
+	}
 
 	// Polar portal currently redirects to purchases dashboard.
 	url, err := h.polar.GetCustomerPortalURL("")
@@ -98,7 +107,9 @@ func (h *BillingHandler) CreatePortalSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"url": url})
+	if err := json.NewEncoder(w).Encode(map[string]string{"url": url}); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // GET /api/v1/billing/subscription
@@ -132,5 +143,7 @@ func (h *BillingHandler) GetSubscription(w http.ResponseWriter, r *http.Request)
 		}[profile.Tier]
 	}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }

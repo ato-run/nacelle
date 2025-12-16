@@ -108,6 +108,7 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	// Ensure requirements are set
 	if req.Requirements.VramMinGB == 0 {
 		// Default to some reasonable value if not specified
+		req.Requirements.VramMinGB = 4
 	}
 
 	// Resolve AppID if provided
@@ -189,7 +190,9 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	// We need to get the Node info to get the address
 	node, exists := h.StateManager.GetNode(bestRig.RigID)
 	if !exists {
-		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		if err := h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID); err != nil {
+			log.Printf("Failed to release VRAM: %v", err)
+		}
 		http.Error(w, "scheduled node not found", http.StatusInternalServerError)
 		return
 	}
@@ -198,7 +201,9 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	engineClient, err := engine.NewRemoteEngineClient(engineAddr)
 	if err != nil {
 		// Rollback VRAM reservation
-		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		if err := h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID); err != nil {
+			log.Printf("Failed to release VRAM: %v", err)
+		}
 		http.Error(w, fmt.Sprintf("failed to connect to engine: %v", err), http.StatusServiceUnavailable)
 		return
 	}
@@ -245,7 +250,9 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	manifestBytes, err := json.Marshal(manifest)
 	if err != nil {
-		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		if err := h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID); err != nil {
+			log.Printf("Failed to release VRAM: %v", err)
+		}
 		http.Error(w, "failed to marshal manifest", http.StatusInternalServerError)
 		return
 	}
@@ -258,7 +265,9 @@ func (h *DeployHandler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := engineClient.DeployCapsule(ctx, execReq)
 	if err != nil {
-		h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID)
+		if err := h.StateManager.ReleaseVRAMByWorkload(ctx, bestRig.RigID, workloadID); err != nil {
+			log.Printf("Failed to release VRAM: %v", err)
+		}
 		http.Error(w, fmt.Sprintf("execution failed: %v", err), http.StatusInternalServerError)
 		return
 	}

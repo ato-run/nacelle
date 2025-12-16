@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 )
@@ -64,7 +65,9 @@ func (h *HealthHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // HandleReadiness handles GET /ready requests (Kubernetes readiness probe)
@@ -113,7 +116,9 @@ func (h *HealthHandler) HandleReadiness(w http.ResponseWriter, r *http.Request) 
 		status.Status = "not ready"
 	}
 
-	json.NewEncoder(w).Encode(status)
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // HandleLiveness handles GET /live requests (Kubernetes liveness probe)
@@ -125,5 +130,7 @@ func (h *HealthHandler) HandleLiveness(w http.ResponseWriter, r *http.Request) {
 
 	// Simple liveness check - if we can respond, we're alive
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("alive"))
+	if _, err := w.Write([]byte("alive")); err != nil {
+		log.Printf("Failed to write response: %v", err)
+	}
 }

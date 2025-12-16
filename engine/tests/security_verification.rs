@@ -46,27 +46,17 @@ mod tests {
         let verifier = ManifestVerifier::new(Some(trusted_pubkey_fingerprint.clone()), true);
 
         // Case A: Verify Trusted Signature -> OK
-        assert!(
-            verifier.verify(content, &sig_trusted_bytes, "").is_ok()
-        );
+        assert!(verifier.verify(content, &sig_trusted_bytes, "").is_ok());
 
         // Case B: Verify Malicious Signature -> FAIL (Key Mismatch)
         let res = verifier.verify(content, &sig_malicious_bytes, "");
-        assert!(
-            res.is_err()
-        );
-        assert!(
-            res.unwrap_err().to_string().contains("is not the trusted signer")
-        );
+        assert!(res.is_err());
+        assert!(res.unwrap_err().to_string().contains("is not the trusted signer"));
 
         // Case C: Tampered Content -> FAIL (Crypto Fail)
         let tampered_content = b"{\"name\": \"hacked\"}";
         let res = verifier.verify(tampered_content, &sig_trusted_bytes, "");
-        assert!(
-            res.is_err()
-        );
-        assert!(
-            res.unwrap_err().to_string().contains("Cryptographic verification failed")
-        );
+        assert!(res.is_err());
+        assert!(res.unwrap_err().to_string().contains("Cryptographic verification failed"));
     }
 }

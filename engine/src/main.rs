@@ -273,7 +273,9 @@ async fn main() -> anyhow::Result<()> {
             http_service_registry,
             http_gpu_detector,
             http_auth_manager,
-        ).await {
+        )
+        .await
+        {
             error!("HTTP API server error: {}", e);
         }
     });
@@ -313,7 +315,9 @@ async fn main() -> anyhow::Result<()> {
             grpc_service_registry,
             grpc_gpu_detector,
             grpc_artifact_manager,
-        ).await {
+        )
+        .await
+        {
             error!("gRPC server failed: {}", e);
         }
     });

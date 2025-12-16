@@ -208,7 +208,9 @@ func main() {
 		// Public endpoints
 		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			if _, err := w.Write([]byte("OK")); err != nil {
+				log.Printf("Failed to write health response: %v", err)
+			}
 		})
 
 		// Apps (Catalog) - Mock for now
@@ -219,7 +221,9 @@ func main() {
 			// Get apps from StateManager (loaded from DB)
 			apps := stateManager.GetAllApps()
 
-			json.NewEncoder(w).Encode(apps)
+			if err := json.NewEncoder(w).Encode(apps); err != nil {
+				log.Printf("Failed to encode apps response: %v", err)
+			}
 		})
 
 		// Metrics
