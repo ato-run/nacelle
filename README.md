@@ -6,59 +6,47 @@ Personal Cloud OS - モノレポ
 
 ```
 ┌─────────────────┐
-│  外部クライアント  │  (CLI/API Client - 将来実装予定)
+│  Gumball Cloud  │  (SaaS Control Plane)
 └────────┬────────┘
-         │ HTTPS API
+         │ HTTPS / gRPC
     ┌────┴──────┬──────┐
     ↓           ↓      ↓
-┌────────────┐  ┌────────────┐  ┌────────────┐
-│Coordinator │  │Coordinator │  │Coordinator │ (Go)
-│ (Client 1) │  │ (Client 2) │  │ (Client 3) │
-└─────┬──────┘  └─────┬──────┘  └─────┬──────┘
-      │ gRPC          │ gRPC          │ gRPC
-┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐
-│  Engine 1  │  │  Engine 2  │  │  Engine 3  │ (Rust)
-│  (Agent)   │  │  (Agent)   │  │  (Agent)   │
-└────────────┘  └────────────┘  └────────────┘
+┌────────────┐  ┌────────────┐
+│ Capsuled   │  │ Capsuled   │ (Single Node / Edge)
+│ (Client)   │  │ (Client)   │
+└─────┬──────┘  └─────┬──────┘
+      │ gRPC (Local)
+┌─────┴──────┐
+│ Capsuled   │
+│  Engine    │
+└─────┬──────┘
 ```
 
 ## コンポーネント
 
-### `client/` - Client (Go)
+このリポジトリは **Cargo Workspace** として構成されています。
 
-- Master 選出
-- スケジューリング
-- HTTP API サーバー
-- Wasmer による Wasm 実行
+### `capsuled-client` (Go)
+- [`client/`](./client)
+- ノード管理、スケジューリング、API ゲートウェイ
+- Coordinator との通信
 
-### `engine/` - Engine (Rust)
-> NOTE: 用語の統一 — `capsuled` では以下の名称を採用します。
->
->- `Capsuled Client` (旧: `rig-client`)
->- `Capsuled Engine` (旧: `rig-manager`)
->
-> この用語は `documents/capsuled/GLOSSARY.md` に記載されています。
+### `capsuled-engine` (Rust)
+- [`engine/`](./engine)
+- コンテナ・Wasm ランタイム管理
+- ストレージ (LVM/LUKS)、ネットワーク (Caddy) 管理
+- **自律動作**: 外部依存なしで単独ビルド可能
 
-- gRPC サーバー
-- コンテナ実行
-- LVM/LUKS ストレージ管理
-- Caddy ネットワーク管理
-- Wasmtime による Wasm 実行
+### `libadep` (Rust)
+- [`libadep/`](./libadep)
+- ADEP (Application Deployment Protocol) コアライブラリ
+- `core`: マニフェスト解析、検証
+- `cas`: CAS (Content Addressable Storage) クライアント
+- `runtime`: ランタイム抽象化
 
-### `adep-logic/` - 共通ロジック (Rust → Wasm)
-
-- adep.json パーサー
-- バリデーター
-- Client と Engine の両方で使用
-
-### `proto/` - gRPC 定義
-
-- `coordinator.proto` (推奨・Canonical)
-- `engine.proto` (レガシー: 非推奨 — `coordinator.proto` に統合予定)
-
-> NOTE: ドキュメントのシングルソースは `documents/capsuled/` を参照してください。用語統一と設計決定は `documents/capsuled/GLOSSARY.md` と `DOCUMENTATION_GUIDELINES.md` に従ってください。
-> `coordinator.proto` を単一の真実のソース (single source of truth) として採用しています。
-- buf.yaml
+### `proto`
+- [`proto/`](./proto)
+- gRPC 定義 (`coordinator.proto`, `engine.proto`)
 
 ## ビルド
 
@@ -74,18 +62,31 @@ make engine
 
 ## 開発
 
-```bash
-# Wasm ビルド
-cd adep-logic
-cargo build --target wasm32-unknown-unknown --release
+### ビルド要件
+- Rust 1.83+
+- Go 1.24+
+- Docker
+- protobuf-compiler
 
-# Engine ビルド
-cd engine
-cargo build
+### ビルドコマンド
+
+```bash
+# 全体ビルド (Engine + libadep)
+cargo build --workspace --release
 
 # Client ビルド
 cd client
-go build -o bin/capsuled-client ./cmd/client
+go build -o ../bin/capsuled-client ./cmd/client
+```
+
+### ローカル実行
+
+```bash
+# Engine 実行
+./target/release/capsuled-engine --port 4500
+
+# Client 実行
+./bin/capsuled-client start
 ```
 
 ## CI/CD
