@@ -1,0 +1,9 @@
+{
+  "name": "gumball-packager-e2e-node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

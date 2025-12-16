@@ -1,0 +1,25 @@
+[package]
+name = "libadep"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libadep-core = { path = "../core" }
+libadep-runtime = { path = "../runtime" }
+libadep-cas = { path = "../cas" }
+libadep-deps = { path = "../deps" }
+libadep-observability = { path = "../observability" }
+
+[features]
+default = ["std"]
+std = ["libadep-core/std", "libadep-cas/std", "libadep-deps/std", "libadep-observability/std"]
+tokio-runtime = ["libadep-deps/tokio-runtime"]
+crypto-hw = ["libadep-core/crypto-hw"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+
+[[example]]
+name = "run_nextjs_sample"
+path = "../examples/run_nextjs_sample.rs"

@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package adep.depsd.v1;
+
+service Depsd {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc ExpandCapsule(ExpandCapsuleRequest) returns (ExpandCapsuleResponse);
+  rpc InstallPython(InstallPythonRequest) returns (InstallPythonResponse);
+  rpc InstallPnpm(InstallPnpmRequest) returns (InstallPnpmResponse);
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+}
+
+message ExpandCapsuleRequest {}
+message ExpandCapsuleResponse {}
+
+message CommandLog {
+  enum Stream {
+    STDOUT = 0;
+    STDERR = 1;
+  }
+  Stream stream = 1;
+  string line = 2;
+}
+
+message InstallPythonRequest {
+  string capsule_path = 1;
+  string cas_root = 2;
+  string requirements_lock = 3;
+  string target_dir = 4;
+  string project_dir = 5;
+  string pip_binary = 6;
+  repeated string pip_args = 7;
+  bool dry_run = 8;
+}
+
+message InstallPythonResponse {
+  repeated string command = 1;
+  int32 exit_code = 2;
+  repeated CommandLog logs = 3;
+  string requirements_lock = 4;
+  repeated string installed_wheels = 5;
+}
+
+message InstallPnpmRequest {
+  string capsule_path = 1;
+  string cas_root = 2;
+  string lockfile = 3;
+  string project_dir = 4;
+  string store_dir = 5;
+  string pnpm_binary = 6;
+  repeated string pnpm_args = 7;
+  bool dry_run = 8;
+}
+
+message InstallPnpmResponse {
+  repeated string command = 1;
+  int32 exit_code = 2;
+  repeated CommandLog logs = 3;
+  repeated string installed_packages = 4;
+}
+
+message OperationError {
+  string code = 1;
+  string message = 2;
+}

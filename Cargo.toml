@@ -1,0 +1,24 @@
+# Capsuled - Cargo Workspace
+# Unified workspace for engine and libadep (ADEP protocol library)
+
+[workspace]
+members = [
+    "engine",
+    "proto/rust",
+    "libadep/core",
+    "libadep/cas",
+    "libadep/runtime",
+    "libadep/deps",
+    "libadep/observability",
+    "libadep/plugins/logic",
+    "libadep/libadep",
+]
+resolver = "2"
+
+# Shared dependencies can be defined here
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"

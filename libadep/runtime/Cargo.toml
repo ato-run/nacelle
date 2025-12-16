@@ -1,0 +1,25 @@
+[package]
+name = "libadep-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core ADEP manifest definitions
+libadep-core = { path = "../core" }
+
+# Async runtime and utilities
+tokio = { version = "1", features = ["process", "sync", "rt", "macros"] }
+async-trait = "0.1"
+
+# UUID generation for capsule IDs
+uuid = { version = "1", features = ["v4"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization (for manifest handling)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }

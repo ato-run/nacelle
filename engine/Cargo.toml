@@ -62,9 +62,8 @@ base64 = "0.22"
 # Metrics
 prometheus = "0.13"
 
-# Storage and container management (optional, for future implementation)
-# libadep-core = { path = "../../libadep/core" }
-libadep-core = { path = "../../libadep/core", features = ["toml-support", "capsuled-proto"] }
+# libadep (now integrated into capsuled workspace)
+libadep-core = { path = "../libadep/core", features = ["toml-support", "capsuled-proto"] }
 tokio-stream = { version = "0.1.17", features = ["sync", "net"] }
 hcl-rs = "0.17"
 async-stream = "0.3.6"
@@ -91,7 +90,7 @@ shell-words = "1.1.1"
 
 # Unit 6: Audit persistence and CAS integration
 rusqlite = { version = "0.32", features = ["bundled"] }
-libadep-cas = { path = "../../libadep/cas" }
+libadep-cas = { path = "../libadep/cas" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nvml-wrapper = "0.9"
