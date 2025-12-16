@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Go dependency resolution (cached layer)
-COPY go.mod go.sum ./
+COPY client/go.mod client/go.sum ./
 
 # Download dependencies with retry logic for reliability
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -41,7 +41,7 @@ RUN set -eux; \
     cp -v "$WASMER_SO" /usr/lib/libwasmer.so
 
 # Copy source and build
-COPY . .
+COPY client/ .
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /bin/coordinator ./cmd/coordinator
 
 # --------------------------------------------------------
@@ -77,8 +77,8 @@ WORKDIR /app
 
 # Copy binary
 COPY --from=builder /bin/coordinator /usr/local/bin/coordinator
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY Caddyfile /etc/caddy/Caddyfile
+COPY client/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY client/Caddyfile /etc/caddy/Caddyfile
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Copy Wasmer shared library required by wasmer-go

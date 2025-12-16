@@ -1,8 +1,8 @@
 # Capsuled Engine - Production Dockerfile
 # Multi-stage build for minimal runtime image
 #
-# Build context: workspace root (onescluster/)
-# Build: docker build -f capsuled/engine/Dockerfile -t capsuled-engine:latest .
+# Build context: capsuled/ root
+# Build: docker build -f engine/Dockerfile -t capsuled-engine:latest .
 
 # ============================================
 # Stage 1: Build Stage (Rust)
@@ -18,10 +18,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /workspace
 
-# Copy entire workspace for libadep dependency
+# Copy entire workspace
 COPY . .
 
-WORKDIR /workspace/capsuled/engine
+WORKDIR /workspace/engine
 
 # Build release binary
 RUN cargo build --release --bin capsuled-engine
@@ -57,10 +57,10 @@ RUN mkdir -p /var/lib/capsuled /var/log/capsuled /tmp/capsuled/logs /tmp/capsule
     && chown -R capsuled:capsuled /var/lib/capsuled /var/log/capsuled /tmp/capsuled
 
 # Copy binary from builder
-COPY --from=builder /workspace/capsuled/engine/target/release/capsuled-engine /usr/local/bin/
+COPY --from=builder /workspace/engine/target/release/capsuled-engine /usr/local/bin/
 
 # Copy migrations
-COPY --from=builder /workspace/capsuled/engine/migrations /var/lib/capsuled/migrations
+COPY --from=builder /workspace/engine/migrations /var/lib/capsuled/migrations
 
 # Set environment
 ENV RUST_LOG=info

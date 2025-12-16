@@ -5,11 +5,11 @@ FROM golang:1.24-bookworm AS builder
 WORKDIR /app
 
 # Cache dependencies
-COPY go.mod go.sum ./
+COPY client/go.mod client/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
 
 # Copy source and build
-COPY . .
+COPY client/ .
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /bin/edge-router ./cmd/edge-router
 
 FROM debian:bookworm-slim AS runtime
