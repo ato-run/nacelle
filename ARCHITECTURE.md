@@ -161,6 +161,7 @@ engine/src/
 #### gRPC サービス
 
 **Engine Service** (`engine.proto`)
+
 ```protobuf
 service Engine {
   rpc DeployCapsule(DeployRequest) returns (DeployResponse);
@@ -171,6 +172,7 @@ service Engine {
 ```
 
 **Coordinator Service** (`coordinator.proto`)
+
 ```protobuf
 service Coordinator {
   rpc ReportStatus(StatusReportRequest) returns (StatusReportResponse);
@@ -224,9 +226,10 @@ let result = wasmer_instance.validate(adep_json)?;
 
 **プロトコル使用ガイドライン**:
 
-現在、プロジェクトには2つの gRPC プロトコル定義が存在します：
+現在、プロジェクトには 2 つの gRPC プロトコル定義が存在します：
 
 1. **engine.proto** (旧設計)
+
    - シンプルな Capsule デプロイメント用
    - `DeployCapsule`, `StopCapsule` などの基本操作
    - 初期実装との後方互換性のために保持
@@ -238,6 +241,7 @@ let result = wasmer_instance.validate(adep_json)?;
    - 厳密に型付けされた AdePManifest スキーマ
 
 **推奨事項**:
+
 - 新規開発では `coordinator.proto` を使用
 - `engine.proto` は段階的に非推奨化を検討
 - 両プロトコルの統合を長期的な目標とする
@@ -250,6 +254,7 @@ buf generate
 ```
 
 生成先:
+
 - Go: `client/pkg/proto/`
 - Rust: `engine/src/proto/`
 
@@ -289,10 +294,12 @@ buf generate
 ### Wasm ホスト通信
 
 **Client**:
+
 - ランタイム: Wasmer
 - 言語: Go → Wasm (CGO 経由)
 
 **Engine**:
+
 - ランタイム: Wasmtime
 - 言語: Rust → Wasm (ネイティブ統合)
 
@@ -361,45 +368,45 @@ buf generate
 
 ### Client (Go)
 
-| カテゴリ | ライブラリ/ツール | 用途 |
-|---------|-----------------|------|
-| gRPC | google.golang.org/grpc | Engine との通信 |
-| Wasm | wasmer-go | adep-logic.wasm 実行 |
-| データベース | rqlite | 分散状態管理 |
-| HTTP | net/http, gorilla/mux (想定) | REST API サーバー |
-| VPN | headscale client | Tailscale 互換 VPN |
-| ロギング | log/slog (想定) | 構造化ログ |
+| カテゴリ     | ライブラリ/ツール            | 用途                 |
+| ------------ | ---------------------------- | -------------------- |
+| gRPC         | google.golang.org/grpc       | Engine との通信      |
+| Wasm         | wasmer-go                    | adep-logic.wasm 実行 |
+| データベース | rqlite                       | 分散状態管理         |
+| HTTP         | net/http, gorilla/mux (想定) | REST API サーバー    |
+| VPN          | headscale client             | Tailscale 互換 VPN   |
+| ロギング     | log/slog (想定)              | 構造化ログ           |
 
 ### Engine (Rust)
 
-| カテゴリ | ライブラリ | 用途 |
-|---------|----------|------|
-| gRPC | tonic | gRPC サーバー/クライアント |
-| Wasm | wasmtime | adep-logic.wasm 実行 |
-| 非同期 | tokio | 非同期ランタイム |
-| シリアライズ | serde, serde_json | JSON/Protobuf 処理 |
-| OCI | oci-spec | OCI 仕様サポート |
-| コンテナ | youki (外部) | OCI ランタイム |
-| プロキシ | Caddy Admin API | リバースプロキシ管理 |
-| GPU | nvidia-smi (外部) | GPU 監視 |
-| ストレージ | LVM/LUKS (外部) | 暗号化ストレージ |
+| カテゴリ     | ライブラリ        | 用途                       |
+| ------------ | ----------------- | -------------------------- |
+| gRPC         | tonic             | gRPC サーバー/クライアント |
+| Wasm         | wasmtime          | adep-logic.wasm 実行       |
+| 非同期       | tokio             | 非同期ランタイム           |
+| シリアライズ | serde, serde_json | JSON/Protobuf 処理         |
+| OCI          | oci-spec          | OCI 仕様サポート           |
+| コンテナ     | youki (外部)      | OCI ランタイム             |
+| プロキシ     | Caddy Admin API   | リバースプロキシ管理       |
+| GPU          | nvidia-smi (外部) | GPU 監視                   |
+| ストレージ   | LVM/LUKS (外部)   | 暗号化ストレージ           |
 
 ### adep-logic (Rust → Wasm)
 
-| カテゴリ | ライブラリ | 用途 |
-|---------|----------|------|
-| シリアライズ | serde, serde_json | JSON パース |
-| バリデーション | validator (想定) | スキーマ検証 |
-| ターゲット | wasm32-unknown-unknown | Wasm コンパイル |
+| カテゴリ       | ライブラリ             | 用途            |
+| -------------- | ---------------------- | --------------- |
+| シリアライズ   | serde, serde_json      | JSON パース     |
+| バリデーション | validator (想定)       | スキーマ検証    |
+| ターゲット     | wasm32-unknown-unknown | Wasm コンパイル |
 
 ### Proto (gRPC)
 
-| ツール | 用途 |
-|--------|------|
-| buf | Protocol Buffers 管理 |
-| protoc | コード生成 |
-| protoc-gen-go | Go コード生成 |
-| prost | Rust コード生成 |
+| ツール        | 用途                  |
+| ------------- | --------------------- |
+| buf           | Protocol Buffers 管理 |
+| protoc        | コード生成            |
+| protoc-gen-go | Go コード生成         |
+| prost         | Rust コード生成       |
 
 ---
 
