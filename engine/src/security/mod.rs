@@ -1,22 +1,20 @@
-//! Security module for Capsule signing and verification
-
-pub mod signing;
-
-pub use signing::{CapsuleSigner, CapsuleSignature, CapsuleVerifier, TrustedKeyStore};
-
 pub mod audit;
-
-pub use audit::{AuditLogger, AuditOperation, AuditStatus};
-
-pub mod egress_proxy;
-
-pub use egress_proxy::EgressProxy;
-
+pub mod dns_monitor;
 pub mod egress_policy;
-
-pub use egress_policy::{EgressPolicyRegistry, ENV_KEY_EGRESS_TOKEN, META_KEY_EGRESS_ALLOWLIST};
-
+pub mod egress_proxy;
 pub mod path;
+pub mod signing;
+pub mod verifier;
 pub mod vram_scrubber;
 
-pub use path::validate_path;
+pub use audit::*;
+pub use dns_monitor::*;
+pub use egress_policy::*;
+pub use egress_proxy::*;
+pub use path::*;
+// pub use signing::*; // Avoid conflict with libadep signing if needed?
+pub use verifier::*;
+pub use vram_scrubber::*;
+
+// Re-export common constants if they were top-level
+pub const ENV_KEY_EGRESS_TOKEN: &str = "CAPSULED_EGRESS_TOKEN"; // Assuming this was it, checking egress_proxy.rs might be safer.

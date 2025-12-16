@@ -87,6 +87,11 @@ rust_decimal_macros = "1.39.0"
 # libcryptsetup-rs = "0.9"
 
 onescluster-capsuled-proto = { path = "../proto/rust" }
+shell-words = "1.1.1"
+
+# Unit 6: Audit persistence and CAS integration
+rusqlite = { version = "0.32", features = ["bundled"] }
+libadep-cas = { path = "../../libadep/cas" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nvml-wrapper = "0.9"
@@ -112,5 +117,6 @@ tower = { version = "0.4", features = ["util"] }
 
 [build-dependencies]
 tonic-build = "0.10"
+protobuf-src = "1.1.0"
 
 

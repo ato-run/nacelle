@@ -173,6 +173,7 @@ async fn main() -> anyhow::Result<()> {
     let artifact_config = ArtifactConfig {
         registry_url,
         cache_path: runtime_dir,
+        cas_root: None, // CAS integration - configure via CLI if needed
     };
 
     let artifact_manager = Arc::new(ArtifactManager::new(artifact_config).await.expect("Failed to initialize ArtifactManager"));
@@ -228,6 +229,12 @@ async fn main() -> anyhow::Result<()> {
         Some(proxy_port),
     ));
 
+    // Initialize ManifestVerifier
+    let verifier_pubkey = std::env::var("CAPSULED_PUBKEY").ok();
+    // Default to strict enforcement? No, default to permissive for now to avoid breaking existing users unless configured.
+    let enforcement_enabled = std::env::var("CAPSULED_ENFORCE_SIGNATURES").map(|v| v == "true" || v == "1").unwrap_or(false);
+    let verifier = Arc::new(capsuled_engine::security::verifier::ManifestVerifier::new(verifier_pubkey, enforcement_enabled));
+
     // Initialize CapsuleManager
     let capsule_manager = Arc::new(CapsuleManager::new(
         audit_logger.clone(),
@@ -239,10 +246,11 @@ async fn main() -> anyhow::Result<()> {
         Some(artifact_manager.clone()),
         Some(process_supervisor.clone()),
         Some(proxy_port),
+        verifier,
         Some(container_runtime_config),
         Some(usage_reporter),
         storage_config,
-    ).map_err(|e| anyhow::anyhow!("Failed to initialize CapsuleManager: {}", e))?);
+    ));
 
     info!("CapsuleManager initialized");
 
