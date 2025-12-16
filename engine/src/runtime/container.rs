@@ -33,7 +33,6 @@ impl ContainerRuntime {
         let native_runtime = if config.kind == crate::runtime::RuntimeKind::Native {
             Some(std::sync::Arc::new(crate::runtime::NativeRuntime::new(
                 artifact_manager,
-                process_supervisor,
                 egress_proxy_port,
             )))
         } else {

@@ -91,6 +91,7 @@ esac
             ArtifactManager::new(ArtifactConfig {
                 registry_url: format!("file://{}", registry_path.display()),
                 cache_path: tmp.path().join("artifact_cache"),
+                cas_root: None,
             })
             .await
             .expect("artifact manager"),
@@ -114,6 +115,8 @@ esac
             None,
         ));
 
+        let verifier = Arc::new(capsuled_engine::security::verifier::ManifestVerifier::new(None, false));
+
         let capsule_manager = Arc::new(
             CapsuleManager::new(
                 audit_logger,
@@ -125,11 +128,11 @@ esac
                 Some(artifact_manager.clone()),
                 None,
                 None,
+                verifier,
                 Some(runtime_config),
                 None,
                 None,
             )
-            .expect("capsule manager"),
         );
 
         let engine_service = EngineService::new(
@@ -223,6 +226,7 @@ async fn deploys_runplan_docker_with_ports_mounts_env() {
         manifest: Some(DeployManifest::RunPlan(sample_runplan())),
         oci_image: String::new(),
         digest: String::new(),
+        manifest_signature: vec![],
     };
 
     let response = harness
@@ -251,6 +255,7 @@ async fn deploys_legacy_adep_json_manifest() {
         manifest: Some(DeployManifest::AdepJson(adep_json.to_vec())),
         oci_image: String::new(),
         digest: String::new(),
+        manifest_signature: vec![],
     };
 
     let response = harness
@@ -283,6 +288,7 @@ memory = "128MB"
         manifest: Some(DeployManifest::TomlContent(adep_toml.to_string())),
         oci_image: String::new(),
         digest: String::new(),
+        manifest_signature: vec![],
     };
 
     let response = harness
@@ -318,6 +324,7 @@ port = 8080
         manifest: Some(DeployManifest::TomlContent(canonical_toml.to_string())),
         oci_image: String::new(),
         digest: String::new(),
+        manifest_signature: vec![],
     };
 
     let response = harness
@@ -344,6 +351,7 @@ async fn deploys_runplan_from_libadep_proto() {
         manifest: Some(DeployManifest::RunPlan(runplan)),
         oci_image: String::new(),
         digest: String::new(),
+        manifest_signature: vec![],
     };
 
     let response = harness
@@ -373,6 +381,7 @@ async fn deploys_libadep_generated_proto_runplan() {
         manifest: Some(DeployManifest::RunPlan(proto_runplan)),
         oci_image: String::new(),
         digest: String::new(),
+        manifest_signature: vec![],
     };
 
     let response = harness

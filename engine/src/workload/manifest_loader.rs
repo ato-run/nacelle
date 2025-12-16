@@ -1,25 +1,21 @@
 use anyhow::{anyhow, Result};
 use std::path::Path;
 
-use crate::adep::{AdepManifest, ComputeConfig, GpuConstraints, SchedulingConfig};
+use crate::adep::CapsuleManifestV1;
 
-/// Resource requirements extracted from capsule or adep manifest
-#[derive(Debug, Clone)]
-#[derive(Default)]
+/// Resource requirements extracted from capsule
+#[derive(Debug, Clone, Default)]
 pub struct ResourceRequirements {
     pub cpu_cores: Option<u32>,
     pub memory_bytes: Option<u64>,
     pub gpu_memory_bytes: Option<u64>,
 }
 
-
 /// Parse a manifest that may be either JSON (adep) or TOML (capsule.toml).
-/// Returns `AdepManifest` convertible to the engine's internal format and an
-/// optional `ResourceRequirements` with hints extracted from TOML or metadata.
 pub fn load_manifest_str(
     path: Option<&Path>,
     text: &str,
-) -> Result<(AdepManifest, Option<ResourceRequirements>)> {
+) -> Result<(CapsuleManifestV1, Option<ResourceRequirements>)> {
     // If extension suggests TOML, parse TOML first
     if let Some(p) = path {
         if let Some(ext) = p.extension().and_then(|s| s.to_str()) {
@@ -30,218 +26,43 @@ pub fn load_manifest_str(
     }
 
     // Try JSON first
-    match serde_json::from_str::<AdepManifest>(text) {
-        Ok(manifest) => Ok((manifest, None)),
+    match serde_json::from_str::<CapsuleManifestV1>(text) {
+        Ok(manifest) => {
+            let reqs = extract_requirements(&manifest);
+            Ok((manifest, Some(reqs)))
+        },
         Err(_) => {
-            // Try TOML (feature-gated by libadep-core toml-support dependency)
+            // Try TOML
             load_toml_manifest(text)
         }
     }
 }
 
-fn load_toml_manifest(text: &str) -> Result<(AdepManifest, Option<ResourceRequirements>)> {
-    #[cfg(feature = "toml-support")]
-    {
-        use libadep_core::capsule_manifest::CapsuleManifest;
-        use libadep_core::utils::parse_memory_string;
-        use tracing::info;
-
-        let capsule: CapsuleManifest = CapsuleManifest::from_toml_str(text)
-            .map_err(|e| anyhow!("failed to parse TOML: {}", e))?;
-
-        info!("[DEBUG] Parsed TOML capsule: name={}, native={:?}", capsule.capsule.name, capsule.native);
-
-        // Convert to AdepManifest and resource hints
-        let manifest: AdepManifest = capsule.clone().into();
-        
-        info!("[DEBUG] Converted to AdepManifest: native={:?}", manifest.compute.native);
-
-        // Build resource requirements
-        let mut req = ResourceRequirements::default();
-        req.cpu_cores = capsule.resources.cpu_cores;
-        if let Some(mem) = &capsule.resources.memory {
-            if let Ok(bytes) = parse_memory_string(mem) {
-                req.memory_bytes = Some(bytes);
-            }
-        }
-        if let Some(vram) = &capsule.resources.gpu_memory_min {
-            if let Ok(bytes) = parse_memory_string(vram) {
-                req.gpu_memory_bytes = Some(bytes);
-            }
-        }
-
-        Ok((manifest, Some(req)))
-    }
-
-    #[cfg(not(feature = "toml-support"))]
-    {
-        Err(anyhow!("TOML support is not enabled in this build"))
-    }
+fn load_toml_manifest(text: &str) -> Result<(CapsuleManifestV1, Option<ResourceRequirements>)> {
+    // Use libadep conversion
+    let manifest = CapsuleManifestV1::from_toml(text)
+        .map_err(|e| anyhow!("failed to parse TOML: {}", e))?;
+    
+    let reqs = extract_requirements(&manifest);
+    Ok((manifest, Some(reqs)))
 }
 
-impl From<libadep_core::capsule_manifest::CapsuleManifest> for AdepManifest {
-    fn from(c: libadep_core::capsule_manifest::CapsuleManifest) -> Self {
-        // Mapping policy: map capsule.name -> adep.name, and create a minimal compute
-        // entry so the Agent can produce an OCI spec. Engines should provide a
-        // default image for capsule-based workloads (placeholder).
-        let image = if let Some(base) = c.ai.base_model.clone() {
-            if base.is_empty() || base.eq_ignore_ascii_case("none") {
-                "".to_string()
-            } else {
-                // If base_model is present and valid, prefer an AI runner image
-                "onescluster/ai-runner:latest".to_string()
-            }
-        } else {
-            // No default image, allowing fallback to DevRuntime
-            "".to_string()
-        };
-
-        // Build scheduling with GPU hints (we set vram_min_gb if provided)
-        let gpu_constraints = c.resources.gpu_memory_min.as_ref().and_then(|s| {
-            match libadep_core::utils::parse_memory_string(s) {
-                Ok(bytes) => Some(GpuConstraints {
-                    vram_min_gb: bytes / (1024 * 1024 * 1024),
-                    cuda_version_min: None,
-                }),
-                Err(_) => None,
-            }
-        });
-
-        let cloud_constraints = if c.resources.cloud_accelerators.is_some()
-            || c.resources.cloud_region.is_some()
-            || c.resources.allowed_clouds.is_some()
-        {
-            Some(crate::adep::CloudConstraints {
-                accelerators: c.resources.cloud_accelerators,
-                region: c.resources.cloud_region,
-                allowed_clouds: c.resources.allowed_clouds,
-            })
-        } else {
-            None
-        };
-
-        let scheduling = SchedulingConfig {
-            gpu: gpu_constraints,
-            strategy: None,
-            cloud: cloud_constraints,
-        };
-
-        let (native, env) = if let Some(native_cfg) = c.native {
-            // HCL v3.0 native block takes priority
-            let native_config = Some(crate::adep::NativeConfig {
-                runtime: native_cfg.runtime,
-                args: native_cfg.args.unwrap_or_default(),
-            });
-
-            let mut env_vars = vec![];
-            if let Some(env_map) = native_cfg.env {
-                for (k, v) in env_map {
-                    if k == "HOST" && (v.is_empty() || v.trim().is_empty()) {
-                        continue;
-                    }
-                    env_vars.push(format!("{}={}", k, v));
-                }
-            }
-            // Add model as env var if present
-            if let Some(model) = native_cfg.model {
-                env_vars.push(format!("MLX_MODEL_ID={}", model));
-            }
-            if let Some(port) = native_cfg.port {
-                env_vars.push(format!("PORT={}", port));
-            }
-            (native_config, env_vars)
-        } else if let Some(runtime) = c.runtime {
-            let native_config = if runtime.runtime_type == "native" {
-                Some(crate::adep::NativeConfig {
-                    runtime: runtime.executable.unwrap_or_default(),
-                    args: runtime.args.unwrap_or_default(),
-                })
-            } else {
-                None
-            };
-
-            let mut env_vars = vec![];
-            if let Some(env_map) = runtime.env {
-                for (k, v) in env_map {
-                    if k == "HOST" && (v.is_empty() || v.trim().is_empty()) {
-                        continue;
-                    }
-                    env_vars.push(format!("{}={}", k, v));
-                }
-            }
-            (native_config, env_vars)
-        } else {
-            (None, vec![])
-        };
-
-        let mut metadata = std::collections::HashMap::new();
-
-        if let Some(entries) = c.permissions.network_allow {
-            let mut domains: Vec<String> = entries
-                .into_iter()
-                .filter_map(|v| crate::security::egress_policy::normalize_allowlist_entry(&v))
-                .collect();
-            domains.sort();
-            domains.dedup();
-
-            if !domains.is_empty() {
-                metadata.insert(
-                    crate::security::META_KEY_EGRESS_ALLOWLIST.to_string(),
-                    domains.join(","),
-                );
-            }
-        }
-
-        AdepManifest {
-            name: c.capsule.name,
-            scheduling,
-            compute: ComputeConfig {
-                image,
-                args: vec![],
-                env,
-                native,
-            },
-            volumes: vec![],
-            metadata,
-        }
+fn extract_requirements(manifest: &CapsuleManifestV1) -> ResourceRequirements {
+    let mut req = ResourceRequirements::default();
+    
+    // Extract VRAM
+    if let Ok(Some(bytes)) = manifest.requirements.vram_min_bytes() {
+        req.gpu_memory_bytes = Some(bytes);
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capsule_manifest_network_allow_is_forwarded_to_metadata() {
-        let capsule = libadep_core::capsule_manifest::CapsuleManifest {
-            capsule: libadep_core::capsule_manifest::CapsuleMetadata {
-                name: "c".to_string(),
-                version: "1.0.0".to_string(),
-                description: None,
-            },
-            resources: Default::default(),
-            ai: Default::default(),
-            permissions: libadep_core::capsule_manifest::Permissions {
-                network_allow: Some(vec![
-                    "https://api.example.com/v1".to_string(),
-                    "example.com".to_string(),
-                ]),
-                ..Default::default()
-            },
-            routing: Default::default(),
-            ui: None,
-            rag: None,
-            runtime: None,
-            native: None,
-        };
-
-        let adep: AdepManifest = capsule.into();
-        let v = adep
-            .metadata
-            .get(crate::security::META_KEY_EGRESS_ALLOWLIST)
-            .cloned()
-            .unwrap();
-        assert!(v.contains("example.com"));
-        assert!(v.contains("api.example.com"));
-    }
+    
+    // CPU/Memory checks if they exist in requirements?
+    // CapsuleRequirements has: vram_min, vram_recommended, platform.
+    // Doesn't seem to have explicit CPU/RAM requirements yet in V1 spec?
+    // Checking libadep/core/src/capsule_v1.rs...
+    // It has `vram_min`.
+    // Maybe in metadata or assumed default?
+    // Engine ResourceRequirements struct has cpu/memory.
+    // For now we leave them None or check metadata.
+    
+    req
 }

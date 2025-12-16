@@ -147,6 +147,7 @@ async fn test_ensure_runtime_success() {
     let config = ArtifactConfig {
         registry_url: format!("file://{}", registry_path.to_string_lossy()),
         cache_path: temp_dir.path().join("cache"),
+        cas_root: None,
     };
 
     let manager = ArtifactManager::new(config).await.unwrap();
@@ -196,6 +197,7 @@ async fn test_hash_verification_failure() {
     let config = ArtifactConfig {
         registry_url: format!("file://{}", registry_path.to_string_lossy()),
         cache_path: temp_dir.path().join("cache"),
+        cas_root: None,
     };
 
     let manager = ArtifactManager::new(config).await.unwrap();
@@ -246,6 +248,7 @@ async fn test_cache_hit() {
     let config = ArtifactConfig {
         registry_url: format!("file://{}", registry_path.to_string_lossy()),
         cache_path: temp_dir.path().join("cache"),
+        cas_root: None,
     };
 
     let manager = ArtifactManager::new(config).await.unwrap();

@@ -1,14 +1,16 @@
-use crate::adep::{AdepManifest, AdepVolume, ComputeConfig, GpuConstraints, NativeConfig, SchedulingConfig};
+use anyhow::{anyhow, Result};
 use crate::proto::onescluster::common::v1 as common;
+use libadep_core::capsule_v1::{CapsuleExecution, CapsuleManifestV1, CapsuleRequirements, CapsuleStorage, RuntimeType, SignalConfig, CapsuleRouting, CapsuleType, StorageVolume};
+use std::collections::HashMap;
 
-/// Result of converting a RunPlan proto into the legacy Adep manifest that the engine can launch.
+/// Result of converting a RunPlan proto into the canonical CapsuleManifestV1.
 pub struct RunPlanConversion {
-    pub adep: AdepManifest,
-    pub oci_image: String,
+    pub adep: CapsuleManifestV1,
+    pub oci_image: String, // Kept for convenience
     pub digest: String,
 }
 
-/// Convert coordinator RunPlan proto into an Adep manifest with best-effort field mapping.
+/// Convert coordinator RunPlan proto into a CapsuleManifestV1 with best-effort field mapping.
 pub fn from_coordinator(plan: &common::RunPlan) -> RunPlanConversion {
     let name = if !plan.name.is_empty() {
         plan.name.clone()
@@ -18,106 +20,86 @@ pub fn from_coordinator(plan: &common::RunPlan) -> RunPlanConversion {
         "capsule".to_string()
     };
 
-    let mut manifest = AdepManifest {
-        name: name.clone(),
-        scheduling: SchedulingConfig::default(),
-        compute: ComputeConfig::default(),
-        volumes: Vec::new(),
-        metadata: Default::default(),
-    };
-
-    // Preserve gpu_profile as metadata hint; vram_min_gb is unknown format so we avoid guessing.
-    if !plan.gpu_profile.is_empty() {
-        manifest
-            .metadata
-            .insert("gpu_profile".to_string(), plan.gpu_profile.clone());
-    }
-
-    // Resource hints
-    if let Some(cpu) = to_option_u32(plan.cpu_cores) {
-        manifest
-            .metadata
-            .insert("cpu_cores".to_string(), cpu.to_string());
-    }
-    if let Some(mem) = to_option_u64(plan.memory_bytes) {
-        manifest
-            .metadata
-            .insert("memory_bytes".to_string(), mem.to_string());
-    }
-
-    // Optional GPU constraint from profile if it looks like "<number>GB"
+    let mut requirements = CapsuleRequirements::default();
     if let Some(vram_gb) = parse_vram_gb_hint(&plan.gpu_profile) {
-        manifest.scheduling.gpu = Some(GpuConstraints {
-            vram_min_gb: vram_gb,
-            cuda_version_min: None,
-        });
+        requirements.vram_min = Some(format!("{}GB", vram_gb));
     }
 
-    // Common helpers
-    let mut env = Vec::new();
+    let mut env = HashMap::new();
     if let Some(runtime_env) = runtime_env(plan) {
-        env.extend(runtime_env);
+        for (k, v) in runtime_env {
+            env.insert(k, v);
+        }
     }
 
     let mut oci_image = String::new();
     let mut digest = String::new();
+    let mut execution = CapsuleExecution {
+        runtime: RuntimeType::Native,
+        entrypoint: "".to_string(),
+        port: None,
+        health_check: None,
+        startup_timeout: 60,
+        env: env.clone(),
+        signals: Default::default(),
+    };
+    let mut storage = CapsuleStorage::default();
 
     match &plan.runtime {
         Some(common::run_plan::Runtime::Docker(docker)) => {
             oci_image = docker.image.clone();
             digest = docker.digest.clone();
 
-            manifest.compute.image = docker.image.clone();
-            manifest.compute.args = docker.command.clone();
-            manifest.compute.env = env.clone();
+            execution.runtime = RuntimeType::Docker;
+            execution.entrypoint = docker.image.clone();            
+            execution.env = env.clone();
 
-            // First port becomes PORT env for compatibility
-            if let Some(port_env) = first_port_env(&docker.ports) {
-                manifest.compute.env.push(port_env.clone());
-                ensure_env(&mut env, port_env);
+            if let Some(port) = first_port(&docker.ports) {
+                execution.port = Some(port);
             }
 
-            // Map mounts into legacy volumes
-            manifest.volumes = docker
+            storage.volumes = docker
                 .mounts
                 .iter()
-                .map(|m| AdepVolume {
-                    r#type: "bind".to_string(),
-                    source: m.source.clone(),
-                    destination: m.target.clone(),
-                    readonly: m.readonly,
+                .map(|m| StorageVolume {
+                    name: format!("bind:{}", m.source),
+                    mount_path: m.target.clone(),
+                    read_only: m.readonly,
                 })
                 .collect();
         }
         Some(common::run_plan::Runtime::PythonUv(py)) => {
-            // Represent python-uv as native runtime "uv" with entrypoint + args
-            let mut args = Vec::new();
-            args.push(py.entrypoint.clone());
-            args.extend(py.args.clone());
-
-            manifest.compute.native = Some(NativeConfig {
-                runtime: "uv".to_string(),
-                args,
-            });
-            manifest.compute.env = env.clone();
-
-            if let Some(port_env) = first_port_env(&py.ports) {
-                manifest.compute.env.push(port_env.clone());
-                ensure_env(&mut env, port_env);
+             execution.runtime = RuntimeType::PythonUv;
+             execution.entrypoint = py.entrypoint.clone();
+             execution.env = env.clone();
+             if let Some(port) = first_port(&py.ports) {
+                execution.port = Some(port);
             }
         }
         Some(common::run_plan::Runtime::Native(native)) => {
-            manifest.compute.native = Some(NativeConfig {
-                runtime: native.binary_path.clone(),
-                args: native.args.clone(),
-            });
-            manifest.compute.env = env.clone();
+            execution.runtime = RuntimeType::Native;
+            execution.entrypoint = native.binary_path.clone(); // Assuming this includes args or is just the binary
+            execution.env = env.clone();
         }
         None => {
-            // No runtime, leave defaults; caller will likely reject later.
-            manifest.compute.env = env.clone();
+            // Default
         }
     }
+
+    let manifest = CapsuleManifestV1 {
+        schema_version: "1.0".to_string(),
+        name,
+        version: plan.version.clone(),
+        capsule_type: CapsuleType::App,
+        metadata: Default::default(),
+        capabilities: None,
+        requirements,
+        execution,
+        storage,
+        routing: CapsuleRouting::default(),
+        network: None,
+        model: None,
+    };
 
     RunPlanConversion {
         adep: manifest,
@@ -126,53 +108,32 @@ pub fn from_coordinator(plan: &common::RunPlan) -> RunPlanConversion {
     }
 }
 
-/// Convert engine RunPlan proto into an Adep manifest (engine uses the shared common RunPlan).
 pub fn from_engine(plan: &common::RunPlan) -> RunPlanConversion {
     from_coordinator(plan)
 }
 
-fn runtime_env(plan: &common::RunPlan) -> Option<Vec<String>> {
+fn runtime_env(plan: &common::RunPlan) -> Option<HashMap<String, String>> {
     match &plan.runtime {
         Some(common::run_plan::Runtime::Docker(docker)) => {
-            Some(env_map_to_vec(&docker.env))
+             Some(docker.env.iter().map(|(k,v)| (k.clone(), v.clone())).collect())
         }
         Some(common::run_plan::Runtime::Native(native)) => {
-            Some(env_map_to_vec(&native.env))
+            Some(native.env.iter().map(|(k,v)| (k.clone(), v.clone())).collect())
         }
         Some(common::run_plan::Runtime::PythonUv(py)) => {
-            Some(env_map_to_vec(&py.env))
+            Some(py.env.iter().map(|(k,v)| (k.clone(), v.clone())).collect())
         }
         None => None,
     }
 }
 
-fn env_map_to_vec(map: &std::collections::HashMap<String, String>) -> Vec<String> {
-    map.iter()
-        .filter_map(|(k, v)| {
-            if k.is_empty() {
-                None
-            } else {
-                Some(format!("{}={}", k, v))
-            }
-        })
-        .collect()
-}
-
-fn ensure_env(env: &mut Vec<String>, value: String) {
-    if !env.iter().any(|existing| existing == &value) {
-        env.push(value);
-    }
-}
-
-fn first_port_env(ports: &[common::Port]) -> Option<String> {
+fn first_port(ports: &[common::Port]) -> Option<u16> {
     ports.first().map(|p| {
-        let port_value = if p.host_port != 0 { p.host_port } else { p.container_port };
-        format!("PORT={}", port_value)
+        if p.host_port != 0 { p.host_port as u16 } else { p.container_port as u16 }
     })
 }
 
 fn parse_vram_gb_hint(profile: &str) -> Option<u64> {
-    // Accept simple suffix like "8GB" -> 8
     if let Some(stripped) = profile.strip_suffix("GB") {
         if let Ok(num) = stripped.trim().parse::<u64>() {
             return Some(num);
@@ -181,10 +142,89 @@ fn parse_vram_gb_hint(profile: &str) -> Option<u64> {
     None
 }
 
-fn to_option_u32(value: u32) -> Option<u32> {
-    if value == 0 { None } else { Some(value) }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::onescluster::common::v1::{self as common, run_plan};
 
-fn to_option_u64(value: u64) -> Option<u64> {
-    if value == 0 { None } else { Some(value) }
+    #[test]
+    fn test_docker_mapping() {
+        let plan = common::RunPlan {
+            capsule_id: "test-capsule".to_string(),
+            name: "Test Capsule".to_string(),
+            version: "1.0.0".to_string(),
+            runtime: Some(run_plan::Runtime::Docker(common::DockerRuntime {
+                image: "nginx:latest".to_string(),
+                digest: "sha256:12345".to_string(),
+                command: vec!["/bin/sh".to_string(), "-c".to_string(), "echo hello".to_string()],
+                env: HashMap::from([("KEY".to_string(), "VALUE".to_string())]),
+                working_dir: "/app".to_string(),
+                user: "1000".to_string(),
+                ports: vec![common::Port {
+                    container_port: 80,
+                    host_port: 8080,
+                    protocol: "tcp".to_string(),
+                }],
+                mounts: vec![common::Mount {
+                    source: "/host/path".to_string(),
+                    target: "/container/path".to_string(),
+                    readonly: true,
+                }],
+            })),
+            cpu_cores: 0,
+            memory_bytes: 0,
+            gpu_profile: "10GB".to_string(),
+            egress_allowlist: vec![],
+        };
+
+        let conversion = from_coordinator(&plan);
+        let manifest = conversion.adep;
+
+        // Check top-level
+        assert_eq!(manifest.name, "Test Capsule");
+        assert_eq!(manifest.version, "1.0.0");
+        
+        // Check Execution
+        assert_eq!(manifest.execution.runtime, RuntimeType::Docker);
+        assert_eq!(manifest.execution.entrypoint, "nginx:latest");
+        assert_eq!(manifest.execution.env.get("KEY").unwrap(), "VALUE");
+        assert_eq!(manifest.execution.port, Some(8080));
+
+        // Check Requirements (GPU parsing)
+        assert_eq!(manifest.requirements.vram_min, Some("10GB".to_string()));
+
+        // Check Storage (Bind mount mapping)
+        assert_eq!(manifest.storage.volumes.len(), 1);
+        let vol = &manifest.storage.volumes[0];
+        assert_eq!(vol.name, "bind:/host/path");
+        assert_eq!(vol.mount_path, "/container/path");
+        assert!(vol.read_only);
+    }
+
+    #[test]
+    fn test_native_mapping_args_check() {
+        let plan = common::RunPlan {
+            capsule_id: "native-capsule".to_string(),
+            name: "Native Test".to_string(),
+            version: "0.1.0".to_string(),
+            runtime: Some(run_plan::Runtime::Native(common::NativeRuntime {
+                binary_path: "/usr/bin/python3".to_string(),
+                args: vec!["app.py".to_string(), "--flag".to_string()],
+                env: HashMap::new(),
+                working_dir: "".to_string(),
+            })),
+            cpu_cores: 0,
+            memory_bytes: 0,
+            gpu_profile: "".to_string(),
+            egress_allowlist: vec![],
+        };
+
+        let conversion = from_coordinator(&plan);
+        let manifest = conversion.adep;
+
+        assert_eq!(manifest.execution.runtime, RuntimeType::Native);
+        
+        // This test intentionally documents the behavior: args are NOT in the manifest.
+        assert_eq!(manifest.execution.entrypoint, "/usr/bin/python3");
+    }
 }

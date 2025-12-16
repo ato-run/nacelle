@@ -357,6 +357,99 @@ fn bench_gzip_tar_extraction() {
 }
 
 // ============================================================================
+// Cold Start Benchmarks
+// ============================================================================
+
+/// Measures the time for cold start preparation:
+/// - TOML manifest parsing
+/// - Manifest validation
+/// - RunPlan generation
+/// - OCI spec building
+#[test]
+fn bench_cold_start_preparation() {
+    use std::time::Instant;
+
+    const SAMPLE_TOML: &str = r#"
+schema_version = "1.0"
+name = "bench-capsule"
+version = "1.0.0"
+type = "app"
+
+[metadata]
+display_name = "Benchmark Capsule"
+description = "Test capsule for cold start benchmarks"
+
+[execution]
+runtime = "docker"
+entrypoint = "ghcr.io/example/hello:latest"
+port = 8080
+
+[execution.env]
+GUMBALL_ENV = "benchmark"
+LOG_LEVEL = "info"
+
+[requirements]
+vram_min = "2GB"
+"#;
+
+    const ITERATIONS: u32 = 100;
+
+    // Benchmark TOML parsing
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        let _manifest: Result<libadep_core::capsule_v1::CapsuleManifestV1, _> = 
+            libadep_core::capsule_v1::CapsuleManifestV1::from_toml(SAMPLE_TOML);
+    }
+    let parse_time = start.elapsed();
+    let parse_avg = parse_time / ITERATIONS;
+
+    // Benchmark validation (parse once, validate many times)
+    let manifest = libadep_core::capsule_v1::CapsuleManifestV1::from_toml(SAMPLE_TOML).unwrap();
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        let _valid = manifest.validate();
+    }
+    let validate_time = start.elapsed();
+    let validate_avg = validate_time / ITERATIONS;
+
+    // Benchmark RunPlan generation
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        let _plan = manifest.to_run_plan();
+    }
+    let runplan_time = start.elapsed();
+    let runplan_avg = runplan_time / ITERATIONS;
+
+    // Calculate total cold start preparation time
+    let total_avg = parse_avg + validate_avg + runplan_avg;
+
+    println!("\n=== Cold Start Preparation Benchmark ===");
+    println!("  TOML Parse:    {:?} avg ({} iterations)", parse_avg, ITERATIONS);
+    println!("  Validation:    {:?} avg", validate_avg);
+    println!("  RunPlan Gen:   {:?} avg", runplan_avg);
+    println!("  ---------------------------------");
+    println!("  TOTAL:         {:?} avg", total_avg);
+    println!();
+
+    // Target: cold start prep should be < 100ms (conservative)
+    // In practice, should be < 10ms for just parsing/validation
+    assert!(
+        total_avg < Duration::from_millis(100),
+        "Cold start preparation too slow: {:?} > 100ms",
+        total_avg
+    );
+
+    // More aggressive target for just parsing/validation
+    assert!(
+        parse_avg + validate_avg < Duration::from_millis(10),
+        "Manifest parsing+validation too slow: {:?}",
+        parse_avg + validate_avg
+    );
+
+    println!("✅ Cold start preparation meets target (<100ms total)");
+}
+
+// ============================================================================
 // Summary
 // ============================================================================
 

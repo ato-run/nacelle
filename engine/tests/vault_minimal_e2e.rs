@@ -78,6 +78,7 @@ async fn test_vault_minimal_hostpath_persistence() {
         ArtifactManager::new(ArtifactConfig {
             registry_url: format!("file://{}", registry_path.display()),
             cache_path: tmp.path().join("artifact_cache"),
+            cas_root: None,
         })
         .await
         .expect("artifact manager"),

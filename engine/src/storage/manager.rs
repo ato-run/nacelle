@@ -3,7 +3,8 @@
 //! Combines LVM volume management and LUKS encryption into a single
 //! interface for provisioning and managing capsule storage.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
@@ -150,7 +151,100 @@ impl StorageManager {
         })
     }
     
-    /// Cleanup storage for a capsule
+    /// Mount a provisioned volume
+    /// 
+    /// This formats the volume (if needed) and mounts it to the target path.
+    pub fn mount_volume(&self, storage: &mut CapsuleStorage) -> StorageResult<()> {
+        let mount_point = self.config.mount_base.join(&storage.capsule_id).join(&storage.lv_name);
+        
+        // Ensure mount point exists
+        if !mount_point.exists() {
+            std::fs::create_dir_all(&mount_point).map_err(|e| {
+                StorageError::CommandFailed(format!("Failed to create mount point: {}", e))
+            })?;
+        }
+        
+        let device_path = &storage.device_path;
+        
+        // Check if formatted
+        if !self.is_formatted(device_path)? {
+            info!("Formatting volume {} as ext4", device_path);
+            let output = Command::new("mkfs.ext4")
+                .arg("-F") // Force
+                .arg(device_path)
+                .output()
+                .map_err(|e| StorageError::CommandFailed(format!("Failed to execute mkfs.ext4: {}", e)))?;
+                
+            if !output.status.success() {
+                return Err(StorageError::CommandFailed(format!(
+                    "mkfs.ext4 failed: {}", 
+                    String::from_utf8_lossy(&output.stderr)
+                )));
+            }
+        }
+        
+        // Mount
+        info!("Mounting {} to {}", device_path, mount_point.display());
+        let output = Command::new("mount")
+            .arg(device_path)
+            .arg(&mount_point)
+            .output()
+            .map_err(|e| StorageError::CommandFailed(format!("Failed to execute mount: {}", e)))?;
+            
+        if !output.status.success() {
+             return Err(StorageError::CommandFailed(format!(
+                "mount failed: {}", 
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+        
+        storage.mount_point = Some(mount_point);
+        Ok(())
+    }
+    
+    /// Unmount a volume
+    pub fn unmount_volume(&self, capsule_id: &str, lv_name: &str) -> StorageResult<()> {
+        // Construct path identically to mount_volume
+        // Note: Ideally we track active mounts, but stateless constraints imply deriving it.
+        // We use sanitize_lv_name just in case caller passes raw name, but we expect sanitized or original?
+        // Let's assume passed valid lv_name. 
+        // Better: We should probably list mounts or try to unmount the expected path.
+        let mount_point = self.config.mount_base.join(capsule_id).join(lv_name);
+        
+        if mount_point.exists() {
+             // Check if mounted? Or just try unmount.
+             info!("Unmounting {}", mount_point.display());
+             let output = Command::new("umount")
+                .arg(&mount_point)
+                .output()
+                .map_err(|e| StorageError::CommandFailed(format!("Failed to execute umount: {}", e)))?;
+            
+            // Ignore "not mounted" errors if we are just cleaning up
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.contains("not mounted") {
+                     return Err(StorageError::CommandFailed(format!("umount failed: {}", stderr)));
+                }
+            }
+            
+            // Remove mount point dir
+            let _ = std::fs::remove_dir(&mount_point);
+        }
+        Ok(())
+    }
+
+    fn is_formatted(&self, device_path: &str) -> StorageResult<bool> {
+        // Use blkid to check for filesystem
+        let output = Command::new("blkid")
+            .arg(device_path)
+            .output()
+            .map_err(|e| StorageError::CommandFailed(format!("Failed to execute blkid: {}", e)))?;
+            
+        // If blkid returns successfully and output contains TYPE=, it's formatted.
+        // If it returns exit code 2, it's unformatted/unknown.
+        Ok(output.status.success())
+    }
+
     ///
     /// This locks any LUKS encryption and deletes the LVM volume.
     ///

@@ -147,16 +147,54 @@ fn test_storage_manager_provision_unencrypted() {
         return;
     }
 
-    // This would test StorageManager::provision_capsule_storage without encryption
-    // In the real test, we would:
-    // 1. Create StorageManager with enable_encryption = false
-    // 2. Call provision_capsule_storage("test-capsule-001", None, Some(false))
-    // 3. Verify LVM volume was created
-    // 4. Verify device_path exists
-    // 5. Call cleanup_capsule_storage("test-capsule-001")
-    // 6. Verify volume was deleted
+    println!("Starting unencrypted storage test...");
     
-    println!("✅ Provision unencrypted storage test would run here");
+    use capsuled_engine::storage::{StorageManager, StorageConfig};
+    
+    let config = StorageConfig {
+        enabled: true,
+        default_vg: "test_vg".to_string(),
+        key_directory: PathBuf::from("/tmp/capsuled_test_keys"),
+        enable_encryption: false,
+        default_size_bytes: 100 * 1024 * 1024,
+        mount_base: PathBuf::from("/tmp/capsuled_test_mounts"),
+    };
+
+    let mut manager = StorageManager::new(config);
+    let capsule_id = "test-capsule-001";
+
+    // 1. Provision
+    println!("Provisioning storage for {}", capsule_id);
+    let mut storage = manager.provision_capsule_storage(capsule_id, None, Some(false))
+        .expect("Provision failed");
+    
+    println!("Provisioned: {:?}", storage);
+    
+    // 2. Mount
+    println!("Mounting volume...");
+    manager.mount_volume(&mut storage).expect("Mount failed");
+    
+    let mount_path = storage.mount_point.clone().expect("Mount point shoud be set");
+    println!("Mounted at: {:?}", mount_path);
+    assert!(mount_path.exists());
+
+    // 3. Write Verification
+    let test_file = mount_path.join("test.txt");
+    std::fs::write(&test_file, "hello storage world").expect("Failed to write to volume");
+    assert!(test_file.exists());
+    println!("File written successfully");
+
+    // 4. Unmount
+    println!("Unmounting...");
+    manager.unmount_volume(capsule_id, &storage.lv_name).expect("Unmount failed");
+    // Mount point directory should be removed by unmount_volume
+    assert!(!mount_path.exists()); 
+
+    // 5. Cleanup
+    println!("Cleaning up...");
+    manager.cleanup_capsule_storage(capsule_id).expect("Cleanup failed");
+    
+    println!("✅ Provision unencrypted storage test passed");
 }
 
 #[test]

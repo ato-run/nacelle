@@ -24,12 +24,18 @@ pub enum ArtifactError {
     NotFound(String),
     #[error("Invalid registry format: {0}")]
     RegistryError(String),
+    #[error("CAS error: {0}")]
+    CasError(String),
+    #[error("Invalid URI: {0}")]
+    InvalidUri(String),
 }
 
 #[derive(Clone, Debug)]
 pub struct ArtifactConfig {
     pub registry_url: String,
     pub cache_path: PathBuf,
+    /// Optional CAS root directory for content-addressable storage
+    pub cas_root: Option<PathBuf>,
 }
 
 /// Manages runtime artifacts and versions.
@@ -50,6 +56,54 @@ impl ArtifactManager {
                 .build()?,
             cache,
         })
+    }
+
+    /// Resolve a CAS URI (cas://<hash>) to a local file path
+    /// 
+    /// CAS URIs follow the format: cas://<sha256-hash>
+    /// The blob is located at: <cas_root>/blobs/<hash[0:2]>/<hash>
+    pub fn resolve_cas_uri(&self, uri: &str) -> Result<PathBuf, ArtifactError> {
+        const CAS_PREFIX: &str = "cas://";
+        
+        if !uri.starts_with(CAS_PREFIX) {
+            return Err(ArtifactError::InvalidUri(format!(
+                "URI must start with '{}', got: {}",
+                CAS_PREFIX, uri
+            )));
+        }
+
+        let hash = uri.strip_prefix(CAS_PREFIX).unwrap();
+        
+        // Validate hash format (64 hex chars for SHA-256)
+        if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(ArtifactError::InvalidUri(format!(
+                "Invalid CAS hash (expected 64 hex chars): {}",
+                hash
+            )));
+        }
+
+        let cas_root = self.config.cas_root.as_ref().ok_or_else(|| {
+            ArtifactError::CasError("CAS root not configured".to_string())
+        })?;
+
+        // CAS storage layout: blobs/<prefix>/<hash>
+        let prefix = &hash[0..2];
+        let blob_path = cas_root.join("blobs").join(prefix).join(hash);
+
+        if !blob_path.exists() {
+            return Err(ArtifactError::NotFound(format!(
+                "CAS blob not found: {}",
+                blob_path.display()
+            )));
+        }
+
+        info!("Resolved CAS URI {} -> {}", uri, blob_path.display());
+        Ok(blob_path)
+    }
+
+    /// Check if a URI is a CAS URI
+    pub fn is_cas_uri(uri: &str) -> bool {
+        uri.starts_with("cas://")
     }
 
     pub async fn ensure_runtime(&self, name: &str, version: &str, _progress_tx: Option<tokio::sync::mpsc::Sender<String>>) -> Result<PathBuf, ArtifactError> {
