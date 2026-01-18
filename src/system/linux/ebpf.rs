@@ -59,14 +59,25 @@ struct Ipv6LpmKey {
 #[cfg(target_os = "linux")]
 unsafe impl Pod for Ipv6LpmKey {}
 
+#[cfg(target_os = "linux")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct PortLpmKey {
+    port: u16,
+}
+
+#[cfg(target_os = "linux")]
+unsafe impl Pod for PortLpmKey {}
+
 pub fn start_enforcer(
     rules: &[EgressRuleEntry],
     dns_rules: &[EgressRuleEntry],
+    socks_port: Option<u16>,
     job_id: &str,
 ) -> Result<EgressEnforcerHandle> {
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (rules, dns_rules, job_id);
+        let _ = (rules, dns_rules, socks_port, job_id);
         anyhow::bail!("eBPF enforcer is only supported on Linux");
     }
 
@@ -86,6 +97,10 @@ pub fn start_enforcer(
             "/nacelle-ebpf"
         )))
         .context("Failed to load eBPF object")?;
+
+        if let Some(port) = socks_port {
+            load_port_rules(&mut bpf, port)?;
+        }
 
         let program: &mut CgroupSkb = bpf
             .program_mut("nacelle_egress")
@@ -118,63 +133,75 @@ fn create_cgroup(job_id: &str) -> Result<PathBuf> {
 
 #[cfg(target_os = "linux")]
 fn load_rules(bpf: &mut Ebpf, v4_map: &str, v6_map: &str, rules: &[EgressRuleEntry]) -> Result<()> {
-    let mut v4_entries: Vec<(u32, u32)> = Vec::new();
-    let mut v6_entries: Vec<(u32, [u8; 16])> = Vec::new();
+        let mut v4_entries: Vec<(u32, u32)> = Vec::new();
+        let mut v6_entries: Vec<(u32, [u8; 16])> = Vec::new();
 
-    for rule in rules {
-        match rule.rule_type.as_str() {
-            "ip" => {
-                let ip: IpAddr = rule.value.parse()?;
-                match ip {
-                    IpAddr::V4(v4addr) => {
-                        v4_entries.push((32, u32::from_be_bytes(v4addr.octets())));
-                    }
-                    IpAddr::V6(v6addr) => {
-                        v6_entries.push((128, v6addr.octets()));
-                    }
-                }
-            }
-            "cidr" => {
-                let (addr, prefix) = rule
-                    .value
-                    .split_once('/')
-                    .ok_or_else(|| anyhow::anyhow!("Invalid CIDR: {}", rule.value))?;
-                let prefix: u32 = prefix.parse()?;
-                let ip: IpAddr = addr.parse()?;
-                match ip {
-                    IpAddr::V4(v4addr) => {
-                        v4_entries.push((prefix, u32::from_be_bytes(v4addr.octets())));
-                    }
-                    IpAddr::V6(v6addr) => {
-                        v6_entries.push((prefix, v6addr.octets()));
+        for rule in rules {
+            match rule.rule_type.as_str() {
+                "ip" => {
+                    let ip: IpAddr = rule.value.parse()?;
+                    match ip {
+                        IpAddr::V4(v4addr) => {
+                            v4_entries.push((32, u32::from_be_bytes(v4addr.octets())));
+                        }
+                        IpAddr::V6(v6addr) => {
+                            v6_entries.push((128, v6addr.octets()));
+                        }
                     }
                 }
+                "cidr" => {
+                    let (addr, prefix) = rule
+                        .value
+                        .split_once('/')
+                        .ok_or_else(|| anyhow::anyhow!("Invalid CIDR: {}", rule.value))?;
+                    let prefix: u32 = prefix.parse()?;
+                    let ip: IpAddr = addr.parse()?;
+                    match ip {
+                        IpAddr::V4(v4addr) => {
+                            v4_entries.push((prefix, u32::from_be_bytes(v4addr.octets())));
+                        }
+                        IpAddr::V6(v6addr) => {
+                            v6_entries.push((prefix, v6addr.octets()));
+                        }
+                    }
+                }
+                other => anyhow::bail!("Unsupported rule type: {}", other),
             }
-            other => anyhow::bail!("Unsupported rule type: {}", other),
         }
+
+        {
+            let map_v4 = bpf
+                .map_mut(v4_map)
+                .ok_or_else(|| anyhow::anyhow!("Missing eBPF map: {}", v4_map))?;
+            let mut v4: LpmTrie<_, Ipv4LpmKey, u8> = LpmTrie::try_from(map_v4)?;
+            for (prefix, addr) in v4_entries {
+                let key = LpmKey::new(prefix, Ipv4LpmKey { addr });
+                v4.insert(&key, 1, 0)?;
+            }
+        }
+
+        {
+            let map_v6 = bpf
+                .map_mut(v6_map)
+                .ok_or_else(|| anyhow::anyhow!("Missing eBPF map: {}", v6_map))?;
+            let mut v6: LpmTrie<_, Ipv6LpmKey, u8> = LpmTrie::try_from(map_v6)?;
+            for (prefix, addr) in v6_entries {
+                let key = LpmKey::new(prefix, Ipv6LpmKey { addr });
+                v6.insert(&key, 1, 0)?;
+            }
+        }
+
+        Ok(())
     }
 
-    {
-        let map_v4 = bpf
-            .map_mut(v4_map)
-            .ok_or_else(|| anyhow::anyhow!("Missing eBPF map: {}", v4_map))?;
-        let mut v4: LpmTrie<_, Ipv4LpmKey, u8> = LpmTrie::try_from(map_v4)?;
-        for (prefix, addr) in v4_entries {
-            let key = LpmKey::new(prefix, Ipv4LpmKey { addr });
-            v4.insert(&key, 1, 0)?;
-        }
+    #[cfg(target_os = "linux")]
+fn load_port_rules(bpf: &mut Ebpf, port: u16) -> Result<()> {
+        let map = bpf
+            .map_mut("SOCKS_PORT_ALLOW")
+            .ok_or_else(|| anyhow::anyhow!("Missing eBPF map: SOCKS_PORT_ALLOW"))?;
+        let mut ports: LpmTrie<_, PortLpmKey, u8> = LpmTrie::try_from(map)?;
+        let key = LpmKey::new(16, PortLpmKey { port: port.to_be() });
+        ports.insert(&key, 1, 0)?;
+        Ok(())
     }
 
-    {
-        let map_v6 = bpf
-            .map_mut(v6_map)
-            .ok_or_else(|| anyhow::anyhow!("Missing eBPF map: {}", v6_map))?;
-        let mut v6: LpmTrie<_, Ipv6LpmKey, u8> = LpmTrie::try_from(map_v6)?;
-        for (prefix, addr) in v6_entries {
-            let key = LpmKey::new(prefix, Ipv6LpmKey { addr });
-            v6.insert(&key, 1, 0)?;
-        }
-    }
-
-    Ok(())
-}

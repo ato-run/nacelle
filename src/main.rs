@@ -60,6 +60,7 @@ async fn bootstrap_bundled_runtime() -> anyhow::Result<()> {
     let enforcement_str = config.sandbox.network.enforcement.as_str();
     let strict_enforcement = enforcement_str == "strict";
     let job_id = format!("job-{}", std::process::id());
+    let socks_port = parse_socks_port()?;
     let mut sandbox = nacelle::system::new_network_sandbox();
     let mut sandbox_enabled = false;
 
@@ -68,6 +69,7 @@ async fn bootstrap_bundled_runtime() -> anyhow::Result<()> {
             allow_rules: Vec::new(),
             dns_rules: dns_rules.clone(),
             job_id: job_id.clone(),
+            socks_port,
         };
         match sandbox.prepare(initial_rule).await {
             Ok(_) => sandbox_enabled = true,
@@ -94,6 +96,7 @@ async fn bootstrap_bundled_runtime() -> anyhow::Result<()> {
             allow_rules: allow_rules.clone(),
             dns_rules: dns_rules.clone(),
             job_id: job_id.clone(),
+            socks_port,
         };
         if !allow_rules.is_empty() || egress_mode == "deny_all" {
             if let Err(e) = sandbox.update_rules(update_rule).await {
@@ -124,4 +127,22 @@ async fn bootstrap_bundled_runtime() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(())
+}
+
+fn parse_socks_port() -> anyhow::Result<Option<u16>> {
+    let value = std::env::var("ATO_TSNET_SOCKS_PORT").ok();
+    if let Some(raw) = value {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        let port: u16 = trimmed
+            .parse()
+            .map_err(|_| anyhow::anyhow!("Invalid ATO_TSNET_SOCKS_PORT: {}", trimmed))?;
+        if port == 0 {
+            return Ok(None);
+        }
+        return Ok(Some(port));
+    }
+    Ok(None)
 }

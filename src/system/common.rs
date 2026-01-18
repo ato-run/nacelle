@@ -6,6 +6,7 @@ pub struct IsolationRule {
     pub allow_rules: Vec<EgressRuleEntry>,
     pub dns_rules: Vec<EgressRuleEntry>,
     pub job_id: String,
+    pub socks_port: Option<u16>,
 }
 
 #[derive(Error, Debug)]

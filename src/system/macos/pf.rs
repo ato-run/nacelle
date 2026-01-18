@@ -82,8 +82,16 @@ impl Drop for PfAnchor {
 
 fn build_pf_rules(_anchor_name: &str, rule: &IsolationRule) -> Result<String, SystemError> {
     let mut rules = String::new();
+    rules.push_str("pass quick on lo0 all\n");
+
+    if let Some(port) = rule.socks_port {
+        rules.push_str(&format!(
+            "pass out quick proto tcp from any to 127.0.0.1 port {}\n",
+            port
+        ));
+    }
+
     rules.push_str("block drop out all\n");
-    rules.push_str("pass out inet proto udp to any port 53\n");
 
     for entry in &rule.allow_rules {
         rules.push_str(&format!("pass out to {}\n", format_pf_target(entry)?));

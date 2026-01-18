@@ -24,7 +24,12 @@ impl LinuxSandbox {
 #[async_trait]
 impl NetworkSandbox for LinuxSandbox {
     async fn prepare(&mut self, rule: IsolationRule) -> Result<(), SystemError> {
-        let handle = ebpf::start_enforcer(&rule.allow_rules, &rule.dns_rules, &rule.job_id)?;
+        let handle = ebpf::start_enforcer(
+            &rule.allow_rules,
+            &rule.dns_rules,
+            rule.socks_port,
+            &rule.job_id,
+        )?;
         self.enforcer = Some(handle);
         Ok(())
     }

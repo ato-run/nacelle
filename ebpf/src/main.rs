@@ -15,6 +15,11 @@ pub struct Ipv6LpmKey {
     pub addr: [u8; 16],
 }
 
+#[repr(C)]
+pub struct PortLpmKey {
+    pub port: u16,
+}
+
 #[map]
 static IPV4_ALLOW: LpmTrie<Ipv4LpmKey, u8> = LpmTrie::<Ipv4LpmKey, u8>::with_max_entries(4096, 0);
 
@@ -28,6 +33,10 @@ static DNS_IPV4_ALLOW: LpmTrie<Ipv4LpmKey, u8> =
 #[map]
 static DNS_IPV6_ALLOW: LpmTrie<Ipv6LpmKey, u8> =
     LpmTrie::<Ipv6LpmKey, u8>::with_max_entries(256, 0);
+
+#[map]
+static SOCKS_PORT_ALLOW: LpmTrie<PortLpmKey, u8> =
+    LpmTrie::<PortLpmKey, u8>::with_max_entries(8, 0);
 
 #[cgroup_skb(egress)]
 pub fn nacelle_egress(ctx: SkBuffContext) -> i32 {
@@ -53,6 +62,10 @@ fn try_nacelle_egress(ctx: SkBuffContext) -> Result<bool, i64> {
             return Ok(true);
         }
         let dst: u32 = u32::from_be(ctx.load(16)?);
+
+        if is_loopback_socks(&ctx, dst)? {
+            return Ok(true);
+        }
 
         let key = LpmKey::new(32, Ipv4LpmKey { addr: dst });
 
@@ -89,6 +102,27 @@ fn is_dns_packet_v4(ctx: &SkBuffContext, first_byte: u8) -> Result<bool, i64> {
     let port: u16 = ctx.load(ihl + 2)?;
     Ok(u16::from_be(port) == 53)
 }
+
+fn is_loopback_socks(ctx: &SkBuffContext, dst: u32) -> Result<bool, i64> {
+    if dst != 0x7f000001 {
+        return Ok(false);
+    }
+    let pkt_len = ctx.len();
+    let first: u8 = ctx.load(0)?;
+    let ihl = (first & 0x0f) as usize * 4;
+    if pkt_len < (ihl as u32 + 4) {
+        return Ok(false);
+    }
+    let proto: u8 = ctx.load(9)?;
+    if proto != 6 {
+        return Ok(false);
+    }
+    let port: u16 = ctx.load(ihl + 2)?;
+    let key = LpmKey::new(16, PortLpmKey { port: port.to_be() });
+    Ok(SOCKS_PORT_ALLOW.get(&key).is_some())
+}
+
+
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
